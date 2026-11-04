@@ -101,8 +101,8 @@ export function getUgcAddonPrice(platforms: string[], plan?: SubscriptionPlan) {
   return hasUgcPlatforms(platforms) ? UGC_ADDON_PRICE : 0;
 }
 
-export function getYoutubeContentIdAddonPrice(_plan?: SubscriptionPlan, enabled?: boolean, accessStatus?: string | null) {
-  return contentIdRequestFee(Boolean(enabled), normalizeContentIdAccessStatus(accessStatus));
+export function getYoutubeContentIdAddonPrice(_plan?: SubscriptionPlan, enabled?: boolean, accessStatus?: string | null, yearlyPlusEntitled = false) {
+  return contentIdRequestFee(Boolean(enabled), normalizeContentIdAccessStatus(accessStatus), yearlyPlusEntitled);
 }
 
 export type DistributionCheckoutQuote = {
@@ -116,6 +116,7 @@ export type DistributionCheckoutQuote = {
   platforms: string[];
   youtubeContentIdEnabled: boolean;
   youtubeContentIdAccessStatus?: string | null;
+  contentIdIncludedByYearlyPlus: boolean;
   currency: "INR";
   basePrice: number;
   bulkDiscount: number;
@@ -138,13 +139,14 @@ export function createDistributionCheckoutQuote(input: {
   platforms: string[];
   youtubeContentIdEnabled: boolean;
   youtubeContentIdAccessStatus?: string | null;
+  yearlyPlusEntitled?: boolean;
   firstReleaseOffer: boolean;
   useHymnCredits: boolean;
   availableCredits: number;
 }): DistributionCheckoutQuote {
   const trackPricing = getTrackPricingQuote(input.trackCount);
   const ugcAddon = getUgcAddonPrice(input.platforms, "one_time");
-  const youtubeContentIdAddon = getYoutubeContentIdAddonPrice("one_time", input.youtubeContentIdEnabled, input.youtubeContentIdAccessStatus);
+  const youtubeContentIdAddon = getYoutubeContentIdAddonPrice("one_time", input.youtubeContentIdEnabled, input.youtubeContentIdAccessStatus, input.yearlyPlusEntitled);
   const firstReleaseDiscount = input.firstReleaseOffer
     ? Math.min(FIRST_RELEASE_BASE_DISCOUNT, trackPricing.finalPrice)
     : 0;
@@ -160,6 +162,7 @@ export function createDistributionCheckoutQuote(input: {
     releaseType: input.releaseType,
     platforms: input.platforms,
     youtubeContentIdEnabled: input.youtubeContentIdEnabled,
+    contentIdIncludedByYearlyPlus: Boolean(input.yearlyPlusEntitled && input.youtubeContentIdEnabled),
     currency: "INR",
     basePrice: trackPricing.basePrice,
     bulkDiscount: trackPricing.discountAmount,

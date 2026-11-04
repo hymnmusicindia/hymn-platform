@@ -18,11 +18,15 @@ assert.equal(SUBSCRIPTION_POLICIES.yearly_plus.amount, expected.yearly_plus * 10
 assert.equal(findDistributionPlan("yearly").price, findDistributionPlan("half_yearly").price * 2 - 299, "Annual savings must derive from configured prices.");
 const ugcPlatforms = ["Spotify", "Instagram / Facebook", "TikTok"];
 assert.equal(getUgcAddonPrice(ugcPlatforms, "one_time"), 50, "UGC fee is separate from Content ID pricing.");
-assert.equal(getYoutubeContentIdAddonPrice("one_time", true), 200, "Content ID remains a separately priced service.");
-assert.equal(getYoutubeContentIdAddonPrice("yearly_plus", true), 200, "Active subscribers pay the one-time Content ID request fee separately from covered release distribution.");
+assert.equal(getYoutubeContentIdAddonPrice("one_time", true), 250, "Non-Yearly+ Content ID requests use the one-time ₹250 fee.");
+assert.equal(getYoutubeContentIdAddonPrice("yearly", true), 250, "Yearly subscribers do not receive the Yearly+ Content ID waiver.");
+assert.equal(getYoutubeContentIdAddonPrice("half_yearly", true), 250, "Half-Yearly subscribers do not receive the Yearly+ Content ID waiver.");
+assert.equal(getYoutubeContentIdAddonPrice("yearly_plus", true), 250, "A selected plan alone does not grant the Yearly+ waiver.");
+assert.equal(getYoutubeContentIdAddonPrice("one_time", true, "none", true), 0, "An active Yearly+ entitlement waives the Content ID request fee.");
 assert.equal(getYoutubeContentIdAddonPrice("one_time", true, "pending"), 0, "A pending account request must not be charged again.");
 assert.equal(getYoutubeContentIdAddonPrice("one_time", true, "approved"), 0, "Approved account access must not be charged again.");
-assert.equal(getYoutubeContentIdAddonPrice("one_time", true, "declined"), 200, "A declined account may submit and pay for a new request.");
+assert.equal(getYoutubeContentIdAddonPrice("one_time", true, "declined"), 250, "A declined non-Yearly+ account may submit and pay for a new request.");
+assert.equal(getYoutubeContentIdAddonPrice("one_time", true, "declined", true), 0, "A declined Yearly+ account may resubmit without a separate fee.");
 assert.equal(getYoutubeContentIdAddonPrice("one_time", false), 0);
 assert.equal(shouldAutoSelectContentId({ status: "approved", platforms: ["YouTube Music"], contentType: "Original/Exclusive Licensed" }), true, "Approved users should automatically include eligible YouTube Music releases.");
 assert.equal(shouldAutoSelectContentId({ status: "pending", platforms: ["YouTube Music"], contentType: "Original/Exclusive Licensed" }), false, "Pending requests must not activate Content ID.");
@@ -34,11 +38,12 @@ assert.equal(isValidYoutubeChannelUrl("https://example.com/@hymn"), false);
 assert.equal(isValidYoutubeChannelUrl("https://youtu.be/track"), false, "Video links are not channel URLs.");
 assert.equal(getTrackPricingQuote(1).finalPrice + getUgcAddonPrice(ugcPlatforms, "one_time"), 149);
 assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: false }), 149, "Server price must exclude Content ID when it is not selected.");
-assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: true }), 349, "Server price must include both distinct optional add-ons only when Content ID is selected.");
+assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: true }), 399, "Server price must include both distinct optional add-ons only when Content ID is selected.");
+assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: true, yearlyPlusEntitled: true }), 149, "An active Yearly+ entitlement waives Content ID but not the separate UGC fee.");
 assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: true, youtubeContentIdAccessStatus: "pending" }), 149, "Pending Content ID access must not be charged or activated again.");
 assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: true, youtubeContentIdAccessStatus: "approved" }), 149, "Approved Content ID access must not incur another request fee.");
 assert.equal(calculateFirstReleasePrice({ plan: "one_time", releaseType: "single", trackCount: 1, normalAmount: 99 + 50 }).finalAmount, 50, "First-release pricing should waive the single's base fee and leave UGC payable.");
-assert.equal(calculateFirstReleasePrice({ plan: "one_time", releaseType: "single", trackCount: 1, normalAmount: 99 + 50 + 200 }).finalAmount, 250, "Opted-in Content ID remains additional after the base fee is waived.");
+assert.equal(calculateFirstReleasePrice({ plan: "one_time", releaseType: "single", trackCount: 1, normalAmount: 99 + 50 + 250 }).finalAmount, 300, "Opted-in Content ID remains additional after the base fee is waived.");
 
 const quote = (input: Partial<Parameters<typeof createDistributionCheckoutQuote>[0]> = {}) => createDistributionCheckoutQuote({
   releaseId: 12,
@@ -66,11 +71,14 @@ for (const platforms of [[], ["Spotify"], ["Instagram / Facebook"], ["TikTok"], 
   assert.equal(quote({ platforms, firstReleaseOffer: true }).payable, (hasUgc ? 50 : 0), "First-release offer must leave the optional UGC fee payable for a single.");
 }
 for (const youtubeContentIdEnabled of [false, true]) {
-  const amount = youtubeContentIdEnabled ? 200 : 0;
+  const amount = youtubeContentIdEnabled ? 250 : 0;
   assert.equal(quote({ youtubeContentIdEnabled }).youtubeContentIdAddon, amount);
   assert.equal(quote({ youtubeContentIdEnabled, firstReleaseOffer: true }).payable, amount, "First-release offer must leave opted-in Content ID payable.");
   assert.equal(quote({ youtubeContentIdEnabled, firstReleaseOffer: true, platforms: ["TikTok"] }).payable, amount + 50, "First-release offer must leave both optional add-ons payable.");
 }
+const yearlyPlusQuote = quote({ youtubeContentIdEnabled: true, yearlyPlusEntitled: true });
+assert.equal(yearlyPlusQuote.youtubeContentIdAddon, 0, "Yearly+ requests have no separate access fee.");
+assert.equal(yearlyPlusQuote.contentIdIncludedByYearlyPlus, true, "The saved quote records the Yearly+ waiver for server verification.");
 for (const [availableCredits, expectedUsed] of [[0, 0], [1, 1], [49, 49], [50, 50], [51, 50], [-5, 0], [49.9, 49]] as const) {
   const creditQuote = quote({ firstReleaseOffer: true, platforms: ["TikTok"], useHymnCredits: true, availableCredits });
   assert.equal(creditQuote.creditsUsed, expectedUsed, `Credits must cap at eligible subtotal (available ${availableCredits}).`);

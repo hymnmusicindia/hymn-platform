@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { normalizeContentIdAccessStatus } from "@/lib/content-id-access";
+import { contentIdLiveTrackCountsQuery, contentIdReviewReadiness, type ContentIdLiveTrackCount } from "@/lib/content-id-review-eligibility";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,9 @@ export async function GET() {
       }
     }
   });
+  const countQuery = contentIdLiveTrackCountsQuery([result.user.id]);
+  const liveTrackCounts = countQuery ? await prisma.$queryRaw<ContentIdLiveTrackCount[]>(countQuery) : [];
+  const reviewReadiness = contentIdReviewReadiness(liveTrackCounts[0]?.liveTrackCount ?? 0);
 
   return NextResponse.json({
     access: access ? {
@@ -36,7 +40,8 @@ export async function GET() {
       channelUrl: access.channelUrl,
       feeAmount: access.feeAmount,
       release: access.release,
-      payment: access.distributionOrder
+      payment: access.distributionOrder,
+      reviewEligibility: reviewReadiness
     } : { status: "none" }
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

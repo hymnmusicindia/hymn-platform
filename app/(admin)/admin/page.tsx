@@ -1,11 +1,11 @@
-import { retryAdminRead } from "@/lib/admin-read-retry";
+import { loadAdminSection, retryAdminRead } from "@/lib/admin-read-retry";
 import { listPlatformRevenue } from "@/lib/platform-revenue";
 import { listSubscriptionRevenue } from "@/lib/subscription-revenue";
 import { adminModuleAllowed } from "@/lib/admin-workspace-navigation";
 import { redirect } from "next/navigation";
 import { AdminControlCenter } from "@/components/admin-control-center";
 import { getAdminAccessForPage, getAdminSessionForPage, getCurrentUserForPage } from "@/lib/access";
-import type { User } from "@/lib/types";
+import type { SiteSettings, User } from "@/lib/types";
 import {
   getSiteSettings,
   listAllArtistProfiles,
@@ -86,19 +86,42 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const canReadSystem=permissions.includes("system.manage");
 
   const resolvedSearchParams = await searchParams;
-  const [users, releases, beats, orders, applications, leads, distributionOrders, artistProfiles, siteSettings, notifications, supportTickets, subscriptionRevenue, pendingEngineerApplications] = await retryAdminRead(() => Promise.all([
-    canReadUsers ? listUsers() : Promise.resolve([]), canReadReleases ? listAllDetailedReleases() : Promise.resolve([]), canReadServices ? listAllBeats() : Promise.resolve([]),
-    canReadCommerce ? listAllOrders() : Promise.resolve([]), canReadServices ? listProducerApplications() : Promise.resolve([]), canReadServices ? listPartnershipLeads() : Promise.resolve([]),
-    canReadCommerce ? listAllDistributionOrders() : Promise.resolve([]), canReadUsers ? listAllArtistProfiles() : Promise.resolve([]), getSiteSettings(),
-    canReadSystem ? listLatestNotifications(50) : Promise.resolve([]), canReadServices ? listAllSupportTickets() : Promise.resolve([]), readSubscriptionRevenue(),
-    canReadServices ? prisma.engineerApplication.count({ where: { status: "PENDING" } }) : Promise.resolve(0)
-  ]));
-  const revenueEntries = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? await retryAdminRead(() => listPlatformRevenue(distributionOrders, orders, subscriptionRevenue)) : [];
+  const unavailableAdminSections: string[] = [];
+  const loadSection = async <T,>(section: string, read: () => Promise<T>, fallback: T) => {
+    const result = await loadAdminSection(section, read, fallback);
+    if (result.failure) unavailableAdminSections.push(result.failure);
+    return result.value;
+  };
+  const defaultSiteSettings: SiteSettings = { homeHeroImageUrl: null, homeFeaturedReleaseIds: [] };
+  const [users, releases, beats, orders, applications, leads, distributionOrders, artistProfiles, siteSettings, notifications, supportTickets, subscriptionRevenue, pendingEngineerApplications] = await Promise.all([
+    loadSection("Users", () => canReadUsers ? listUsers() : Promise.resolve([]), []),
+    loadSection("Releases", () => canReadReleases ? listAllDetailedReleases() : Promise.resolve([]), []),
+    loadSection("Beats", () => canReadServices ? listAllBeats() : Promise.resolve([]), []),
+    loadSection("Orders", () => canReadCommerce ? listAllOrders() : Promise.resolve([]), []),
+    loadSection("Producer applications", () => canReadServices ? listProducerApplications() : Promise.resolve([]), []),
+    loadSection("Partnership leads", () => canReadServices ? listPartnershipLeads() : Promise.resolve([]), []),
+    loadSection("Distribution orders", () => canReadCommerce ? listAllDistributionOrders() : Promise.resolve([]), []),
+    loadSection("Artist profiles", () => canReadUsers ? listAllArtistProfiles() : Promise.resolve([]), []),
+    loadSection("Site settings", () => getSiteSettings(), defaultSiteSettings),
+    loadSection("Notifications", () => canReadSystem ? listLatestNotifications(50) : Promise.resolve([]), []),
+    loadSection("Support tickets", () => canReadServices ? listAllSupportTickets() : Promise.resolve([]), []),
+    loadSection("Subscription revenue", () => readSubscriptionRevenue(), []),
+    loadSection("Engineer applications", () => canReadServices ? prisma.engineerApplication.count({ where: { status: "PENDING" } }) : Promise.resolve(0), 0)
+  ]);
+  const revenueEntries = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission))
+    ? await loadSection("Platform revenue", () => listPlatformRevenue(distributionOrders, orders, subscriptionRevenue), [])
+    : [];
   const requestedTabCandidate = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
   const requestedTab = requestedTabCandidate && !adminModuleAllowed(requestedTabCandidate,permissions) ? "overview" : requestedTabCandidate;
 
   return (
     <main className="admin-panel-shell py-6 sm:py-8">
+      {unavailableAdminSections.length ? (
+        <section role="alert" className="mb-5 rounded-2xl border p-4" style={{ borderColor: "var(--danger)", background: "var(--card)" }}>
+          <h1 className="font-semibold">Some admin data could not be loaded</h1>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>The workspace is available, but these sections may be incomplete: {unavailableAdminSections.join(", ")}. Reload or contact HYMN support if this continues.</p>
+        </section>
+      ) : null}
       {canReadSystem ? <div className="mb-4 flex justify-end"><a className="btn-secondary" href="/admin/releases/manual">Manual release</a></div> : null}
       {canReadServices && pendingEngineerApplications > 0 ? <a href="/admin/studio" className="mb-4 flex items-center justify-between rounded-2xl border border-[var(--border-strong)] bg-[var(--card)] p-4 transition hover:border-[var(--accent)]"><span><strong className="block">Mix / Master engineer approvals</strong><small className="mt-1 block text-[var(--text-muted)]">Review profiles, work samples and pricing before publishing.</small></span><span className="rounded-full px-3 py-1 text-sm font-semibold" style={{ background: "#f4d493", color: "#241b0c", border: "1px solid #f9dfac" }}>{pendingEngineerApplications} pending</span></a> : null}
       <AdminControlCenter

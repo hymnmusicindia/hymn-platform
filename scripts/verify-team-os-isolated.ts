@@ -11,6 +11,11 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("team_fixture");
+    if (process.argv.includes("--admin-data-only")) {
+      await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-admin-workspace.ts"]);
+      return;
+    }
     // Start with the unchanged application schema, then exercise the additive SQL.
     const baseline = path.join(fixture, "baseline.prisma");
     writeFileSync(baseline, readFileSync("prisma/schema.prisma", "utf8").replace(/^model Team\w+ \{[\s\S]*?^\}\r?\n/gm, "").replace(/^  teamMemberships TeamMember\[\]\r?\n/gm, "").replace(/^  teamProspect TeamProspect\?\r?\n/gm, ""));

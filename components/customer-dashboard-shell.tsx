@@ -45,6 +45,7 @@ type ContentIdAccessSummary = {
   reviewReason?: string | null;
   channelUrl?: string | null;
   feeAmount?: number;
+  reviewEligibility?: { liveTrackCount: number; requiredTrackCount: number; ready: boolean };
   release?: { id: number; title: string; artistName: string; artworkUrl: string | null; tracks: Array<{ id: number; title: string; trackNumber: number | null }> };
   payment?: { paymentStatus: string; amount: number; creditsUsed: number; createdAt: string } | null;
 };
@@ -620,24 +621,26 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
               <div className="max-w-2xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Account access</p>
                 <h2 className="mt-2 text-xl font-semibold" style={{ color: "var(--text)" }}>
-                  {contentIdAccessLoading ? "Checking your access…" : contentIdAccess?.status === "approved" ? "Content ID is enabled" : contentIdAccess?.status === "pending" ? "Approval is in process" : contentIdAccess?.status === "declined" ? "Request not approved" : "Not enabled yet"}
+                  {contentIdAccessLoading ? "Checking your access…" : contentIdAccess?.status === "approved" ? "Content ID is enabled" : contentIdAccess?.status === "pending" && !contentIdAccess.reviewEligibility?.ready ? "Waiting for five live tracks" : contentIdAccess?.status === "pending" ? "Approval is in process" : contentIdAccess?.status === "declined" ? "Request not approved" : "Not enabled yet"}
                 </h2>
                 <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>
                   {contentIdAccess?.status === "approved"
                     ? "HYMN has approved your Content ID access. Eligible releases sent to YouTube Music will be selected automatically."
-                    : contentIdAccess?.status === "pending"
-                      ? "HYMN is reviewing your paid request. Reviews typically take 2–3 weeks. Content ID will remain off until approval."
+                    : contentIdAccess?.status === "pending" && !contentIdAccess.reviewEligibility?.ready
+                      ? `Your request is saved, but review has not started. HYMN will begin its 2–3 week review after at least ${contentIdAccess.reviewEligibility?.requiredTrackCount ?? 5} tracks are confirmed live through HYMN Music. Progress: ${contentIdAccess.reviewEligibility?.liveTrackCount ?? 0}/${contentIdAccess.reviewEligibility?.requiredTrackCount ?? 5}.`
+                      : contentIdAccess?.status === "pending"
+                        ? "HYMN is reviewing your request. Reviews typically take 2–3 weeks. Content ID will remain off until approval."
                       : contentIdAccess?.status === "declined"
                         ? "Your request was not approved. Review the reason below; you can submit a new request with an eligible release."
-                        : "Request account-wide access with an eligible release. The ₹200 fee is charged once; active subscribers can request it while distribution is covered by their plan. Content ID stays off during HYMN’s review."}
+                        : "Request account-wide access with an eligible release. The one-time fee is ₹250, waived for active Yearly+ subscribers. Review starts after at least five tracks are confirmed live through HYMN Music; Content ID stays off until approval."}
                 </p>
                 {contentIdAccess?.status === "declined" && contentIdAccess.reviewReason ? <p className="mt-3 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--border)", color: "var(--text)" }}><strong>HYMN&apos;s note:</strong> {customerMessage(contentIdAccess.reviewReason)}</p> : null}
-                {contentIdAccess?.requestedAt ? <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>Requested {formatDate(contentIdAccess.requestedAt)}{contentIdAccess.payment?.paymentStatus === "paid" ? " · ₹200 payment confirmed" : ""}</p> : null}
+                {contentIdAccess?.requestedAt ? <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>Requested {formatDate(contentIdAccess.requestedAt)}{contentIdAccess.payment?.paymentStatus === "paid" ? contentIdAccess.feeAmount === 0 ? " · no separate request fee" : ` · ₹${contentIdAccess.feeAmount?.toLocaleString("en-IN") ?? 250} confirmed` : ""}</p> : null}
               </div>
-              <StatusPill label={contentIdAccess?.status === "approved" ? "enabled" : contentIdAccess?.status === "pending" ? "under review" : contentIdAccess?.status === "declined" ? "declined" : "not requested"} active={contentIdAccess?.status === "approved"} />
+              <StatusPill label={contentIdAccess?.status === "approved" ? "enabled" : contentIdAccess?.status === "pending" && !contentIdAccess.reviewEligibility?.ready ? "waiting for tracks" : contentIdAccess?.status === "pending" ? "under review" : contentIdAccess?.status === "declined" ? "declined" : "not requested"} active={contentIdAccess?.status === "approved"} />
             </div>
             {contentIdAccess?.status !== "approved" ? <div className="mt-5 grid gap-2 sm:grid-cols-3">
-              {[["1", "Submit a paid request"], ["2", "HYMN reviews your rights"], ["3", "Access activates after approval"]].map(([step, label], index) => {
+              {[["1", "Submit your request"], ["2", contentIdAccess?.status === "pending" && !contentIdAccess.reviewEligibility?.ready ? "Reach five live tracks" : "HYMN reviews your rights"], ["3", "Access activates after approval"]].map(([step, label], index) => {
                 const current = contentIdAccess?.status === "pending" ? index === 1 : contentIdAccess?.status === "declined" ? index === 0 : index === 0;
                 return <div key={step} className="flex items-center gap-3 rounded-xl border p-3" style={{ borderColor: current ? "var(--accent)" : "var(--border)", background: "var(--card)" }}><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: current ? "var(--accent)" : "var(--bg-soft)", color: current ? "var(--accent-foreground)" : "var(--text-muted)" }}>{step}</span><span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>{label}</span></div>;
               })}
@@ -652,7 +655,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
             {releases.filter((release) => matchesQuery([releaseTitle(release), release.artistName, release.youtubeContentIdChannelUrl, ...(release.tracks ?? []).map(track => track.trackTitle)], dashboardSearch)).map((release) => {
               const isRequestedRelease = contentIdAccess?.release?.id === release.id;
               const enabled = Boolean(release.youtubeContentIdEnabled && contentIdAccess?.status === "approved");
-              const label = enabled ? "Content ID enabled" : isRequestedRelease && contentIdAccess?.status === "pending" ? "Approval in process" : "Content ID off";
+              const label = enabled ? "Content ID enabled" : isRequestedRelease && contentIdAccess?.status === "pending" && !contentIdAccess.reviewEligibility?.ready ? "Waiting for five live tracks" : isRequestedRelease && contentIdAccess?.status === "pending" ? "Approval in process" : "Content ID off";
               return <article key={`cid-${release.id}`} className="surface-list-item flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
                 <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
                   {release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 320)} alt={`${releaseTitle(release)} cover artwork`} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center text-xs" style={{ color: "var(--text-soft)" }}>No artwork</div>}

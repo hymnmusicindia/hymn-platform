@@ -91,16 +91,15 @@ export async function POST(request: Request) {
     }
     const subscription = await getSubscriptionByUserId(session.sub);
     const hasActiveSubscription = subscriptionHasEntitlement(subscription);
+    const hasYearlyPlusEntitlement = hasActiveSubscription && subscription?.plan === "yearly_plus";
     if (payload.plan !== "one_time" && !hasActiveSubscription && savedYoutubeContentId) {
       return NextResponse.json({ error: "Activate your subscription first, then request Content ID with an eligible release." }, { status: 409 });
     }
     // Issues the zero-value order that lets an active plan cover this release.
     const coverWithSubscription = async (plan: typeof payload.plan) => {
-      const contentIdRequestFee = getYoutubeContentIdAddonPrice(plan, savedYoutubeContentId, contentIdAccessStatus);
-      const reviewMetadataHash = contentIdRequestFee > 0
-        ? (await releaseReviewSnapshotHash(checkoutDraft.id, session.sub)) || ""
-        : "";
-      if (contentIdRequestFee > 0 && (!reviewMetadataHash || (checkoutDraft.reviewMetadataHash && reviewMetadataHash !== checkoutDraft.reviewMetadataHash))) {
+      const contentIdRequestFee = getYoutubeContentIdAddonPrice(plan, savedYoutubeContentId, contentIdAccessStatus, hasYearlyPlusEntitlement);
+      const reviewMetadataHash = (await releaseReviewSnapshotHash(checkoutDraft.id, session.sub)) || "";
+      if (!reviewMetadataHash || (checkoutDraft.reviewMetadataHash && reviewMetadataHash !== checkoutDraft.reviewMetadataHash)) {
         return NextResponse.json({ error: "The release review is out of date. Review and confirm the latest saved version before checkout." }, { status: 409 });
       }
       const existingEntitlement = payload.draftReleaseId
@@ -160,6 +159,7 @@ export async function POST(request: Request) {
           platforms: savedPlatforms,
           youtubeContentIdEnabled: savedYoutubeContentId,
           youtubeContentIdAccessStatus: contentIdAccessStatus,
+          contentIdIncludedByYearlyPlus: Boolean(hasYearlyPlusEntitlement && savedYoutubeContentId),
           currency: "INR",
           basePrice: 0,
           bulkDiscount: 0,
@@ -200,7 +200,32 @@ export async function POST(request: Request) {
         });
       }
       const entitlementOrderId = `sub_entitlement_${session.sub}_${Date.now()}`;
-      await createDistributionOrder({ userId: session.sub, plan, amount: 0, razorpayOrderId: entitlementOrderId, releaseId: payload.draftReleaseId });
+      const quoteSnapshot = {
+        version: 1,
+        plan,
+        paymentModel: "subscription",
+        releaseId: checkoutDraft.id,
+        reviewMetadataHash,
+        trackCount: savedTrackCount,
+        releaseType: savedReleaseType,
+        platforms: savedPlatforms,
+        youtubeContentIdEnabled: savedYoutubeContentId,
+        youtubeContentIdAccessStatus: contentIdAccessStatus,
+        contentIdIncludedByYearlyPlus: Boolean(hasYearlyPlusEntitlement && savedYoutubeContentId),
+        currency: "INR",
+        basePrice: 0,
+        bulkDiscount: 0,
+        ugcAddon: 0,
+        youtubeContentIdAddon: 0,
+        firstReleaseDiscount: 0,
+        subtotal: 0,
+        creditsUsed: 0,
+        payable: 0,
+        promotionCode: null,
+        subscriptionCovered: true,
+        issuedAt: new Date().toISOString()
+      };
+      await createDistributionOrder({ userId: session.sub, plan, amount: 0, razorpayOrderId: entitlementOrderId, releaseId: payload.draftReleaseId, quoteSnapshot });
       return NextResponse.json({
         orderId: entitlementOrderId,
         plan,
@@ -233,7 +258,7 @@ export async function POST(request: Request) {
     if (payload.promotionCode === FIRST_RELEASE_PROMOTION_CODE && savedMetadata.promotionCode !== FIRST_RELEASE_PROMOTION_CODE) {
       return NextResponse.json({ error: "Save and confirm this first-release offer on the draft before checkout." }, { status: 409 });
     }
-    const normalAmount = getDistributionPricing(payload.plan, savedTrackCount, savedReleaseType, savedPlatforms, { youtubeContentIdEnabled: savedYoutubeContentId, youtubeContentIdAccessStatus: contentIdAccessStatus });
+    const normalAmount = getDistributionPricing(payload.plan, savedTrackCount, savedReleaseType, savedPlatforms, { youtubeContentIdEnabled: savedYoutubeContentId, youtubeContentIdAccessStatus: contentIdAccessStatus, yearlyPlusEntitled: hasYearlyPlusEntitlement });
     let amount = normalAmount;
     let promotion = null;
     const firstReleaseOffer = savedMetadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
@@ -265,6 +290,7 @@ export async function POST(request: Request) {
           platforms: savedPlatforms,
           youtubeContentIdEnabled: savedYoutubeContentId,
           youtubeContentIdAccessStatus: contentIdAccessStatus,
+          yearlyPlusEntitled: hasYearlyPlusEntitlement,
           firstReleaseOffer,
           useHymnCredits: Boolean(payload.useHymnCredits),
           availableCredits: Number(creditAccount?.referralCredits ?? 0)
@@ -415,7 +441,7 @@ export async function POST(request: Request) {
       priceBeforeCredits,
       promotion,
       ugcAddOnAmount: getUgcAddonPrice(savedPlatforms, payload.plan),
-      youtubeContentIdAddOnAmount: getYoutubeContentIdAddonPrice(payload.plan, savedYoutubeContentId, contentIdAccessStatus),
+      youtubeContentIdAddOnAmount: getYoutubeContentIdAddonPrice(payload.plan, savedYoutubeContentId, contentIdAccessStatus, hasYearlyPlusEntitlement),
       trackPricing: payload.plan === "one_time" ? getTrackPricingQuote(savedTrackCount) : null,
       quote: responseQuote,
       key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""

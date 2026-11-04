@@ -1,6 +1,7 @@
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 
 export type ContentIdAccessStatus = "none" | "pending" | "approved" | "declined";
+export const CONTENT_ID_REQUEST_FEE = 250;
 
 export function normalizeContentIdAccessStatus(status?: string | null): ContentIdAccessStatus {
   const normalized = status?.trim().toLowerCase();
@@ -21,8 +22,10 @@ export function isValidYoutubeChannelUrl(value: unknown): value is string {
   }
 }
 
-export function contentIdRequestFee(selected: boolean, status: ContentIdAccessStatus) {
-  return selected && status !== "pending" && status !== "approved" ? 200 : 0;
+export function contentIdRequestFee(selected: boolean, status: ContentIdAccessStatus, yearlyPlusEntitled = false) {
+  return selected && status !== "pending" && status !== "approved" && !yearlyPlusEntitled
+    ? CONTENT_ID_REQUEST_FEE
+    : 0;
 }
 
 export function shouldAutoSelectContentId(input: {

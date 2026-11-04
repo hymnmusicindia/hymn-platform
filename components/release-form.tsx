@@ -995,6 +995,7 @@ export function ReleaseForm({
   initialStage,
   selectedPlan,
   hasActiveSubscription = false,
+  hasYearlyPlusEntitlement = false,
   hymnCreditBalance = 0,
   initialRelease,
   returnedFromSubmission = false,
@@ -1012,6 +1013,7 @@ export function ReleaseForm({
   initialStage?: number;
   selectedPlan: DistributionPlanOption;
   hasActiveSubscription?: boolean;
+  hasYearlyPlusEntitlement?: boolean;
   hymnCreditBalance?: number;
   initialRelease?: Release | null;
   returnedFromSubmission?: boolean;
@@ -1337,7 +1339,7 @@ export function ReleaseForm({
     () => getUgcAddonPrice(platforms, selectedPlan),
     [platforms, selectedPlan],
   );
-  const youtubeContentIdAddOnAmount = getYoutubeContentIdAddonPrice(selectedPlan, youtubeContentIdEnabled, contentIdAccessStatus);
+  const youtubeContentIdAddOnAmount = getYoutubeContentIdAddonPrice(selectedPlan, youtubeContentIdEnabled, contentIdAccessStatus, hasYearlyPlusEntitlement);
   const distributionBaseAmount =
     selectedPlan === "one_time"
       ? trackPricingQuote.basePrice
@@ -5035,12 +5037,18 @@ export function ReleaseForm({
                           : contentIdAccessStatus === "pending"
                             ? "HYMN is reviewing your request (typically 2–3 weeks). Content ID stays off until approval."
                             : selectedPlan !== "one_time" && !hasActiveSubscription
-                              ? "Activate your subscription first; then request account-wide Content ID access with an eligible release for ₹200."
+                              ? "Activate your subscription first; then request account-wide Content ID access with an eligible release for ₹250."
                               : selectedPlan !== "one_time"
-                                ? "Your plan covers distribution. Request account-wide Content ID access for ₹200; access remains off until HYMN approves it."
+                                ? hasYearlyPlusEntitlement
+                                  ? "Your active Yearly+ subscription includes the Content ID request; access remains off until HYMN approves it."
+                                  : "Your plan covers distribution. Request account-wide Content ID access for ₹250; access remains off until HYMN approves it."
                               : contentIdAccessStatus === "declined"
-                                ? "Your request was declined. You can submit a new ₹200 approval request."
-                                : "Request account-wide Content ID access for ₹200. It will remain off until HYMN approves it."}
+                                ? hasYearlyPlusEntitlement
+                                  ? "Your request was declined. Your active Yearly+ plan includes a new request."
+                                  : "Your request was declined. You can submit a new ₹250 approval request."
+                                : hasYearlyPlusEntitlement
+                                  ? "Request account-wide Content ID access at no extra charge with Yearly+. It will remain off until HYMN approves it."
+                                  : "Request account-wide Content ID access for ₹250. It will remain off until HYMN approves it."}
                     </span>
                     {contentIdAccessStatus !== "approved" && contentIdAccessStatus !== "pending" && (selectedPlan === "one_time" || hasActiveSubscription) ? <button
                       type="button"
@@ -5052,7 +5060,7 @@ export function ReleaseForm({
                     </button> : null}
                     {youtubeContentIdEnabled && contentIdAccessStatus === "none" || youtubeContentIdEnabled && contentIdAccessStatus === "declined" ? (
                       <span className="w-full text-xs" style={{ color: "var(--text-soft)" }}>
-                        One-time ₹200 request fee; ongoing access starts only after HYMN approval.
+                        {youtubeContentIdAddOnAmount === 0 ? "Included with Yearly+; access starts only after HYMN approval." : "One-time ₹250 request fee; access starts only after HYMN approval."}
                       </span>
                     ) : null}
                   </div>
@@ -5270,6 +5278,7 @@ export function ReleaseForm({
         }}
         channelUrl={youtubeContentIdChannelUrl}
         onChannelUrlChange={setYoutubeContentIdChannelUrl}
+        requestFeeAmount={youtubeContentIdAddOnAmount}
       />
       <ContributorsModal
         state={contributorsModal}

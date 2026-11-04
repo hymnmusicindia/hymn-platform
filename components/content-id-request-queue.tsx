@@ -7,6 +7,7 @@ import { artworkPreviewUrl } from "@/lib/artwork-preview";
 type RequestRow = {
   id: number;
   status: "pending" | "approved" | "declined";
+  reviewEligibility: { liveTrackCount: number; requiredTrackCount: number; ready: boolean };
   requestedAt: string;
   reviewedAt: string | null;
   channelUrl: string | null;
@@ -98,6 +99,7 @@ export function ContentIdRequestQueue({ initialRequests }: { initialRequests: Re
         <div className="grid gap-4">
           {visibleRows.map((row) => {
             const paymentConfirmed = row.distributionOrder?.paymentStatus === "paid";
+            const reviewReady = row.reviewEligibility.ready;
             const channelLink = safeYoutubeChannelUrl(row.channelUrl);
             return (
               <article key={row.id} className="surface-card overflow-hidden">
@@ -119,12 +121,13 @@ export function ContentIdRequestQueue({ initialRequests }: { initialRequests: Re
                   </div>
                   <aside className="rounded-xl border p-4 text-sm lg:w-72" style={{ borderColor: "var(--border)", background: "var(--surface-muted)" }}>
                     <p className="font-semibold">Payment evidence</p>
-                    <p className="mt-2">Request fee: ₹{row.feeAmount.toLocaleString("en-IN")}</p>
-                    <p className={paymentConfirmed ? "font-medium" : ""} style={{ color: paymentConfirmed ? "var(--success)" : "var(--danger)" }}>{paymentConfirmed ? "Payment confirmed" : "Payment not confirmed"}</p>
+                    <p className="mt-2">Request fee: {row.feeAmount === 0 ? "Waived" : `₹${row.feeAmount.toLocaleString("en-IN")}`}</p>
+                    <p className={paymentConfirmed ? "font-medium" : ""} style={{ color: paymentConfirmed ? "var(--success)" : "var(--danger)" }}>{paymentConfirmed ? row.feeAmount === 0 ? "Yearly+ entitlement confirmed" : "Payment confirmed" : "Payment not confirmed"}</p>
                     <p className="mt-1">Charged in checkout: ₹{row.distributionOrder?.amount?.toLocaleString("en-IN") ?? 0}</p>
                     <p className="mt-1">Distribution order: {row.distributionOrder?.id ?? "Unavailable"}</p>
                     {row.distributionOrder?.razorpayPaymentId ? <p className="mt-1 break-all text-xs">Payment ref: {row.distributionOrder.razorpayPaymentId}</p> : null}
                     <p className="mt-2">Paid with credits: ₹{row.distributionOrder?.creditsUsed?.toLocaleString("en-IN") ?? 0}</p>
+                    <p className="mt-2">Live HYMN tracks: {row.reviewEligibility.liveTrackCount}/{row.reviewEligibility.requiredTrackCount}</p>
                   </aside>
                 </div>
                 <div className="mt-5 grid gap-4 border-t pt-4 md:grid-cols-2" style={{ borderColor: "var(--border)" }}>
@@ -150,11 +153,12 @@ export function ContentIdRequestQueue({ initialRequests }: { initialRequests: Re
                       <textarea className="input min-h-20" maxLength={2000} value={notes[row.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [row.id]: event.target.value }))} placeholder="Add context or the reason for your decision" />
                     </label>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" className="btn-primary pressable" disabled={busyId === row.id || !paymentConfirmed} onClick={() => void review(row, "approve")}>Approve access</button>
-                      <button type="button" className="btn-secondary pressable" disabled={busyId === row.id || !paymentConfirmed} onClick={() => void review(row, "keep_pending")}>Keep pending</button>
-                      <button type="button" className="btn-secondary pressable" disabled={busyId === row.id || !paymentConfirmed} onClick={() => void review(row, "decline")}>Decline request</button>
+                      <button type="button" className="btn-primary pressable" disabled={busyId === row.id || !paymentConfirmed || !reviewReady} onClick={() => void review(row, "approve")}>Approve access</button>
+                      <button type="button" className="btn-secondary pressable" disabled={busyId === row.id || !paymentConfirmed || !reviewReady} onClick={() => void review(row, "keep_pending")}>Keep pending</button>
+                      <button type="button" className="btn-secondary pressable" disabled={busyId === row.id || !paymentConfirmed || !reviewReady} onClick={() => void review(row, "decline")}>Decline request</button>
                     </div>
-                    {!paymentConfirmed ? <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>Review actions are disabled until the ₹200 payment is confirmed.</p> : null}
+                    {!paymentConfirmed ? <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>Review actions are disabled until the request payment or Yearly+ entitlement is confirmed.</p> : null}
+                    {paymentConfirmed && !reviewReady ? <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Review has not started. Actions unlock after {row.reviewEligibility.requiredTrackCount} tracks are confirmed live through HYMN Music.</p> : null}
                     <p className="mt-2 text-sm" aria-live="polite">{messages[row.id]}</p>
                   </div>
                 ) : (

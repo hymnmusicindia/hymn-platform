@@ -10,3 +10,19 @@ export async function retryAdminRead<T>(read: () => Promise<T>): Promise<T> {
     return read();
   }
 }
+
+export async function loadAdminSection<T>(
+  section: string,
+  read: () => Promise<T>,
+  fallback: T,
+  onFailure: (section: string, error: unknown) => void = (failedSection, error) => {
+    console.error("Admin workspace section failed to load", { section: failedSection, error });
+  }
+) {
+  try {
+    return { value: await retryAdminRead(read), failure: null as string | null };
+  } catch (error) {
+    onFailure(section, error);
+    return { value: fallback, failure: section };
+  }
+}

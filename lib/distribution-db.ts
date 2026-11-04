@@ -1943,10 +1943,10 @@ export async function transitionDistributionQueueEntry(input: {
 
   return null;
 }
-export function getDistributionPricing(plan: SubscriptionPlan, trackCount: number, releaseType: Release["releaseType"], platforms: string[] = [], options?: { youtubeContentIdEnabled?: boolean; youtubeContentIdAccessStatus?: string | null }) {
+export function getDistributionPricing(plan: SubscriptionPlan, trackCount: number, releaseType: Release["releaseType"], platforms: string[] = [], options?: { youtubeContentIdEnabled?: boolean; youtubeContentIdAccessStatus?: string | null; yearlyPlusEntitled?: boolean }) {
   void releaseType;
   const ugcAddonPrice = getUgcAddonPrice(platforms, plan);
-  const youtubeContentIdAddonPrice = getYoutubeContentIdAddonPrice(plan, options?.youtubeContentIdEnabled, options?.youtubeContentIdAccessStatus);
+  const youtubeContentIdAddonPrice = getYoutubeContentIdAddonPrice(plan, options?.youtubeContentIdEnabled, options?.youtubeContentIdAccessStatus, options?.yearlyPlusEntitled);
   if (plan !== "one_time") {
     return planLimits(plan).amount;
   }

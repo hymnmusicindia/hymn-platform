@@ -2,7 +2,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const suites = ['performance-execution','first-release','direnote-contract','producer-lifecycle','analytics','migration-safety','razorpay','subscriptions','payment-enforcement','storage','release-status','distribution-idempotency','payout','managed-services','studio-services'];
+const suites = ['performance-execution','first-release','direnote-contract','producer-lifecycle','analytics','migration-safety','razorpay','subscriptions','payment-enforcement','storage','release-status','distribution-idempotency','payout','managed-services','studio-services','distribution-pricing'];
 // These suites import server-only business modules. The condition must reach
 // each child process, rather than only the npm process that starts the suite.
 const env = { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --conditions=react-server`.trim(), EMAIL_ENABLED: 'false', HYMN_CRON_WORKER_ENABLED: 'false' };

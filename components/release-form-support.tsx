@@ -547,13 +547,15 @@ export function YoutubeContentIdModal({
   onClose,
   onSave,
   channelUrl,
-  onChannelUrlChange
+  onChannelUrlChange,
+  requestFeeAmount
 }: {
   open: boolean;
   onClose: () => void;
   onSave: () => void;
   channelUrl: string;
   onChannelUrlChange: (value: string) => void;
+  requestFeeAmount: number;
 }) {
   return (
     <ModalShell open={open} onClose={onClose} maxWidthClass="max-w-xl">
@@ -569,7 +571,7 @@ export function YoutubeContentIdModal({
           <div className="rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text-muted)" }}>
             <p className="font-semibold" style={{ color: "var(--text)" }}>Content ID is separate from YouTube Music</p>
             <p className="mt-2">It helps identify matching audio in YouTube videos. Only submit music you control exclusively; matches may include uploads on your own channel.</p>
-            <p className="mt-2">HYMN reviews the ₹200 one-time, account-wide request, typically within 2–3 weeks. Content ID stays off until approval. After approval, eligible YouTube Music releases are selected automatically.</p>
+            <p className="mt-2">{requestFeeAmount === 0 ? "Your active Yearly+ plan includes this account-wide request." : `The one-time account-wide request fee is ₹${requestFeeAmount.toLocaleString("en-IN")}.`} HYMN starts its 2–3 week review after at least five tracks are confirmed live through HYMN Music. Content ID stays off until approval. After approval, eligible YouTube Music releases are selected automatically.</p>
           </div>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>Paste the URL of the YouTube channel that should be linked to your Content ID request.</p>
           <label className="grid gap-2">

@@ -13,7 +13,7 @@ assert(isDistributionChannel('150+ More Stores'),'Existing draft preference rema
 assert(!isDistributionChannel('Audible Magic Identification'),'Do not invent an unsupported destination');
 assert.equal(getUgcAddonPrice(['YouTube Music'],'one_time'),0);
 assert.equal(getUgcAddonPrice(['Snapchat'],'one_time'),50);
-assert.equal(getYoutubeContentIdAddonPrice('one_time',true),200);
+assert.equal(getYoutubeContentIdAddonPrice('one_time',true),250);
 assert.equal(getYoutubeContentIdAddonPrice('one_time',false),0);
 const assets=JSON.parse(readFileSync('public/assets/store-logos/original/sources.json','utf8'));
 assert(assets.assets.every((a:any)=>a.file&&a.source&&!a.unavailable));

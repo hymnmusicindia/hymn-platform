@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminPermission } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
+import { CONTENT_ID_REQUEST_FEE } from "@/lib/content-id-access";
+import { contentIdLiveTrackCountsQuery, contentIdReviewReadiness, type ContentIdLiveTrackCount } from "@/lib/content-id-review-eligibility";
 
 const reviewSchema = z.object({
   action: z.enum(["approve", "keep_pending", "decline"]),
@@ -38,15 +40,32 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       });
       if (!current) return { error: "Content ID request not found.", status: 404 };
       if (current.status !== "pending") return { error: "This request is no longer pending.", status: 409 };
+      const countQuery = contentIdLiveTrackCountsQuery([current.userId]);
+      const liveTrackCounts = countQuery ? await tx.$queryRaw<ContentIdLiveTrackCount[]>(countQuery) : [];
+      const reviewReadiness = contentIdReviewReadiness(liveTrackCounts[0]?.liveTrackCount ?? 0);
+      if (!reviewReadiness.ready) {
+        return {
+          error: `Review cannot start until at least ${reviewReadiness.requiredTrackCount} tracks are confirmed live through HYMN Music (${reviewReadiness.liveTrackCount}/${reviewReadiness.requiredTrackCount} so far).`,
+          status: 409
+        };
+      }
       if (!current.distributionOrder || current.distributionOrder.paymentStatus !== "paid") {
-        return { error: "A confirmed ₹200 Content ID payment is required before review.", status: 409 };
+        return { error: "A confirmed Content ID request payment or Yearly+ entitlement is required before review.", status: 409 };
       }
       const quoteSnapshot = current.distributionOrder.quoteSnapshot;
       const quotedAccessFee = quoteSnapshot && typeof quoteSnapshot === "object" && !Array.isArray(quoteSnapshot)
         ? Number((quoteSnapshot as Record<string, unknown>).youtubeContentIdAddon)
         : 0;
-      if (current.feeAmount !== 200 || current.distributionOrder.currency !== "INR" || quotedAccessFee !== 200) {
-        return { error: "The linked checkout does not contain a verified ₹200 Content ID access fee.", status: 409 };
+      const quote = quoteSnapshot && typeof quoteSnapshot === "object" && !Array.isArray(quoteSnapshot)
+        ? quoteSnapshot as Record<string, unknown>
+        : null;
+      const paidRequestFee = [200, CONTENT_ID_REQUEST_FEE].includes(current.feeAmount) && quotedAccessFee === current.feeAmount;
+      const yearlyPlusWaiver = current.feeAmount === 0
+        && quotedAccessFee === 0
+        && quote?.contentIdIncludedByYearlyPlus === true
+        && quote?.youtubeContentIdEnabled === true;
+      if (current.distributionOrder.currency !== "INR" || (!paidRequestFee && !yearlyPlusWaiver)) {
+        return { error: "The linked checkout does not contain a verified Content ID fee or Yearly+ waiver.", status: 409 };
       }
 
       if (body.action === "keep_pending") {
