@@ -32,7 +32,7 @@ const storeLogos = [
 
 export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{featuredReleases:Awaited<ReturnType<typeof getPublicHomePreview>>["featuredReleases"];catalog:ReturnType<typeof buildBeatStorefront>["catalog"];signedIn?:boolean}) {
   const homepageShowcaseReleases = [...new Map(featuredReleases.map(release => [release.id, release])).values()];
-  const rowCount = Math.min(signedIn ? 3 : 2, homepageShowcaseReleases.length);
+  const rowCount = Math.min(3, homepageShowcaseReleases.length);
   const showcaseRows = ["left", "right", "left"].slice(0, rowCount).map((direction, rowIndex) => {
     // Disjoint pools keep a release in one row throughout the entire animation.
     const source = homepageShowcaseReleases.filter((_, index) => index % rowCount === rowIndex);
