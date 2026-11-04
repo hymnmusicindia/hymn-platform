@@ -16,6 +16,12 @@ export async function enqueueRenderedEmail(db: any, input: { eventKey: string; t
 }
 
 export async function enqueueReleaseEmail(db: any, event: string, input: { to: string; userId: number; correctionEventKey?: string; statusEventKey?: string; correctionBinding?:string; correctionAttemptId?:number } & ReleaseEmailData) {
+  if (event === "release_sent_to_distributor") {
+    const attempt = await db.distributionSubmissionAttempt.findFirst({ where: { releaseId: Number(input.releaseId), provider: "direnote", isCurrent: true }, orderBy: { id: "desc" } });
+    // A local approval/queue transition alone is never delivery evidence.
+    if (!attempt || !["submitted", "processing"].includes(attempt.state) || !(attempt.providerReference || object(attempt.responseRedacted).ingestJobId)) return undefined;
+    input = { ...input, upc: attempt.upc ?? undefined, statusEventKey: `attempt:${attempt.id}`, correctionAttemptId: attempt.id };
+  }
   if (event === "release_submitted") {
     const existing = await db.emailLog.findFirst({ where: { entityType: "release", entityId: String(input.releaseId), template: event, status: { in: ["sent", "pending", "sending", "review"] } }, select: { id: true } });
     if (existing) return existing.id as number;
@@ -27,7 +33,7 @@ export async function enqueueReleaseEmail(db: any, event: string, input: { to: s
 
 /** Called inside the status transaction: SMTP is never part of that transaction. */
 export async function queueReleaseStatusUpdate(db: any, releaseId: number, status: string, requestedReminderKey?: string) {
-  const event = ({ submitted: "release_submitted", changes_requested: "release_changes_requested", rejected: "release_rejected", approved: "release_approved_by_hymn", scheduled: "release_scheduled", live: "release_live" } as Record<string, string>)[status.toLowerCase()];
+  const event = ({ submitted: "release_submitted", changes_requested: "release_changes_requested", rejected: "release_rejected", approved: "release_approved_by_hymn", sent_to_distributor: "release_sent_to_distributor", distributor_processing: "release_sent_to_distributor", scheduled: "release_scheduled", live: "release_live" } as Record<string, string>)[status.toLowerCase()];
   if (!event) return undefined;
   const release = await db.release.findUnique({ where: { id: releaseId }, include: { user: { select: { id: true, email: true, name: true, status: true } } } });
   if (!release || release.archivedAt || release.user.status !== "ACTIVE") return undefined;
@@ -80,9 +86,12 @@ export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, del
     // Receipt confirms a historical submission; normal progress must not cancel it.
     // Drafts/withdrawn releases still cannot receive a submission receipt.
     const validSubmission = job.template === "release_submitted" && ["SUBMITTED", "UNDER_REVIEW", "IN_QC_QUEUE", "APPROVED", "QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "SCHEDULED", "LIVE", "CHANGES_REQUESTED", "REJECTED", "RESUBMITTED", "DELIVERY_FAILED"].includes(release?.status ?? "");
+    const forwardStatus = ["APPROVED", "QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "SCHEDULED", "LIVE"].includes(release?.status ?? "");
+    const acceptedAttempt = job.template === "release_sent_to_distributor" && payload.correctionAttemptId ? await prisma.distributionSubmissionAttempt.findFirst({ where: { id: Number(payload.correctionAttemptId), releaseId: Number(job.entityId), isCurrent: true, state: "submitted" }, select: { id: true } }) : null;
+    const validMilestone = forwardStatus && (job.template === "release_approved_by_hymn" || job.template === "release_sent_to_distributor" && Boolean(acceptedAttempt));
     const amendment = job.template === 'release_amendment_update' ? await prisma.releaseChangeRequest.findFirst({ where: { id: Number(payload.amendmentRequestId), releaseId: Number(job.entityId), requestedByUserId: job.userId ?? 0 } }) : null;
     const validAmendment = Boolean(amendment && String(object(amendment.requestedChanges).fingerprint ?? '') === String(payload.amendmentFingerprint ?? '') && (payload.amendmentStatus === 'submitted' || amendment.status === payload.amendmentStatus));
-    if (!release || release.archivedAt || (job.template === 'release_amendment_update' ? !validAmendment : !validSubmission && release.status !== payload.expectedStatus) || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {
+    if (!release || release.archivedAt || (job.template === 'release_amendment_update' ? !validAmendment : job.template === 'release_sent_to_distributor' ? !validMilestone : !validSubmission && !validMilestone && release.status !== payload.expectedStatus) || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {
       await prisma.emailLog.update({ where: { id: job.id }, data: { status: "cancelled", errorMessage: "Release, owner or draft changed before delivery." } }); cancelled++; continue;
     }
     try {

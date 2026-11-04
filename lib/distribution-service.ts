@@ -385,14 +385,10 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
             ? "This submission has reached its retry limit. Review Submission history and contact support."
             : "The previous submission requires review before it can be retried. Check Submission history for the recorded error.",
   };
-  await snapshotTrackContributions(claim.attempt.id, releaseId);
   // DireNote v2.5 queues ingestion asynchronously. Reuse HYMN's stable attempt
   // key on every transport retry so DireNote can return the same job safely.
   const providerPayload = { ...payload, idempotency_key: claim.attempt.idempotencyKey };
   const providerRedactedPayload = redactDireNotePayload(providerPayload);
-
-  await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", options.correctionReingest ? "Corrected release queued as a new DireNote submission; waiting for fresh provider identifiers." : "Validated and queued for DireNote API.", undefined, { manualOverride: Boolean(options.correctionReingest), actorType: "system", notify: !amendment });
-  await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.", undefined, { notify: !amendment });
 
   let providerAccepted = false;
   let providerRequestStarted = false;
@@ -400,6 +396,11 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   // can mistake it for an arbitrary CSS utility while scanning TypeScript.
   const correlationId = `DNM_SUB_${new Date().toISOString().replaceAll("-", "").replaceAll(":", "").replaceAll(".", "").replace("T", "").replace("Z", "").slice(0, 14)}_${claim.attempt.id}`;
   try {
+    // Every operation after claiming must be guarded: a local preparation
+    // failure must not strand an attempt as an unresolved network request.
+    await snapshotTrackContributions(claim.attempt.id, releaseId);
+    await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", options.correctionReingest ? "Corrected release queued as a new DireNote submission; waiting for fresh provider identifiers." : "Validated and queued for DireNote API.", undefined, { manualOverride: Boolean(options.correctionReingest), actorType: "system", notify: !amendment });
+    await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.", undefined, { notify: !amendment });
     await reserveDireNoteRequest("content_ingestion", releaseId, options.actorId);
     await prisma.distributionSubmissionAttempt.update({ where: { id: claim.attempt.id }, data: {
       payloadRedacted: JSON.parse(JSON.stringify(providerRedactedPayload)),
@@ -504,6 +505,10 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote submission accepted.");
     await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote submission accepted.");
     await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? parsed.ingestJobId ?? null, providerStatus: "catalogue_confirmed", responseRedacted: { ...(amendment ? { amendmentRequestId: amendment.request.id, identifierPolicy: "replace" } : {}), distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, artists: parsed.artists, songwriters: parsed.songwriters, warnings: parsed.warnings, ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: null, ingestJobStatus: null, pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } });
+    if (!amendment) {
+      const { queueReleaseStatusUpdate } = await import("@/lib/email/release-outbox");
+      await queueReleaseStatusUpdate(prisma, releaseId, automaticStatus);
+    }
     if (amendment?.wizard && parsed.upc && assignedTrackIsrcs.length === release.tracks?.length) { const { recordAmendmentQcPassed } = await import('./release-amendment-automation'); await recordAmendmentQcPassed(amendment.request.id, claim.attempt.id); }
     if (artistCardIds.length || contributorPartyIds.length) {
       const { syncDireNoteArtistInformation, syncDireNoteSongwriterInformation } = await import("@/lib/direnote-service");
