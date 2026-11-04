@@ -24,6 +24,12 @@ Server authorization and validation remain authoritative. A displayed client suc
 
 ## Build and release
 
+Customer app 1.0.3 adds native Google account selection alongside email codes, a two-row product header, expandable navigation groups, artwork-led home and beat catalogue, and the public HYMN release showcase. Google uses Android Credential Manager and server ID-token verification; it never embeds a browser login. Register package `fun.hymnmusic.app` with the release certificate SHA-1 `A0:CB:DC:63:9F:1E:14:26:DC:2A:8E:9D:25:57:B2:E8:39:FB:5C:29` in the same Google Cloud project as the web client. A real Google account/device test remains necessary; an emulator without an account cannot prove consent completion.
+
+Public home content uses the website's cached public preview and an encrypted device cache. Images run on a separate bounded executor so artwork downloads do not block authenticated API work. Private customer data is excluded from the public home response.
+
+Sign-in mail has a compact authentication-only template, a distinct code subject and UTC request timestamp. SMTP acceptance confirms handoff, not inbox delivery time. Delivery diagnostics omit addresses and codes. Active administrator identities can sign in without losing their existing roles; suspended and merged identities remain blocked.
+
 Run `node scripts/release-music-app.cjs`. A first build creates an ignored signing key under `android/.signing/`; subsequent builds reuse it and increment `android/music-release.json`. The command builds the release APK, runs JVM tests, checks the package/version metadata and publishes a content-hashed APK plus `public/downloads/hymn-music/release.json`.
 
 Back up `android/.signing/customer-release.jks` and `customer.properties` securely together. They must never be committed or uploaded to public storage. The same key is required for every future APK update.
