@@ -23,8 +23,15 @@ async function deliver(email: string, code: string) {
   const config = getEmailConfig(), client = getEmailClient({ timeoutMs: 15000 });
   if (!config.enabled || !client) throw new EmailSignInError('Email sign-in is temporarily unavailable.', 503);
   const template = { title: 'Your HYMN sign-in code', body: `Your verification code is ${code}.\n\nUse it to sign in or create your HYMN account. It expires in 10 minutes and works once.`, ctaLabel: '', ctaUrl: '', notice: 'Never share this code. If you did not request it, ignore this email.' };
-  const result = await client.emails.send({ from: config.from, to: email, subject: template.title, html: emailLayout(template), text: emailText(template), ...(config.replyTo ? { replyTo: config.replyTo } : {}) });
-  if (result.error) throw new EmailSignInError('We could not send your code. Please try again shortly.', 503);
+  try {
+    const result = await client.emails.send({ from: config.from, to: email, subject: template.title, html: emailLayout(template), text: emailText(template), ...(config.replyTo ? { replyTo: config.replyTo } : {}) });
+    if (result.error) throw new Error('Delivery rejected.');
+    console.info('CUSTOMER_EMAIL_OTP_ACCEPTED', { recipientKey: mac(`delivery:${email}`).slice(0, 16) });
+  } catch (error) {
+    const detail = error as { code?: unknown; responseCode?: unknown };
+    console.error('CUSTOMER_EMAIL_OTP_DELIVERY_FAILED', { code: typeof detail.code === 'string' ? detail.code.slice(0, 30) : 'DELIVERY_ERROR', responseCode: typeof detail.responseCode === 'number' ? detail.responseCode : undefined });
+    throw new EmailSignInError('We could not send your code. Please try again shortly.', 503);
+  }
 }
 export async function requestEmailCode(email: string, name: string, ip: string, send = deliver) {
   email = email.trim().toLowerCase(); name = name.trim().slice(0, 100);
@@ -38,8 +45,11 @@ export async function requestEmailCode(email: string, name: string, ip: string, 
     await tx.securityRateLimit.create({ data: { keyHash: mac(`challenge:${id}`), scope, count: 0, windowStart: new Date(), expiresAt: new Date(Date.now() + TTL * 1000) } });
   });
   const existing = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } }, select: { status: true, role: true } });
-  let eligible = !existing || existing.status === 'ACTIVE' && existing.role !== 'ADMIN';
-  try { await assertNotMergedIdentity({ email }); } catch { eligible = false; }
+  let eligible = !existing || existing.status === 'ACTIVE';
+  try { await assertNotMergedIdentity({ email }); } catch (error) {
+    if (error instanceof Error && error.message.startsWith('This login is no longer available.')) eligible = false;
+    else throw error;
+  }
   if (eligible) await send(email, code);
   return { challenge, expiresIn: TTL, resendAfter: 60, message: 'Check your inbox and spam folder for your HYMN code. Use the most recent code.' };
 }
@@ -62,7 +72,7 @@ export async function verifyEmailCode(email: string, challenge: string, code: st
     if (!row || row.count !== 0 || row.expiresAt <= new Date()) throw invalid();
     await assertNotMergedIdentity({ email }, tx, true);
     let user = await tx.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
-    if (user && (user.status !== 'ACTIVE' || user.role === 'ADMIN')) throw invalid();
+    if (user && user.status !== 'ACTIVE') throw invalid();
     const isNew = !user;
     if (!user) {
       const name = typeof claims.n === 'string' && claims.n.trim() ? claims.n.trim().slice(0, 100) : email.split('@')[0].slice(0, 100);

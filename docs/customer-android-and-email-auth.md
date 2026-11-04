@@ -4,7 +4,7 @@ The customer app is the native `android/music` module (`fun.hymnmusic.app`). The
 
 ## Email sign-in
 
-`POST /api/auth/email` requests or verifies a six-digit email code. Requesting a code does not create an account. Successful verification creates a customer or signs into the existing active customer/producer identity. Administrator and merged/inactive identities cannot enter through this flow. Existing roles and account names are preserved.
+`POST /api/auth/email` requests or verifies a six-digit email code. Requesting a code does not create an account. Successful verification creates a customer or signs into an existing active identity, preserving its account role and name. Merged/inactive identities cannot enter through this flow. Administrator identities receive codes like other active accounts; the existing role is read from the database, never accepted from the client.
 
 Codes expire after ten minutes. Requests and attempts have persistent limits; resends invalidate older challenges. A keyed code digest is bound to the email and challenge ID. Verification consumes a locked database row in the same transaction as identity creation. Session cookies use the existing HttpOnly session system. The native app stores its cookie and recovery state in Android encrypted preferences. No schema migration or new environment secret is needed; the existing email configuration and user session secret are used.
 

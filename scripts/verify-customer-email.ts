@@ -32,7 +32,9 @@ async function main() {
   const suspended = await prisma.user.create({ data: { name: 'Suspended', email: 'suspended@fixture.invalid', googleId: randomUUID(), status: 'SUSPENDED' } });
   await requestEmailCode(suspended.email, '', 'suspended', deliver); assert.equal(codes.has(suspended.email), false);
   const admin = await prisma.user.create({ data: { name: 'Admin', email: 'admin@fixture.invalid', googleId: randomUUID(), role: 'ADMIN' } });
-  await requestEmailCode(admin.email, '', 'admin', deliver); assert.equal(codes.has(admin.email), false);
+  const adminCode = await requestEmailCode(admin.email, '', 'admin', deliver); assert.equal(codes.has(admin.email), true);
+  const adminLogin = await verifyEmailCode(admin.email, adminCode.challenge, codes.get(admin.email)!, 'admin-verify');
+  assert.equal(adminLogin.user.id, admin.id); assert.equal(adminLogin.user.role, 'ADMIN', 'OTP preserves the existing account role.');
   await assert.rejects(requestEmailCode('offline@fixture.invalid', '', 'offline', async () => { throw Error('SMTP unavailable'); }));
   assert.equal(await prisma.user.count({ where: { email: 'offline@fixture.invalid' } }), 0);
   console.log('PASS customer email OTP: verified signup, existing-role preservation, concurrent single use, replay, attempts, wrong email, tampering, expiry, restricted accounts and SMTP failure; no real email sent.');
