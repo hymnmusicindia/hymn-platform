@@ -12,12 +12,12 @@ const steps = [
   { title: "Take your finished music worldwide", description: "Submit your release for review and distribution to Spotify, Apple Music, YouTube Music and more.", action: "Explore distribution", href: "/distribution" }
 ] as const;
 
-export function MusicLifecycleBanner() {
+export function MusicLifecycleBanner({ compact = false }: { compact?: boolean }) {
   const [activeStep, setActiveStep] = useState(0);
   const step = steps[activeStep];
   return (
     <section className="shell py-7 sm:py-9" aria-labelledby="music-journey-heading">
-      <div className={styles.banner}>
+      <div className={`${styles.banner} ${compact ? styles.compact : ''}`}>
         <div className={styles.heading}>
           <div><h2 id="music-journey-heading">Your sound. <span>Release-ready.</span></h2><p>Beat to master to worldwide release. All with HYMN.</p></div>
           <Link href="/beat-store" className={styles.cta}>Start with a beat <ArrowRight size={17} aria-hidden="true" /></Link>

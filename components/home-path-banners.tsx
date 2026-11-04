@@ -3,6 +3,7 @@ import { CoverArt } from "@/components/cover-art";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Headphones } from "lucide-react";
+import { HomeBeatCarousel } from "@/components/home-beat-carousel";
 import { MusicLifecycleBanner } from "@/components/music-lifecycle-banner";
 import { HomeProducerInvitation } from "@/components/home-producer-invitation";
 import type { getPublicHomePreview } from "@/lib/public-home-data";
@@ -31,9 +32,10 @@ const storeLogos = [
 
 export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{featuredReleases:Awaited<ReturnType<typeof getPublicHomePreview>>["featuredReleases"];catalog:ReturnType<typeof buildBeatStorefront>["catalog"];signedIn?:boolean}) {
   const homepageShowcaseReleases = [...new Map(featuredReleases.map(release => [release.id, release])).values()];
-  const showcaseRows = ["left", "right", "left"].slice(0, Math.min(3, homepageShowcaseReleases.length)).map((direction, rowIndex) => {
+  const rowCount = Math.min(signedIn ? 3 : 2, homepageShowcaseReleases.length);
+  const showcaseRows = ["left", "right", "left"].slice(0, rowCount).map((direction, rowIndex) => {
     // Disjoint pools keep a release in one row throughout the entire animation.
-    const source = homepageShowcaseReleases.filter((_, index) => index % Math.min(3, homepageShowcaseReleases.length) === rowIndex);
+    const source = homepageShowcaseReleases.filter((_, index) => index % rowCount === rowIndex);
     return {
       direction,
       items: Array.from({ length: source.length * Math.ceil(8 / source.length) }, (_, index) => source[index % source.length])
@@ -90,29 +92,9 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
       </section>),
     beats: (<section id="beats" className="landing-beats shell py-10">
         <div className="landing-section-heading"><div><p className="landing-eyebrow">Beatstore</p><h2>A new sound. A new beginning.</h2></div><Link prefetch={false} href="/beat-store">Browse all beats <ArrowRight size={16}/></Link></div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {catalog.slice(0, 4).map((beat) => (
-            <article key={beat.id} className="overflow-hidden rounded-[1.35rem] border border-border bg-card/76 p-3 shadow-[0_16px_50px_rgba(0,0,0,0.22)]">
-              <div className="relative overflow-hidden rounded-[1rem] border border-border">
-                <Image src={artworkPreviewUrl(beat.coverImage, 320)} alt={beat.title} width={900} height={900} className="aspect-square w-full object-cover transition duration-500 hover:scale-[1.03]" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-transparent to-transparent" />
-                <Link prefetch={false} href="/beat-store" aria-label={`Explore ${beat.title}`} className="absolute left-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.15] bg-black/[0.35] text-white backdrop-blur-md">
-                  <Headphones className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-              <div className="mt-3 px-0.5 pb-0.5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/42">{beat.genre} / {beat.bpm} BPM</p>
-                <h3 className="mt-1.5 text-lg font-semibold" style={{ color: "var(--text)" }}>{beat.title}</h3>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-[#f5c16c]">Rs {beat.startingPrice}</span>
-                  <Link prefetch={false} href="/beat-store" className="premium-ghost rounded-full border border-border px-3 py-1.5 text-[11px] font-semibold text-white/72">Open store</Link>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+        <HomeBeatCarousel beats={catalog.slice(0, 8).map(beat => ({ id: beat.id, title: beat.title, genre: beat.genre, bpm: beat.bpm, artwork: artworkPreviewUrl(beat.coverImage, 320), price: beat.startingPrice, src: beat.previewUrl || `/api/beats/${beat.id}/audio` }))}/>
       </section>),
-    journey: <div id="journey" className="landing-banner landing-journey"><MusicLifecycleBanner /></div>,
+    journey: <div id="journey" className="landing-banner landing-journey"><MusicLifecycleBanner compact={!signedIn} /></div>,
     producers: <div id="producers" className="landing-banner landing-producers"><HomeProducerInvitation /></div>,
     studio: <section className="home-path-studio home-studio-editorial"><div><p className="landing-eyebrow">Mixing / Mastering</p><h2>Your sound.<br />Release-ready.</h2><p>Give your next record its finishing touch.</p><Link prefetch={false} href="/studio">Explore studio services <ArrowRight size={16}/></Link></div><Image src="/home-studio.jpg" alt="Professional recording studio and mixing console" width={1400} height={900} className="home-path-studio-image" /></section>
   };

@@ -1,0 +1,50 @@
+// Real homepage components with isolated public data; no production accounts or emails.
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+const {build}=require('esbuild'),{chromium}=require('playwright');
+async function main(){
+ const dir=path.resolve('.tmp/homepage-compact');fs.mkdirSync(dir,{recursive:true});
+ const fixture=String.raw`
+ import React from 'react';import {createRoot} from 'react-dom/client';import HomePage from './app/(public)/page';import {MusicAppInstall} from './components/music-app-install';
+ const state=new WeakMap();Object.defineProperty(HTMLMediaElement.prototype,'paused',{get(){return !state.get(this)}});HTMLMediaElement.prototype.play=function(){if(window.__failPreview)return Promise.reject(Error('fixture'));state.set(this,true);this.dispatchEvent(new Event('play'));return Promise.resolve()};HTMLMediaElement.prototype.pause=function(){state.set(this,false);this.dispatchEvent(new Event('pause'))};
+ HomePage().then(page=>createRoot(document.getElementById('root')).render(<><header className="fixture-header"><strong>HYMN</strong><div><MusicAppInstall/><a href="/login">Login</a><span>Cart</span></div></header>{page}</>));`;
+ const mocks={
+ 'next/link':`import React from 'react';export default function Link({prefetch,children,...p}){return <a {...p}>{children}</a>}`,
+ 'next/image':`import React from 'react';export default function Image({fill,unoptimized,priority,quality,...p}){return <img {...p}/>} `,
+ '@/components/cover-art':`import React from 'react';export function CoverArt({previewWidth,...p}){return <img {...p}/>} `,
+ '@/components/landing-workspace':`import React from 'react';export function LandingWorkspace({children}){return <div className="landing-workspace rail-collapsed"><div className="landing-canvas"><div className="landing-page-content">{children}</div></div></div>} `,
+ '@/components/home-goal-workspace':`export function HomeGoalWorkspace(){return null}`,
+ '@/components/home-producer-invitation':`export function HomeProducerInvitation(){return null}`,
+ '@/lib/seo':`export function publicPageMetadata(){return {}}`,
+ '@/lib/session':`export async function getSession(){return null}`,
+ '@/lib/routes':`export function destinationForRole(){return '/'}`,
+ '@/lib/beat-store':`export function buildBeatStorefront(beats){return {catalog:beats}}`,
+ '@/lib/public-home-data':`export async function getPublicHomePreview(){return {beats:Array.from({length:8},(_,i)=>({id:i+1,title:'Artist beat '+(i+1),genre:'Hip hop',bpm:90,coverImage:'/home-hero-crowd.jpg',startingPrice:250,previewUrl:'/fixture-preview.mp3'})),producerProfiles:[],featuredReleases:Array.from({length:12},(_,i)=>({id:i+1,title:'Real release '+i,artistName:'Artist '+i,artworkUrl:'/home-hero-crowd.jpg'})),featuredReviews:[{id:1,rating:5,body:'My release reached stores and the team kept me informed.',featured:true,featuredOrder:0,purchaseType:'distribution',user:{id:1,name:'Verified fixture artist',avatar:null}},{id:2,rating:4,body:'A great beat for my next track.',featured:false,featuredOrder:1,purchaseType:'beat',user:{id:2,name:'Fixture producer',avatar:null}}]}}`
+ };
+ await build({stdin:{contents:fixture,resolveDir:process.cwd(),loader:'tsx'},bundle:true,external:['/assets/*','/fonts/*'],outfile:path.join(dir,'bundle.js'),loader:{'.module.css':'local-css'},jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'public-fixture',setup(b){b.onResolve({filter:/.*/},args=>args.path in mocks?{path:args.path,namespace:'fixture'}:null);b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:mocks[args.path],resolveDir:process.cwd(),loader:'tsx'}));}}]});
+ const postcss=require('postcss'),tailwind=require('tailwindcss');
+ const base=await postcss([tailwind()]).process(fs.readFileSync('app/globals.css','utf8'),{from:path.resolve('app/globals.css')});
+ const globalFiles=[...fs.readFileSync('app/layout.tsx','utf8').matchAll(/import "(\.\/styles\/[^\"]+\.css)"/g)].map(m=>path.resolve('app',m[1]));
+ fs.writeFileSync(path.join(dir,'base.css'),base.css+'\n'+globalFiles.map(f=>fs.readFileSync(f,'utf8')).join('\n'));
+ const html=`<!doctype html><html data-theme="light"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/bundle.css"><style>.fixture-header{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;background:var(--card);z-index:1200;border-bottom:1px solid var(--border)}.fixture-header>div{display:flex;align-items:center;gap:14px}</style></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>`;
+ const server=http.createServer((req,res)=>{let file=req.url.split('?')[0];if(['/bundle.js','/bundle.css','/base.css'].includes(file)){res.setHeader('Content-Type',file.endsWith('.css')?'text/css':'application/javascript');res.end(fs.readFileSync(path.join(dir,file)));}else if(file.startsWith('/api/newsletter')){res.setHeader('Content-Type','application/json');res.end('{"subscription":null}');}else if(fs.existsSync(path.join('public',file))&&!fs.statSync(path.join('public',file)).isDirectory()){res.end(fs.readFileSync(path.join('public',file)));}else{res.setHeader('Content-Type','text/html');res.end(html)}});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});
+ try{for(const width of [320,390,768,1440]){const page=await browser.newPage({viewport:{width,height:850}});await page.goto(`http://127.0.0.1:${server.address().port}`);await page.getByRole('heading',{name:'What are you creating next?'}).waitFor();
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`No page overflow at ${width}`);
+ assert.equal(await page.locator('.landing-signup').count(),0);assert.equal(await page.getByText('Rhea K.',{exact:true}).count(),0);
+ const order=await page.locator('.landing-page-content').evaluate(el=>[...el.children].map(n=>n.className));assert.match(order[0],/landing-hero/);assert.match(order[1],/landing-releases/);
+ const services=await page.locator('.landing-next-move').boundingBox();assert.ok(services.height<330,`Compact services at ${width}: ${services.height}`);
+ if(width<640){const stages=await page.locator('[aria-controls="music-journey-detail"]').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().top));assert.ok(Math.max(...stages)-Math.min(...stages)<2,'Journey stays side by side');}
+ await page.getByRole('button',{name:'Mix & master'}).click();await page.getByRole('heading',{name:'Turn your recording into a finished track'}).waitFor();
+ const viewport=page.getByRole('region',{name:'Beat previews. Swipe to explore.'});await viewport.scrollIntoViewIfNeeded();
+ await page.mouse.move(0,0);const before=await viewport.evaluate(el=>el.scrollLeft);await page.waitForTimeout(600);const after=await viewport.evaluate(el=>el.scrollLeft);assert.ok(after>before,'Carousel moves');
+ await viewport.hover();const at=await viewport.evaluate(el=>el.scrollLeft);await page.waitForTimeout(250);assert.ok(Math.abs(await viewport.evaluate(el=>el.scrollLeft)-at)<2,'Hover pauses carousel');
+ await page.getByRole('button',{name:'Play Artist beat 1',exact:true}).click();await page.getByRole('button',{name:'Pause Artist beat 1',exact:true}).waitFor();await page.getByRole('button',{name:'Pause Artist beat 1',exact:true}).click();await page.getByRole('button',{name:'Play Artist beat 1',exact:true}).waitFor();
+ await page.evaluate(()=>window.__failPreview=true);await page.getByRole('button',{name:'Play Artist beat 2',exact:true}).click();await page.getByRole('status').filter({hasText:'Preview unavailable.'}).waitFor();
+ await page.getByRole('button',{name:'Get the HYMN Music app'}).click();await page.getByRole('dialog').waitFor();assert.equal(await page.getByRole('link',{name:'Download Android APK'}).getAttribute('href'),'/music/app/download');
+ await page.getByRole('tab',{name:'iPhone / iPad'}).click();await page.getByText('Add HYMN to your Home Screen with Safari.').waitFor();assert.ok(await page.getByRole('dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),'Install popup fits');if(width===390)await page.screenshot({path:path.join(dir,'install-390.png')});await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0);
+ await page.evaluate(()=>{document.documentElement.dataset.theme='dark'});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.emulateMedia({reducedMotion:'reduce'});await page.getByRole('button',{name:'Resume carousel'}).click();await page.mouse.move(0,0);const reduced=await viewport.evaluate(el=>el.scrollLeft);await page.waitForTimeout(150);assert.equal(await viewport.evaluate(el=>el.scrollLeft),reduced,'Reduced motion stops drift');await page.evaluate(()=>{document.documentElement.dataset.theme='light'});await page.evaluate(()=>window.scrollTo(0,0));
+ await page.screenshot({path:path.join(dir,`home-${width}.png`),fullPage:true});console.log(JSON.stringify({width,height:await page.evaluate(()=>document.documentElement.scrollHeight),serviceHeight:services.height}));await page.close();}
+ console.log('PASS compact homepage: mobile/tablet/desktop, real-review fixture, section order, side-by-side journey, carousel motion/pause/playback, app popup and Safari steps.');
+ }finally{await browser.close();await new Promise(r=>server.close(r));}
+}
+main().catch(e=>{console.error(e);process.exitCode=1});

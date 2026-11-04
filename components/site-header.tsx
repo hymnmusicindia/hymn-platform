@@ -19,6 +19,7 @@ import { beatLicenseLabel, type BeatStoreLicenseType } from "@/lib/beat-store";
 import { SubscriptionButton, SubscriptionOptions } from "@/components/subscription-options";
 import { SmartHelpToggle } from "@/components/smart-help-toggle";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
+import { MusicAppInstall } from "@/components/music-app-install";
 
 type SiteHeaderProps = {
   user?: SessionPayload | null;
@@ -658,6 +659,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         </nav>}
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          {!adminWorkspaceHeader ? <MusicAppInstall /> : null}
           <div className="hidden items-center gap-3 lg:flex">
             {workspaceHeader ? <>{!adminWorkspaceHeader ? <SubscriptionButton className="studio-header-plans" /> : null}<Link prefetch={false} href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link prefetch={false} href="/faq" className="studio-header-tool" aria-label="FAQ"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
             {!isAuthenticated && !workspaceHeader ? <ThemeToggle /> : null}
