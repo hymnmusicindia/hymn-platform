@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { releaseSaveFailure } from "@/lib/release-track-save";
 import { firstReleaseAttribution } from "@/lib/first-release-flow";
 import {validateReleaseDocument} from '@/lib/release-attachment-validation';
+import { normalizeContentIdAccessStatus, shouldAutoSelectContentId } from "@/lib/content-id-access";
 
 export const maxDuration = 180;
 
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
     const payload = JSON.parse(String(formData.get("payload") || "{}"));
     const metadata = payload.metadata ?? {};
     const contentIdEligible = getContentIdEligibility(metadata.contentType).eligible;
+    const contentIdAccess = await prisma.contentIdAccess.findUnique({ where: { userId: session.sub }, select: { status: true, channelUrl: true } });
+    const contentIdAccessStatus = normalizeContentIdAccessStatus(contentIdAccess?.status);
     if (typeof metadata.licenseReceiptUrl === "string" && /^https?:/i.test(metadata.licenseReceiptUrl)) {
       const proofUrl = new URL(metadata.licenseReceiptUrl);
       if (!/^https?:$/.test(proofUrl.protocol) || metadata.licenseReceiptUrl.length > 2048) throw new Error("Document link must be a valid http or https URL.");
@@ -139,8 +142,12 @@ export async function POST(request: Request) {
         mood: typeof metadata.mood === "string" ? metadata.mood.trim() : "",
         language: metadata.language ?? "",
         platforms: metadata.platforms ?? [],
-        youtubeContentIdEnabled: contentIdEligible && Boolean(metadata.youtubeContentIdEnabled),
-        youtubeContentIdChannelUrl: contentIdEligible ? metadata.youtubeContentIdChannelUrl ?? "" : "",
+        youtubeContentIdEnabled: contentIdEligible && (contentIdAccessStatus === "approved"
+          ? shouldAutoSelectContentId({ status: contentIdAccessStatus, platforms: Array.isArray(metadata.platforms) ? metadata.platforms.filter((item: unknown): item is string => typeof item === "string") : [], contentType: metadata.contentType })
+          : contentIdAccessStatus === "pending" ? false : Boolean(metadata.youtubeContentIdEnabled)),
+        youtubeContentIdChannelUrl: contentIdEligible
+          ? contentIdAccessStatus === "approved" ? contentIdAccess?.channelUrl || metadata.youtubeContentIdChannelUrl || "" : metadata.youtubeContentIdChannelUrl ?? ""
+          : "",
         monetisationAccepted: Boolean(metadata.monetisationAccepted),
         monetisationClauses: metadata.monetisationClauses ?? {},
         territory: metadata.territory ?? "Worldwide",

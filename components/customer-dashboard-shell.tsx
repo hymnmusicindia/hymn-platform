@@ -4,6 +4,7 @@ import {customerTab,type CustomerTab} from '@/lib/customer-dashboard-tabs';
 import { openSubscriptions } from "@/components/subscription-options";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { customerMessage } from "@/lib/customer-message";
+import { isValidYoutubeChannelUrl } from "@/lib/content-id-access";
 
 import Link from "next/link";
 import { WorkspacePanel as Panel, WorkspaceMetric as StatCard } from "@/components/workspace-panel";
@@ -38,6 +39,15 @@ type CustomerPayoutSummary = {
   payoutHistory: Array<{ id: number; status: string; requestedAmount: number; requestDate: string }>;
 };
 type SmartNextAction = { key: string; title: string; reason: string; cta: string; href: string; priority: "critical" | "high" | "normal" };
+type ContentIdAccessSummary = {
+  status: "none" | "pending" | "approved" | "declined";
+  requestedAt?: string;
+  reviewReason?: string | null;
+  channelUrl?: string | null;
+  feeAmount?: number;
+  release?: { id: number; title: string; artistName: string; artworkUrl: string | null; tracks: Array<{ id: number; title: string; trackNumber: number | null }> };
+  payment?: { paymentStatus: string; amount: number; creditsUsed: number; createdAt: string } | null;
+};
 
 
 function SubscriptionActions({ status, cancelAtPeriodEnd }: { status: string; cancelAtPeriodEnd?: boolean }) {
@@ -162,6 +172,9 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const [supportFeedback, setSupportFeedback] = useState<string | null>(null);
   const [dataErrors, setDataErrors] = useState<Record<string, string>>({});
   const [reloadKey, setReloadKey] = useState(0);
+  const [contentIdAccess, setContentIdAccess] = useState<ContentIdAccessSummary | null>(null);
+  const [contentIdAccessLoading, setContentIdAccessLoading] = useState(false);
+  const [contentIdAccessError, setContentIdAccessError] = useState("");
   const [purchaseAction, setPurchaseAction] = useState<{ id: number; type: "license" | "release" } | null>(null);
   const [notificationActionPending, setNotificationActionPending] = useState(false);
   const [licenceArtistNames, setLicenceArtistNames] = useState<Record<number, string>>({});
@@ -219,6 +232,26 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       .then((response) => response.ok ? response.json() : null)
       .then((data) => { if (ignore) return; if (data) { setBeatPurchases(Array.isArray(data.purchases) ? data.purchases : []); setDataErrors(current => { const next = { ...current }; delete next.purchases; return next; }); } else setDataErrors(current => ({ ...current, purchases: "Purchases could not be loaded." })); })
       .catch(() => { if (!ignore) setDataErrors(current => ({ ...current, purchases: "Purchases could not be loaded." })); });
+    return () => { ignore = true; };
+  }, [activeTab, reloadKey]);
+
+  useEffect(() => {
+    if (activeTab !== "content-id") return;
+    let ignore = false;
+    setContentIdAccessLoading(true);
+    setContentIdAccessError("");
+    fetch("/api/content-id/access", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Content ID access could not be loaded.");
+        if (!ignore) setContentIdAccess(data.access ?? { status: "none" });
+      })
+      .catch((error) => {
+        if (!ignore) setContentIdAccessError(error instanceof Error ? error.message : "Content ID access could not be loaded.");
+      })
+      .finally(() => {
+        if (!ignore) setContentIdAccessLoading(false);
+      });
     return () => { ignore = true; };
   }, [activeTab, reloadKey]);
 
@@ -580,21 +613,60 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       {activeTab === "collaborators" ? <SplitsDashboard releases={releases} /> : null}
 
       {activeTab === "content-id" ? (
-        <Panel title="Content ID and monetisation" description="Shows actual release-level Content ID and monetisation consent fields.">
-          <div className="grid gap-4">
-            {releases.filter((release) => matchesQuery([releaseTitle(release), release.artistName, release.youtubeContentIdChannelUrl], dashboardSearch)).map((release) => (
-              <article key={`cid-${release.id}`} className="surface-list-item p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold" style={{ color: "var(--text)" }}>{releaseTitle(release)}</p>
-                    <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Channel: {release.youtubeContentIdChannelUrl || "Not provided"}</p>
-                  </div>
-                  <StatusPill label={release.youtubeContentIdEnabled ? "Content ID on" : "Content ID off"} active={Boolean(release.youtubeContentIdEnabled)} />
+        <Panel title="YouTube Content ID" description="Track your approval and see which releases are enabled for YouTube rights matching.">
+          {contentIdAccessError ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{customerMessage(contentIdAccessError)} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
+          <section className="mb-6 rounded-2xl border p-5 sm:p-6" style={{ borderColor: contentIdAccess?.status === "approved" ? "color-mix(in srgb,var(--success) 40%,var(--border))" : "var(--border)", background: "var(--bg-soft)" }}>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-2xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Account access</p>
+                <h2 className="mt-2 text-xl font-semibold" style={{ color: "var(--text)" }}>
+                  {contentIdAccessLoading ? "Checking your access…" : contentIdAccess?.status === "approved" ? "Content ID is enabled" : contentIdAccess?.status === "pending" ? "Approval is in process" : contentIdAccess?.status === "declined" ? "Request not approved" : "Not enabled yet"}
+                </h2>
+                <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>
+                  {contentIdAccess?.status === "approved"
+                    ? "HYMN has approved your Content ID access. Eligible releases sent to YouTube Music will be selected automatically."
+                    : contentIdAccess?.status === "pending"
+                      ? "HYMN is reviewing your paid request. Reviews typically take 2–3 weeks. Content ID will remain off until approval."
+                      : contentIdAccess?.status === "declined"
+                        ? "Your request was not approved. Review the reason below; you can submit a new request with an eligible release."
+                        : "Request account-wide access with an eligible release. The ₹200 fee is charged once; active subscribers can request it while distribution is covered by their plan. Content ID stays off during HYMN’s review."}
+                </p>
+                {contentIdAccess?.status === "declined" && contentIdAccess.reviewReason ? <p className="mt-3 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--border)", color: "var(--text)" }}><strong>HYMN&apos;s note:</strong> {customerMessage(contentIdAccess.reviewReason)}</p> : null}
+                {contentIdAccess?.requestedAt ? <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>Requested {formatDate(contentIdAccess.requestedAt)}{contentIdAccess.payment?.paymentStatus === "paid" ? " · ₹200 payment confirmed" : ""}</p> : null}
+              </div>
+              <StatusPill label={contentIdAccess?.status === "approved" ? "enabled" : contentIdAccess?.status === "pending" ? "under review" : contentIdAccess?.status === "declined" ? "declined" : "not requested"} active={contentIdAccess?.status === "approved"} />
+            </div>
+            {contentIdAccess?.status !== "approved" ? <div className="mt-5 grid gap-2 sm:grid-cols-3">
+              {[["1", "Submit a paid request"], ["2", "HYMN reviews your rights"], ["3", "Access activates after approval"]].map(([step, label], index) => {
+                const current = contentIdAccess?.status === "pending" ? index === 1 : contentIdAccess?.status === "declined" ? index === 0 : index === 0;
+                return <div key={step} className="flex items-center gap-3 rounded-xl border p-3" style={{ borderColor: current ? "var(--accent)" : "var(--border)", background: "var(--card)" }}><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: current ? "var(--accent)" : "var(--bg-soft)", color: current ? "var(--accent-foreground)" : "var(--text-muted)" }}>{step}</span><span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>{label}</span></div>;
+              })}
+            </div> : null}
+            {contentIdAccess?.status !== "approved" && contentIdAccess?.status !== "pending" ? <Link href="/distribution/start" className="btn-primary pressable mt-5 inline-flex">{contentIdAccess?.status === "declined" ? "Request review again" : "Start a Content ID request"}</Link> : null}
+          </section>
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div><h3 className="font-semibold" style={{ color: "var(--text)" }}>Your releases</h3><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>A release is only active after HYMN approval.</p></div>
+            {contentIdAccess?.channelUrl && isValidYoutubeChannelUrl(contentIdAccess.channelUrl) ? <a href={contentIdAccess.channelUrl} target="_blank" rel="noreferrer" className="btn-outline pressable px-3 py-2 text-xs">YouTube channel</a> : null}
+          </div>
+          <div className="grid gap-3">
+            {releases.filter((release) => matchesQuery([releaseTitle(release), release.artistName, release.youtubeContentIdChannelUrl, ...(release.tracks ?? []).map(track => track.trackTitle)], dashboardSearch)).map((release) => {
+              const isRequestedRelease = contentIdAccess?.release?.id === release.id;
+              const enabled = Boolean(release.youtubeContentIdEnabled && contentIdAccess?.status === "approved");
+              const label = enabled ? "Content ID enabled" : isRequestedRelease && contentIdAccess?.status === "pending" ? "Approval in process" : "Content ID off";
+              return <article key={`cid-${release.id}`} className="surface-list-item flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+                  {release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 320)} alt={`${releaseTitle(release)} cover artwork`} className="h-full w-full object-cover" loading="lazy" /> : <div className="flex h-full items-center justify-center text-xs" style={{ color: "var(--text-soft)" }}>No artwork</div>}
                 </div>
-                {!release.youtubeContentIdChannelUrl && release.youtubeContentIdEnabled ? <p className="mt-3 text-sm" style={{ color: "var(--danger)" }}>Channel URL is missing for a Content ID-enabled release.</p> : null}
-              </article>
-            ))}
-            {releases.length === 0 ? <EmptyState copy="No releases available for Content ID review." /> : null}
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold" style={{ color: "var(--text)" }}>{releaseTitle(release)}</p>
+                  <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName}</p>
+                  <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>{(release.tracks ?? []).slice(0, 3).map(track => track.trackTitle).join(" · ") || "Track details unavailable"}{(release.tracks?.length ?? 0) > 3 ? ` · +${release.tracks!.length - 3} more` : ""}</p>
+                  {release.youtubeContentIdChannelUrl ? <p className="mt-1 truncate text-xs" style={{ color: "var(--text-soft)" }}>Channel: {release.youtubeContentIdChannelUrl}</p> : null}
+                </div>
+                <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end"><StatusPill label={label} active={enabled} /><Link href={`/dashboard/releases/${release.id}`} className="text-xs font-semibold hover:underline" style={{ color: "var(--accent)" }}>View release</Link></div>
+              </article>;
+            })}
+            {releases.length === 0 ? <EmptyState copy="Your releases will appear here after you start a distribution submission." /> : null}
           </div>
         </Panel>
       ) : null}
@@ -735,4 +807,3 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
     </HymnStudioFrame>
   );
 }
-

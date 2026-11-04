@@ -24,6 +24,8 @@ import { findReleaseIdentifierConflicts } from "@/lib/release-identifier-conflic
 import { runPendingDistributionQc } from "@/lib/distribution-auto-qc";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { validateReleaseDocument } from '@/lib/release-attachment-validation';
+import { isValidYoutubeChannelUrl, normalizeContentIdAccessStatus, shouldAutoSelectContentId } from "@/lib/content-id-access";
+import { getYoutubeContentIdAddonPrice } from "@/lib/distribution-pricing";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -53,6 +55,21 @@ export async function POST(request: Request) {
     }
     const persistedOrder = await prisma.distributionOrder.findUnique({ where: { razorpayOrderId: parsed.razorpay_order_id } });
     if (!persistedOrder || persistedOrder.userId !== session.sub) return NextResponse.json({ error: "Distribution order not found." }, { status: 404 });
+    const contentIdAccess = await prisma.contentIdAccess.findUnique({ where: { userId: session.sub }, select: { status: true, channelUrl: true, distributionOrderId: true } });
+    const contentIdAccessStatus = normalizeContentIdAccessStatus(contentIdAccess?.status);
+    const contentIdRequestFeeAmount = getYoutubeContentIdAddonPrice(parsed.metadata.plan, parsed.metadata.youtubeContentIdEnabled, contentIdAccessStatus);
+    const youtubeContentIdChannelUrl = contentIdAccessStatus === "approved"
+      ? contentIdAccess?.channelUrl || parsed.metadata.youtubeContentIdChannelUrl
+      : parsed.metadata.youtubeContentIdChannelUrl;
+    if (parsed.metadata.youtubeContentIdEnabled && contentIdAccessStatus === "pending" && contentIdAccess?.distributionOrderId !== persistedOrder.id) {
+      return NextResponse.json({ error: "Your Content ID request is still under review and is not active yet." }, { status: 409 });
+    }
+    if (parsed.metadata.youtubeContentIdEnabled && !isValidYoutubeChannelUrl(youtubeContentIdChannelUrl)) {
+      return NextResponse.json({ error: "Add a valid YouTube channel URL before requesting or using Content ID." }, { status: 400 });
+    }
+    if (parsed.metadata.youtubeContentIdEnabled && contentIdAccessStatus !== "approved" && contentIdRequestFeeAmount !== 200) {
+      return NextResponse.json({ error: "Content ID access requires a ₹200 one-time release request. It will remain off until HYMN approves it." }, { status: 409 });
+    }
     const storedQuote = persistedOrder.quoteSnapshot && typeof persistedOrder.quoteSnapshot === "object" && !Array.isArray(persistedOrder.quoteSnapshot)
       ? persistedOrder.quoteSnapshot as Record<string, unknown>
       : null;
@@ -80,8 +97,9 @@ export async function POST(request: Request) {
     )) return NextResponse.json({ error: "The saved checkout quote no longer matches this release. Refresh the review and create a new checkout." }, { status: 409 });
     if (checkoutPlan(persistedOrder, "one_time") !== parsed.metadata.plan) return NextResponse.json({ error: "The submitted plan does not match the persisted order. Resume checkout to reload the saved payment plan." }, { status: 400 });
     if ((checkoutPlan(persistedOrder, "one_time") === "one_time") !== (parsed.metadata.paymentModel === "one_time")) return NextResponse.json({ error: "The submitted payment model does not match the persisted order." }, { status: 400 });
-    const isSubscriptionEntitlement = parsed.razorpay_order_id.startsWith("sub_entitlement_");
-    const normalAmount = getDistributionPricing(parsed.metadata.plan, parsed.metadata.tracks.length, parsed.metadata.releaseType, parsed.metadata.platforms, { youtubeContentIdEnabled: parsed.metadata.youtubeContentIdEnabled });
+    const isZeroValueSubscriptionEntitlement = parsed.razorpay_order_id.startsWith("sub_entitlement_");
+    const subscriptionCoveredRelease = isZeroValueSubscriptionEntitlement || storedQuote?.subscriptionCovered === true;
+    const normalAmount = getDistributionPricing(parsed.metadata.plan, parsed.metadata.tracks.length, parsed.metadata.releaseType, parsed.metadata.platforms, { youtubeContentIdEnabled: parsed.metadata.youtubeContentIdEnabled, youtubeContentIdAccessStatus: contentIdAccessStatus });
     const promotionQuote = isFirstReleaseOffer
       ? storedQuote
         ? { originalAmount: Number(storedQuote.subtotal) + Number(storedQuote.firstReleaseDiscount), discountAmount: Number(storedQuote.firstReleaseDiscount), finalAmount: Number(storedQuote.subtotal) }
@@ -95,7 +113,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "The first-release offer reservation is missing or no longer matches this checkout. Resume checkout before submitting." }, { status: 409 });
       }
     }
-    if (!distributionOrderPriceMatches({ amount: persistedOrder.amount, creditsUsed: persistedOrder.creditsUsed, expectedAmount, currency: persistedOrder.currency, subscriptionEntitlement: isSubscriptionEntitlement })) return NextResponse.json({ error: "The submitted release price does not match the persisted order." }, { status: 400 });
+    if (!distributionOrderPriceMatches({ amount: persistedOrder.amount, creditsUsed: persistedOrder.creditsUsed, expectedAmount, currency: persistedOrder.currency, subscriptionEntitlement: isZeroValueSubscriptionEntitlement })) return NextResponse.json({ error: "The submitted release price does not match the persisted order." }, { status: 400 });
     if (isFirstReleaseOffer && persistedOrder.plan !== "one_time") return NextResponse.json({ error: "First-release order is invalid." }, { status: 400 });
     await assertReleaseArtistVerification(session.sub, parsed.draftReleaseId, selectedReleaseArtistIds(parsed.metadata.tracks), true);
     const savedArtistIds = new Set((await listArtistProfilesByUser(session.sub)).map((profile) => profile.id));
@@ -113,12 +131,13 @@ export async function POST(request: Request) {
       return value;
     };
 
-    if (isSubscriptionEntitlement) {
+    if (subscriptionCoveredRelease) {
       const sub = await getSubscriptionByUserId(session.sub);
       if (!subscriptionHasEntitlement(sub)) return NextResponse.json({ error: "No active subscription entitlement found." }, { status: 400 });
       if (!subscriptionHasReleaseAllowance(sub)) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
       if (parsed.metadata.paymentModel !== "subscription" || parsed.metadata.plan !== checkoutPlan(sub!, "one_time")) return NextResponse.json({ error: "The submitted plan does not match your active subscription." }, { status: 400 });
-    } else if (persistedOrder.amount > 0) {
+    }
+    if (!isZeroValueSubscriptionEntitlement && persistedOrder.amount > 0) {
       if (persistedOrder.paymentStatus === "paid") {
         if (!persistedOrder.razorpayPaymentId || persistedOrder.razorpayPaymentId !== parsed.razorpay_payment_id) return NextResponse.json({ error: "The stored payment reference does not match this release." }, { status: 409 });
       } else {
@@ -127,8 +146,71 @@ export async function POST(request: Request) {
         await verifyCapturedRazorpayPayment({ orderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, amountMinor: persistedOrder.amount * 100, currency: persistedOrder.currency });
         await confirmDistributionPayment({ razorpayOrderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, userId: session.sub, source: "browser" });
       }
-    } else if (!(isFirstReleaseOffer && promotionQuote?.finalAmount === 0 && persistedOrder.creditsUsed === 0 && persistedOrder.razorpayOrderId.startsWith("free_first_release_")) && !(persistedOrder.paymentStatus === "paid" && persistedOrder.creditsUsed > 0 && persistedOrder.razorpayPaymentId === parsed.razorpay_payment_id)) {
+    } else if (!isZeroValueSubscriptionEntitlement && !(isFirstReleaseOffer && promotionQuote?.finalAmount === 0 && persistedOrder.creditsUsed === 0 && persistedOrder.razorpayOrderId.startsWith("free_first_release_")) && !(persistedOrder.paymentStatus === "paid" && persistedOrder.creditsUsed > 0 && persistedOrder.razorpayPaymentId === parsed.razorpay_payment_id)) {
       return NextResponse.json({ error: "This zero-value order has no valid release entitlement." }, { status: 400 });
+    }
+
+    const quotedContentIdFee = Number(storedQuote?.youtubeContentIdAddon ?? contentIdRequestFeeAmount);
+    if (contentIdRequestFeeAmount === 200 && quotedContentIdFee !== 200) {
+      return NextResponse.json({ error: "The Content ID approval fee is missing from this verified checkout." }, { status: 409 });
+    }
+    if (contentIdRequestFeeAmount === 200) {
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${session.sub} FOR UPDATE`;
+        const existing = await tx.contentIdAccess.findUnique({ where: { userId: session.sub } });
+        if (existing?.status === "approved") throw new Error("Content ID access was approved while this payment was processing. Contact HYMN support to review the duplicate fee.");
+        if (existing?.status === "pending") {
+          if (existing.distributionOrderId !== persistedOrder.id) {
+            throw new Error("A Content ID request is already under review. This payment needs HYMN support review.");
+          }
+          return;
+        }
+        const access = await tx.contentIdAccess.upsert({
+          where: { userId: session.sub },
+          create: {
+            userId: session.sub,
+            releaseId: parsed.draftReleaseId!,
+            distributionOrderId: persistedOrder.id,
+            status: "pending",
+            channelUrl: parsed.metadata.youtubeContentIdChannelUrl || null,
+            feeAmount: 200
+          },
+          update: {
+            releaseId: parsed.draftReleaseId!,
+            distributionOrderId: persistedOrder.id,
+            status: "pending",
+            channelUrl: parsed.metadata.youtubeContentIdChannelUrl || null,
+            feeAmount: 200,
+            requestedAt: new Date(),
+            reviewedAt: null,
+            reviewedById: null,
+            reviewReason: null
+          }
+        });
+        await tx.auditLog.create({
+          data: {
+            actorType: "customer",
+            actorId: session.sub,
+            actorRole: "customer",
+            action: "CONTENT_ID_ACCESS_REQUESTED",
+            entity: "content_id_access",
+            entityId: String(access.id),
+            newValue: { status: "pending", feeAmount: 200 },
+            metadata: { releaseId: parsed.draftReleaseId, distributionOrderId: persistedOrder.id }
+          }
+        });
+        await tx.notification.create({
+          data: {
+            userId: session.sub,
+            title: "Content ID request received",
+            body: "HYMN received your ₹200 account-wide request. Reviews typically take 2–3 weeks; Content ID stays off until approval.",
+            type: "account",
+            href: "/dashboard?tab=content-id",
+            actionLabel: "Track request",
+            eventKey: `content-id:${access.id}:request:${persistedOrder.id}`
+          }
+        });
+      });
     }
 
     const artworkUrl = requirePrivateAsset(await resolvePrivateReleaseArtworkUrl({
@@ -212,7 +294,7 @@ export async function POST(request: Request) {
       }
       await claimDistributionOrderForSubmission({ razorpayOrderId: parsed.razorpay_order_id, userId: session.sub });
       orderClaimed = true;
-      if (isSubscriptionEntitlement) subscriptionReservation = await reserveSubscriptionReleaseSlot(session.sub, parsed.draftReleaseId);
+      if (subscriptionCoveredRelease) subscriptionReservation = await reserveSubscriptionReleaseSlot(session.sub, parsed.draftReleaseId);
       const releaseMetadata = {
         artistName: parsed.metadata.artistName,
         trackName: parsed.metadata.tracks[0]?.trackTitle ?? resolvedReleaseTitle,
@@ -223,8 +305,15 @@ export async function POST(request: Request) {
         sunoLink: parsed.metadata.sunoLink,
         licenseReceiptUrl: parsed.metadata.licenseReceiptUrl,
         releasePreviouslyReleased: parsed.metadata.releasePreviouslyReleased,
-        youtubeContentIdEnabled: parsed.metadata.youtubeContentIdEnabled,
-        youtubeContentIdChannelUrl: parsed.metadata.youtubeContentIdChannelUrl ?? undefined,
+        youtubeContentIdEnabled: contentIdAccessStatus === "approved"
+          && shouldAutoSelectContentId({ status: contentIdAccessStatus, platforms: parsed.metadata.platforms, contentType: parsed.metadata.contentType }),
+        youtubeContentIdChannelUrl: contentIdAccessStatus === "approved" && shouldAutoSelectContentId({
+          status: contentIdAccessStatus,
+          platforms: parsed.metadata.platforms,
+          contentType: parsed.metadata.contentType
+        })
+          ? youtubeContentIdChannelUrl || undefined
+          : parsed.metadata.youtubeContentIdChannelUrl ?? undefined,
         monetisationAccepted: parsed.metadata.monetisationAccepted,
         monetisationClauses: parsed.metadata.monetisationClauses,
         audioUrl: tracks[0]?.audioUrl ?? "",
@@ -305,8 +394,8 @@ export async function POST(request: Request) {
 
     await createNotification({
       userId: session.sub,
-      title: isFirstReleaseOffer ? "First release submitted" : isSubscriptionEntitlement ? "Subscription release submitted" : "Distribution payment confirmed",
-      body: isFirstReleaseOffer ? "Your first-release credit has been applied. Your release is under review." : isSubscriptionEntitlement ? "Your active subscription covered this release submission." : "Your distribution payment is confirmed and your release is in review.",
+      title: isFirstReleaseOffer ? "First release submitted" : subscriptionCoveredRelease ? "Subscription release submitted" : "Distribution payment confirmed",
+      body: isFirstReleaseOffer ? "Your first-release credit has been applied. Your release is under review." : subscriptionCoveredRelease ? "Your active subscription covered this release submission." : "Your distribution payment is confirmed and your release is in review.",
       type: "order",
       href: release?.id ? `/dashboard/releases?releaseId=${release.id}` : "/dashboard/releases",
       actionLabel: "Open release",

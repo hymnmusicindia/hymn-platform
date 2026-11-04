@@ -14,6 +14,8 @@ import { prisma } from "@/lib/prisma";
 import { confirmDistributionPayment } from "@/lib/payment-webhooks";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { releaseReviewSnapshotHash } from "@/lib/release-review-snapshot";
+import { getContentIdEligibility } from "@/lib/content-id-eligibility";
+import { isValidYoutubeChannelUrl, normalizeContentIdAccessStatus, shouldAutoSelectContentId } from "@/lib/content-id-access";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -29,6 +31,8 @@ export async function POST(request: Request) {
       include: { tracks: { select: { id: true, trackNumber: true } } }
     });
     if (!checkoutDraft) return NextResponse.json({ error: "The checkout draft is no longer available." }, { status: 409 });
+    const contentIdAccess = await prisma.contentIdAccess.findUnique({ where: { userId: session.sub }, select: { status: true, channelUrl: true } });
+    const contentIdAccessStatus = normalizeContentIdAccessStatus(contentIdAccess?.status);
     await assertReleaseArtistVerification(session.sub, payload.draftReleaseId);
     const savedMetadata = checkoutDraft.metadata && typeof checkoutDraft.metadata === "object" && !Array.isArray(checkoutDraft.metadata)
       ? checkoutDraft.metadata as Record<string, unknown>
@@ -36,7 +40,17 @@ export async function POST(request: Request) {
     const savedPlatforms = Array.isArray(savedMetadata.platforms) ? savedMetadata.platforms.filter((item): item is string => typeof item === "string") : [];
     const savedReleaseType = checkoutDraft.releaseType || "single";
     const savedTrackCount = checkoutDraft.tracks.length;
-    const savedYoutubeContentId = savedMetadata.youtubeContentIdEnabled === true;
+    const savedYoutubeContentId = contentIdAccessStatus === "approved"
+      ? shouldAutoSelectContentId({ status: contentIdAccessStatus, platforms: savedPlatforms, contentType: savedMetadata.contentType })
+      : contentIdAccessStatus === "pending"
+        ? false
+        : savedMetadata.youtubeContentIdEnabled === true && getContentIdEligibility(savedMetadata.contentType).eligible;
+    const savedYoutubeChannelUrl = contentIdAccessStatus === "approved"
+      ? contentIdAccess?.channelUrl || savedMetadata.youtubeContentIdChannelUrl
+      : savedMetadata.youtubeContentIdChannelUrl;
+    if (savedYoutubeContentId && !isValidYoutubeChannelUrl(savedYoutubeChannelUrl)) {
+      return NextResponse.json({ error: "Add a valid YouTube channel URL before requesting or using Content ID." }, { status: 400 });
+    }
     const savedPlan = typeof savedMetadata.distributionPlan === "string" ? savedMetadata.distributionPlan : payload.plan;
     const savedPaymentModel = savedMetadata.paymentModel === "subscription" ? "subscription" : "one_time";
     if (savedPlan !== payload.plan || savedTrackCount !== payload.trackCount || savedReleaseType !== payload.releaseType || savedPaymentModel !== payload.paymentModel) {
@@ -77,12 +91,22 @@ export async function POST(request: Request) {
     }
     const subscription = await getSubscriptionByUserId(session.sub);
     const hasActiveSubscription = subscriptionHasEntitlement(subscription);
+    if (payload.plan !== "one_time" && !hasActiveSubscription && savedYoutubeContentId) {
+      return NextResponse.json({ error: "Activate your subscription first, then request Content ID with an eligible release." }, { status: 409 });
+    }
     // Issues the zero-value order that lets an active plan cover this release.
     const coverWithSubscription = async (plan: typeof payload.plan) => {
+      const contentIdRequestFee = getYoutubeContentIdAddonPrice(plan, savedYoutubeContentId, contentIdAccessStatus);
+      const reviewMetadataHash = contentIdRequestFee > 0
+        ? (await releaseReviewSnapshotHash(checkoutDraft.id, session.sub)) || ""
+        : "";
+      if (contentIdRequestFee > 0 && (!reviewMetadataHash || (checkoutDraft.reviewMetadataHash && reviewMetadataHash !== checkoutDraft.reviewMetadataHash))) {
+        return NextResponse.json({ error: "The release review is out of date. Review and confirm the latest saved version before checkout." }, { status: 409 });
+      }
       const existingEntitlement = payload.draftReleaseId
         ? await prisma.distributionOrder.findUnique({ where: { releaseId: payload.draftReleaseId } })
         : null;
-      if (existingEntitlement?.userId === session.sub && existingEntitlement.fulfilledAt == null && existingEntitlement.plan === plan && existingEntitlement.amount === 0 && existingEntitlement.creditsUsed === 0 && existingEntitlement.razorpayOrderId.startsWith("sub_entitlement_")) {
+      if (contentIdRequestFee === 0 && existingEntitlement?.userId === session.sub && existingEntitlement.fulfilledAt == null && existingEntitlement.plan === plan && existingEntitlement.amount === 0 && existingEntitlement.creditsUsed === 0 && existingEntitlement.razorpayOrderId.startsWith("sub_entitlement_")) {
         return NextResponse.json({
           orderId: existingEntitlement.razorpayOrderId,
           plan: existingEntitlement.plan,
@@ -92,6 +116,87 @@ export async function POST(request: Request) {
           requiresPayment: false,
           subscriptionCovered: true,
           resumedOrder: true,
+        });
+      }
+      const existingQuote = existingEntitlement?.quoteSnapshot && typeof existingEntitlement.quoteSnapshot === "object" && !Array.isArray(existingEntitlement.quoteSnapshot)
+        ? existingEntitlement.quoteSnapshot as Record<string, unknown>
+        : null;
+      if (contentIdRequestFee > 0
+        && existingEntitlement?.userId === session.sub
+        && existingEntitlement.fulfilledAt == null
+        && existingEntitlement.plan === plan
+        && existingEntitlement.amount === contentIdRequestFee
+        && existingEntitlement.creditsUsed === 0
+        && ["created", "authorized"].includes(existingEntitlement.paymentStatus)
+        && Number(existingQuote?.youtubeContentIdAddon) === contentIdRequestFee
+        && existingQuote?.reviewMetadataHash === reviewMetadataHash
+        && existingQuote?.youtubeContentIdEnabled === savedYoutubeContentId
+        && existingQuote?.plan === plan
+        && JSON.stringify(existingQuote?.platforms) === JSON.stringify(savedPlatforms)) {
+        return NextResponse.json({
+          orderId: existingEntitlement.razorpayOrderId,
+          plan,
+          amount: contentIdRequestFee * 100,
+          currency: existingEntitlement.currency,
+          displayAmount: contentIdRequestFee,
+          requiresPayment: true,
+          subscriptionCovered: true,
+          resumedOrder: true,
+          youtubeContentIdAddOnAmount: contentIdRequestFee,
+          quote: existingQuote,
+          key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""
+        });
+      }
+      if (contentIdRequestFee > 0) {
+        if (!razorpay) return NextResponse.json({ error: "Payment service is not configured." }, { status: 503 });
+        const quoteSnapshot = {
+          version: 1,
+          plan,
+          paymentModel: "subscription",
+          releaseId: checkoutDraft.id,
+          reviewMetadataHash,
+          trackCount: savedTrackCount,
+          releaseType: savedReleaseType,
+          platforms: savedPlatforms,
+          youtubeContentIdEnabled: savedYoutubeContentId,
+          youtubeContentIdAccessStatus: contentIdAccessStatus,
+          currency: "INR",
+          basePrice: 0,
+          bulkDiscount: 0,
+          ugcAddon: 0,
+          youtubeContentIdAddon: contentIdRequestFee,
+          firstReleaseDiscount: 0,
+          subtotal: contentIdRequestFee,
+          creditsUsed: 0,
+          payable: contentIdRequestFee,
+          promotionCode: null,
+          subscriptionCovered: true,
+          issuedAt: new Date().toISOString()
+        };
+        const order = await razorpay.orders.create({
+          amount: contentIdRequestFee * 100,
+          currency: "INR",
+          receipt: `hymn-cid-${Date.now()}`
+        });
+        await createDistributionOrder({
+          userId: session.sub,
+          plan,
+          amount: contentIdRequestFee,
+          razorpayOrderId: order.id,
+          releaseId: checkoutDraft.id,
+          quoteSnapshot
+        });
+        return NextResponse.json({
+          orderId: order.id,
+          plan,
+          amount: contentIdRequestFee * 100,
+          currency: "INR",
+          displayAmount: contentIdRequestFee,
+          requiresPayment: true,
+          subscriptionCovered: true,
+          youtubeContentIdAddOnAmount: contentIdRequestFee,
+          quote: quoteSnapshot,
+          key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""
         });
       }
       const entitlementOrderId = `sub_entitlement_${session.sub}_${Date.now()}`;
@@ -128,7 +233,7 @@ export async function POST(request: Request) {
     if (payload.promotionCode === FIRST_RELEASE_PROMOTION_CODE && savedMetadata.promotionCode !== FIRST_RELEASE_PROMOTION_CODE) {
       return NextResponse.json({ error: "Save and confirm this first-release offer on the draft before checkout." }, { status: 409 });
     }
-    const normalAmount = getDistributionPricing(payload.plan, savedTrackCount, savedReleaseType, savedPlatforms, { youtubeContentIdEnabled: savedYoutubeContentId });
+    const normalAmount = getDistributionPricing(payload.plan, savedTrackCount, savedReleaseType, savedPlatforms, { youtubeContentIdEnabled: savedYoutubeContentId, youtubeContentIdAccessStatus: contentIdAccessStatus });
     let amount = normalAmount;
     let promotion = null;
     const firstReleaseOffer = savedMetadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
@@ -159,6 +264,7 @@ export async function POST(request: Request) {
           releaseType: savedReleaseType,
           platforms: savedPlatforms,
           youtubeContentIdEnabled: savedYoutubeContentId,
+          youtubeContentIdAccessStatus: contentIdAccessStatus,
           firstReleaseOffer,
           useHymnCredits: Boolean(payload.useHymnCredits),
           availableCredits: Number(creditAccount?.referralCredits ?? 0)
@@ -309,7 +415,7 @@ export async function POST(request: Request) {
       priceBeforeCredits,
       promotion,
       ugcAddOnAmount: getUgcAddonPrice(savedPlatforms, payload.plan),
-      youtubeContentIdAddOnAmount: getYoutubeContentIdAddonPrice(payload.plan, savedYoutubeContentId),
+      youtubeContentIdAddOnAmount: getYoutubeContentIdAddonPrice(payload.plan, savedYoutubeContentId, contentIdAccessStatus),
       trackPricing: payload.plan === "one_time" ? getTrackPricingQuote(savedTrackCount) : null,
       quote: responseQuote,
       key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""

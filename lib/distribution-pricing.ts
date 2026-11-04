@@ -1,6 +1,7 @@
 import { socialPlatforms } from "@/lib/release-config";
 import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
 import type { SubscriptionPlan } from "@/lib/types";
+import { contentIdRequestFee, normalizeContentIdAccessStatus } from "@/lib/content-id-access";
 
 const TRACK_PRICE = 99;
 export const UGC_ADDON_PRICE = 50;
@@ -100,8 +101,8 @@ export function getUgcAddonPrice(platforms: string[], plan?: SubscriptionPlan) {
   return hasUgcPlatforms(platforms) ? UGC_ADDON_PRICE : 0;
 }
 
-export function getYoutubeContentIdAddonPrice(plan?: SubscriptionPlan, enabled?: boolean) {
-  return (!plan || plan === "one_time") && enabled ? 200 : 0;
+export function getYoutubeContentIdAddonPrice(_plan?: SubscriptionPlan, enabled?: boolean, accessStatus?: string | null) {
+  return contentIdRequestFee(Boolean(enabled), normalizeContentIdAccessStatus(accessStatus));
 }
 
 export type DistributionCheckoutQuote = {
@@ -114,6 +115,7 @@ export type DistributionCheckoutQuote = {
   releaseType: string;
   platforms: string[];
   youtubeContentIdEnabled: boolean;
+  youtubeContentIdAccessStatus?: string | null;
   currency: "INR";
   basePrice: number;
   bulkDiscount: number;
@@ -135,13 +137,14 @@ export function createDistributionCheckoutQuote(input: {
   releaseType: string;
   platforms: string[];
   youtubeContentIdEnabled: boolean;
+  youtubeContentIdAccessStatus?: string | null;
   firstReleaseOffer: boolean;
   useHymnCredits: boolean;
   availableCredits: number;
 }): DistributionCheckoutQuote {
   const trackPricing = getTrackPricingQuote(input.trackCount);
   const ugcAddon = getUgcAddonPrice(input.platforms, "one_time");
-  const youtubeContentIdAddon = getYoutubeContentIdAddonPrice("one_time", input.youtubeContentIdEnabled);
+  const youtubeContentIdAddon = getYoutubeContentIdAddonPrice("one_time", input.youtubeContentIdEnabled, input.youtubeContentIdAccessStatus);
   const firstReleaseDiscount = input.firstReleaseOffer
     ? Math.min(FIRST_RELEASE_BASE_DISCOUNT, trackPricing.finalPrice)
     : 0;

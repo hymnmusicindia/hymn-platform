@@ -566,7 +566,12 @@ export function YoutubeContentIdModal({
           <button type="button" className="btn-outline pressable" onClick={onClose}>Close</button>
         </div>
         <div className="grid gap-4 px-5 py-5">
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Paste the URL of the YouTube channel that should be linked to this release.</p>
+          <div className="rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text-muted)" }}>
+            <p className="font-semibold" style={{ color: "var(--text)" }}>Content ID is separate from YouTube Music</p>
+            <p className="mt-2">It helps identify matching audio in YouTube videos. Only submit music you control exclusively; matches may include uploads on your own channel.</p>
+            <p className="mt-2">HYMN reviews the ₹200 one-time, account-wide request, typically within 2–3 weeks. Content ID stays off until approval. After approval, eligible YouTube Music releases are selected automatically.</p>
+          </div>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Paste the URL of the YouTube channel that should be linked to your Content ID request.</p>
           <label className="grid gap-2">
             <span className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Channel URL</span>
             <input className="field" value={channelUrl} onChange={(event) => onChannelUrlChange(event.target.value)} placeholder="https://www.youtube.com/@yourchannel" />

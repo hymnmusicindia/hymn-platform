@@ -4,6 +4,7 @@ import { SUBSCRIPTION_POLICIES } from "../lib/subscription-billing";
 import { createDistributionCheckoutQuote, getTrackPricingQuote, getUgcAddonPrice, getYoutubeContentIdAddonPrice } from "../lib/distribution-pricing";
 import { calculateFirstReleasePrice } from "../lib/first-release-promotion";
 import { getDistributionPricing } from "../lib/distribution-db";
+import { isValidYoutubeChannelUrl, shouldAutoSelectContentId } from "../lib/content-id-access";
 
 const expected = { one_time: 99, half_yearly: 699, yearly: 1099, yearly_plus: 1999 } as const;
 
@@ -18,10 +19,24 @@ assert.equal(findDistributionPlan("yearly").price, findDistributionPlan("half_ye
 const ugcPlatforms = ["Spotify", "Instagram / Facebook", "TikTok"];
 assert.equal(getUgcAddonPrice(ugcPlatforms, "one_time"), 50, "UGC fee is separate from Content ID pricing.");
 assert.equal(getYoutubeContentIdAddonPrice("one_time", true), 200, "Content ID remains a separately priced service.");
+assert.equal(getYoutubeContentIdAddonPrice("yearly_plus", true), 200, "Active subscribers pay the one-time Content ID request fee separately from covered release distribution.");
+assert.equal(getYoutubeContentIdAddonPrice("one_time", true, "pending"), 0, "A pending account request must not be charged again.");
+assert.equal(getYoutubeContentIdAddonPrice("one_time", true, "approved"), 0, "Approved account access must not be charged again.");
+assert.equal(getYoutubeContentIdAddonPrice("one_time", true, "declined"), 200, "A declined account may submit and pay for a new request.");
 assert.equal(getYoutubeContentIdAddonPrice("one_time", false), 0);
+assert.equal(shouldAutoSelectContentId({ status: "approved", platforms: ["YouTube Music"], contentType: "Original/Exclusive Licensed" }), true, "Approved users should automatically include eligible YouTube Music releases.");
+assert.equal(shouldAutoSelectContentId({ status: "pending", platforms: ["YouTube Music"], contentType: "Original/Exclusive Licensed" }), false, "Pending requests must not activate Content ID.");
+assert.equal(shouldAutoSelectContentId({ status: "approved", platforms: ["YouTube Music"], contentType: "Cover" }), false, "Ineligible content must not activate Content ID.");
+assert.equal(shouldAutoSelectContentId({ status: "approved", platforms: ["Spotify"], contentType: "Original/Exclusive Licensed" }), false, "Content ID must only auto-select for YouTube Music.");
+assert.equal(isValidYoutubeChannelUrl("https://www.youtube.com/@hymn"), true);
+assert.equal(isValidYoutubeChannelUrl("http://www.youtube.com/@hymn"), false, "Channel links must use HTTPS.");
+assert.equal(isValidYoutubeChannelUrl("https://example.com/@hymn"), false);
+assert.equal(isValidYoutubeChannelUrl("https://youtu.be/track"), false, "Video links are not channel URLs.");
 assert.equal(getTrackPricingQuote(1).finalPrice + getUgcAddonPrice(ugcPlatforms, "one_time"), 149);
 assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: false }), 149, "Server price must exclude Content ID when it is not selected.");
 assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: true }), 349, "Server price must include both distinct optional add-ons only when Content ID is selected.");
+assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: true, youtubeContentIdAccessStatus: "pending" }), 149, "Pending Content ID access must not be charged or activated again.");
+assert.equal(getDistributionPricing("one_time", 1, "single", ugcPlatforms, { youtubeContentIdEnabled: true, youtubeContentIdAccessStatus: "approved" }), 149, "Approved Content ID access must not incur another request fee.");
 assert.equal(calculateFirstReleasePrice({ plan: "one_time", releaseType: "single", trackCount: 1, normalAmount: 99 + 50 }).finalAmount, 50, "First-release pricing should waive the single's base fee and leave UGC payable.");
 assert.equal(calculateFirstReleasePrice({ plan: "one_time", releaseType: "single", trackCount: 1, normalAmount: 99 + 50 + 200 }).finalAmount, 250, "Opted-in Content ID remains additional after the base fee is waived.");
 

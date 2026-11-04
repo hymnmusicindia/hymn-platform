@@ -24,6 +24,7 @@ import { customerMessage } from "@/lib/customer-message";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { distributionSubmittedUrl, isCompletedDistributionSubmission } from "@/lib/distribution-return";
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
+import { isValidYoutubeChannelUrl, shouldAutoSelectContentId, type ContentIdAccessStatus } from "@/lib/content-id-access";
 import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
 import { wizardTrackTitle } from "@/lib/distribution-title";
 
@@ -1004,6 +1005,8 @@ export function ReleaseForm({
   initialCorrectionField,
   amendmentMode = false,
   amendmentSourceRevision,
+  contentIdAccessStatus = "none",
+  contentIdChannelUrl,
 }: {
   userName?: string;
   initialStage?: number;
@@ -1019,6 +1022,8 @@ export function ReleaseForm({
   initialCorrectionField?: string;
   amendmentMode?: boolean;
   amendmentSourceRevision?: string;
+  contentIdAccessStatus?: ContentIdAccessStatus;
+  contentIdChannelUrl?: string | null;
 }) {
   const router = useRouter();
   const [amendmentReceipt, setAmendmentReceipt] = useState<{ id: number; status: string; existing?: boolean } | null>(() => amendmentMode && initialRelease?.amendment && activeAmendmentStatuses.includes(initialRelease.amendment.status) ? { ...initialRelease.amendment, existing: true } : null);
@@ -1185,10 +1190,11 @@ export function ReleaseForm({
       } as MonetisationClauseState;
     });
   const [youtubeContentIdEnabled, setYoutubeContentIdEnabled] = useState(() =>
-    Boolean(initialRelease?.youtubeContentIdEnabled),
+    Boolean(initialRelease?.youtubeContentIdEnabled)
+      || (contentIdAccessStatus === "approved" && initialRelease?.platforms?.includes("YouTube Music") === true),
   );
   const [youtubeContentIdChannelUrl, setYoutubeContentIdChannelUrl] = useState(
-    () => initialRelease?.youtubeContentIdChannelUrl ?? "",
+    () => initialRelease?.youtubeContentIdChannelUrl ?? contentIdChannelUrl ?? "",
   );
   const [release, setRelease] = useState<ReleaseDraft>(() =>
     createInitialReleaseDraft(initialRelease, minimumScheduledDate, prefillSuggestions, audioLibraryPrefill),
@@ -1217,6 +1223,20 @@ export function ReleaseForm({
       ? [...new Set([...initialRelease.platforms, ...(initialRelease.platforms.includes("150+ More Stores") ? defaultStorePlatforms.filter(name=>!["Spotify", "Apple Music", "YouTube Music", "Amazon Music", "JioSaavn"].includes(name)) : [])])]
       : defaultStorePlatforms,
   );
+  useEffect(() => {
+    if (contentIdAccessStatus === "pending") {
+      setYoutubeContentIdEnabled(false);
+      return;
+    }
+    if (contentIdAccessStatus === "approved") {
+      setYoutubeContentIdEnabled(shouldAutoSelectContentId({
+        status: contentIdAccessStatus,
+        platforms,
+        contentType: release.contentType
+      }));
+      setYoutubeContentIdChannelUrl(current => current || contentIdChannelUrl || "");
+    }
+  }, [contentIdAccessStatus, contentIdChannelUrl, platforms, release.contentType]);
 
   useEffect(() => {
     if (contentIdEligibility.eligible || !youtubeContentIdEnabled) return;
@@ -1317,7 +1337,7 @@ export function ReleaseForm({
     () => getUgcAddonPrice(platforms, selectedPlan),
     [platforms, selectedPlan],
   );
-  const youtubeContentIdAddOnAmount = getYoutubeContentIdAddonPrice(selectedPlan, youtubeContentIdEnabled);
+  const youtubeContentIdAddOnAmount = getYoutubeContentIdAddonPrice(selectedPlan, youtubeContentIdEnabled, contentIdAccessStatus);
   const distributionBaseAmount =
     selectedPlan === "one_time"
       ? trackPricingQuote.basePrice
@@ -1329,7 +1349,7 @@ export function ReleaseForm({
   const firstReleaseDiscount = firstReleaseOffer && selectedPlan === "one_time" && releaseType === "single" && tracks.length === 1 ? Math.min(FIRST_RELEASE_BASE_DISCOUNT, trackPricingQuote.finalPrice) : 0;
   const finalDistributionAmount = Math.max(0, distributionAmount - firstReleaseDiscount);
   const hymnCreditsApplied = useHymnCredits && !subscriptionCovered && selectedPlan === "one_time" ? Math.min(Math.max(0, hymnCreditBalance), finalDistributionAmount) : 0;
-  const distributionCheckoutAmount = Math.max(0, finalDistributionAmount - hymnCreditsApplied);
+  const distributionCheckoutAmount = Math.max(0, (subscriptionCovered ? youtubeContentIdAddOnAmount : finalDistributionAmount) - hymnCreditsApplied);
   const legalComplete = useMemo(
     () => Object.values(legal).every(Boolean),
     [legal],
@@ -2396,7 +2416,7 @@ export function ReleaseForm({
         : null,
       platforms.includes("YouTube Music") &&
       youtubeContentIdEnabled &&
-      !youtubeContentIdChannelUrl.trim()
+      !isValidYoutubeChannelUrl(youtubeContentIdChannelUrl)
         ? {
             step: 5,
             key: "youtube-content-id-url",
@@ -3248,7 +3268,7 @@ export function ReleaseForm({
           ...(quote.bulkDiscount > 0 ? [`Track discount: −${money(quote.bulkDiscount)}`] : []),
           ...(quote.firstReleaseDiscount > 0 ? [`First-release base-fee discount: −${money(quote.firstReleaseDiscount)}`] : []),
           ...(quote.ugcAddon > 0 ? [`UGC add-on: ${money(quote.ugcAddon)}`] : []),
-          ...(quote.youtubeContentIdAddon > 0 ? [`YouTube Content ID add-on: ${money(quote.youtubeContentIdAddon)}`] : []),
+          ...(quote.youtubeContentIdAddon > 0 ? [`Content ID access request: ${money(quote.youtubeContentIdAddon)}`] : []),
           ...(quote.creditsUsed > 0 ? [`HYMN credits: −${money(quote.creditsUsed)}`] : []),
           `Total to pay: ${money(quote.payable)}`
         ];
@@ -3561,7 +3581,7 @@ export function ReleaseForm({
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Plan</dt><dd className="text-right">{currentPlan.title}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Artists</dt><dd>{artistCount}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Tracks</dt><dd>{tracks.length}</dd></div>
-              <div className="release-due-today flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Due today</dt><dd className="text-right">{subscriptionCovered || distributionCheckoutAmount === 0 ? "₹0" : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`}</dd></div>
+              <div className="release-due-today flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Due today</dt><dd className="text-right">{distributionCheckoutAmount === 0 ? "₹0" : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Save state</dt><dd aria-live="polite" style={{ color: autosaveEligible && autosaveStatus === "error" ? "var(--danger)" : autosaveEligible && autosaveStatus === "saved" ? "var(--success)" : "var(--text-muted)" }}>{autosaveLabel}</dd></div>
             </dl>
             {validationIssueCount > 0 ? <div className="release-summary-tasks mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Next up</p><ul className="mt-3 grid gap-1">{validationIssues.slice(0, 5).map((issue) => <li key={`${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)} className="group flex w-full items-start justify-between gap-3 py-2 text-left text-xs leading-5 transition" style={{ color: "var(--text-muted)" }}><span>{customerMessage(issue.message)}</span><span className="shrink-0 text-[var(--text-soft)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" aria-hidden="true">→</span></button></li>)}</ul></div> : null}
@@ -4996,7 +5016,7 @@ export function ReleaseForm({
                         onChange={() => togglePlatform(platform.name, "social")} />
                     ))}
                     <StoreChoice name="YouTube Content ID" checked={youtubeContentIdEnabled}
-                      disabled={!socialConsentAccepted || !contentIdEligibility.eligible}
+                      disabled={!socialConsentAccepted || !contentIdEligibility.eligible || contentIdAccessStatus === "pending" || contentIdAccessStatus === "approved" || (selectedPlan !== "one_time" && !hasActiveSubscription)}
                       onChange={() => {
                         if (youtubeContentIdEnabled) {
                           setYoutubeContentIdEnabled(false);
@@ -5008,21 +5028,31 @@ export function ReleaseForm({
                   {platforms.includes("YouTube Music") ? (
                   <div className={layoutStyles.contentIdAction} style={{ borderColor: "var(--border)" }}>
                     <span style={{ color: "var(--text-muted)" }}>
-                      {!contentIdEligibility.eligible ? contentIdEligibility.reason : youtubeContentIdEnabled
-                        ? "YouTube Content ID is enabled."
-                        : "Don’t have YouTube Content ID?"}
+                      {!contentIdEligibility.eligible
+                        ? contentIdEligibility.reason
+                        : contentIdAccessStatus === "approved"
+                          ? "Approved. Content ID is automatically selected for eligible YouTube Music releases."
+                          : contentIdAccessStatus === "pending"
+                            ? "HYMN is reviewing your request (typically 2–3 weeks). Content ID stays off until approval."
+                            : selectedPlan !== "one_time" && !hasActiveSubscription
+                              ? "Activate your subscription first; then request account-wide Content ID access with an eligible release for ₹200."
+                              : selectedPlan !== "one_time"
+                                ? "Your plan covers distribution. Request account-wide Content ID access for ₹200; access remains off until HYMN approves it."
+                              : contentIdAccessStatus === "declined"
+                                ? "Your request was declined. You can submit a new ₹200 approval request."
+                                : "Request account-wide Content ID access for ₹200. It will remain off until HYMN approves it."}
                     </span>
-                    <button
+                    {contentIdAccessStatus !== "approved" && contentIdAccessStatus !== "pending" && (selectedPlan === "one_time" || hasActiveSubscription) ? <button
                       type="button"
                       disabled={!socialConsentAccepted || !contentIdEligibility.eligible}
                       className={layoutStyles.contentIdButton}
                       onClick={() => openYoutubeContentIdModal()}
                     >
-                      {youtubeContentIdEnabled ? "Review" : "Claim it"}
-                    </button>
-                    {youtubeContentIdEnabled && selectedPlan === "one_time" ? (
+                      {youtubeContentIdEnabled ? "Review request" : "Request access"}
+                    </button> : null}
+                    {youtubeContentIdEnabled && contentIdAccessStatus === "none" || youtubeContentIdEnabled && contentIdAccessStatus === "declined" ? (
                       <span className="w-full text-xs" style={{ color: "var(--text-soft)" }}>
-                        ₹200 is added to this one-time release.
+                        One-time ₹200 request fee; ongoing access starts only after HYMN approval.
                       </span>
                     ) : null}
                   </div>
@@ -5127,7 +5157,7 @@ export function ReleaseForm({
                   ? "Processing…"
                   : isPaidReleaseResubmission
                     ? amendmentMode ? "Submit amendment" : "Submit corrections →"
-                  : subscriptionCovered
+                  : subscriptionCovered && youtubeContentIdAddOnAmount === 0
                     ? "Confirm & Submit Release →"
                     : distributionCheckoutAmount === 0
                       ? "Submit your release →"
@@ -5145,10 +5175,10 @@ export function ReleaseForm({
             <div className="record-review-details">{[
               {title:"Release details",stage:2,rows:[["Genre",release.primaryGenre],["Subgenre",release.secondaryGenre],["Language",release.language],["Mood",release.mood]]},
               {title:"Rights & ownership",stage:5,rows:[["Copyright",release.copyrightOwner],["Recording rights",release.publishingRights],["Content ownership",release.contentType],["Rights proof",release.licenseReceiptUrl ? "Attached" : "Not attached"]]},
-              {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],["Content ID",youtubeContentIdEnabled ? "Enabled" : "Off"],["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
+              {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],["Content ID",contentIdAccessStatus === "approved" && youtubeContentIdEnabled ? "Enabled" : contentIdAccessStatus === "pending" ? "Approval in process · off" : youtubeContentIdEnabled ? "Approval request" : "Off"],["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
             ].map(group => <section key={group.title}><header><h3>{group.title}</h3><button type="button" onClick={() => goToStep(group.stage)}>Edit →</button></header><dl>{group.rows.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl></section>)}</div>
             {validationIssues.length > 0 ? <section className="record-review-issues"><h3>A few details need your attention</h3>{validationIssues.map(issue => <button type="button" key={`${issue.key}-${issue.trackIndex}`} onClick={() => triggerFieldFocus(issue)}><span>{customerMessage(issue.message)}</span><span aria-hidden="true">→</span></button>)}</section> : <p className="record-review-ready"><CheckCircle2 size={18} /> All required release details are complete.</p>}
-                  {isPaidReleaseResubmission ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">No additional payment</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your existing release entitlement covers these corrections. Submit the updated release for review.</p></section> : !subscriptionCovered ? <section className="payment-summary p-5 md:p-7">
+                  {isPaidReleaseResubmission ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">No additional payment</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your existing release entitlement covers these corrections. Submit the updated release for review.</p></section> : subscriptionCovered && youtubeContentIdAddOnAmount > 0 ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">Content ID access request</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your plan covers the release distribution. Pay ₹{youtubeContentIdAddOnAmount.toLocaleString("en-IN")} once for account-wide Content ID access; it remains off during HYMN’s review.</p><div className="payment-total mt-4 flex items-end justify-between border-t pt-4" style={{ borderColor: "var(--border)" }}><span className="font-semibold">Due today</span><span className="text-2xl font-semibold" style={{ color: "var(--accent)" }}>₹{distributionCheckoutAmount.toLocaleString("en-IN")}</span></div></section> : !subscriptionCovered ? <section className="payment-summary p-5 md:p-7">
                     <div className="flex items-end justify-between gap-4 border-b pb-4" style={{ borderColor: "var(--border)" }}>
                       <h3 className="text-lg font-semibold">Payment summary</h3>
                       <span className="text-[10px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Invoice</span>
@@ -5180,7 +5210,7 @@ export function ReleaseForm({
                             ]
                           : []),
                         ...(youtubeContentIdAddOnAmount > 0
-                          ? [["YouTube Content ID add-on", `Rs ${youtubeContentIdAddOnAmount.toLocaleString("en-IN")}`]]
+                          ? [["Content ID access request", `Rs ${youtubeContentIdAddOnAmount.toLocaleString("en-IN")}`]]
                           : []),
                         ...(hymnCreditsApplied > 0 ? [["HYMN credits", `-Rs ${hymnCreditsApplied.toLocaleString("en-IN")}`]] : []),
                         ["Payment status", distributionCheckoutAmount === 0 ? "No Razorpay payment required" : "Pending"],
@@ -5217,7 +5247,7 @@ export function ReleaseForm({
                   </section> : null}
 
 
-            <div className="record-review-payment"><span>{isPaidReleaseResubmission ? "Corrections to your existing release" : subscriptionCovered ? "Covered by your plan" : "Total payable"}</span><strong>{isPaidReleaseResubmission || subscriptionCovered ? "No additional payment" : distributionCheckoutAmount === 0 ? "₹0" : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`}</strong></div>
+            <div className="record-review-payment"><span>{isPaidReleaseResubmission ? "Corrections to your existing release" : subscriptionCovered && youtubeContentIdAddOnAmount === 0 ? "Covered by your plan" : subscriptionCovered ? "Content ID access request" : "Total payable"}</span><strong>{isPaidReleaseResubmission || (subscriptionCovered && youtubeContentIdAddOnAmount === 0) ? "No additional payment" : distributionCheckoutAmount === 0 ? "₹0" : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`}</strong></div>
 
           </section>
       </ReleaseReviewDialog>

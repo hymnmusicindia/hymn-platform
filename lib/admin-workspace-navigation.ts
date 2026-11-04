@@ -7,6 +7,7 @@ export const adminWorkspaceNavigation:Item[]=[
         { key: "analytics", label: "Operational Reporting", description: "Persisted platform activity", group: "Command Center" },
         {key:"manual-catalogue",label:"Manual catalogue",description:"Assigned and imported release records",group:"Distribution Operations",href:"/admin/releases/manual"},
         { key: "releases", label: "Releases", description: "Catalogue, QC review and failed deliveries", group: "Distribution Operations" },
+        { key: "content-id-requests", label: "Content ID Requests", description: "Review paid YouTube Content ID access requests", group: "Distribution Operations", href: "/admin/content-id/requests" },
         { key: "delivery", label: "Distributor Delivery", description: "Distribution and store status", group: "Distribution Operations" },
         { key: "updates", label: "Changes & takedowns", description: "Metadata and delivery changes", group: "Distribution Operations", href: "/admin/release-change-requests" },
         { key: "fraud", label: "Fraud Detection", description: "Risk monitoring and investigations", group: "Distribution Operations", href: "/admin/fraud" },
@@ -46,7 +47,7 @@ export const adminWorkspaceNavigation:Item[]=[
 const required:Record<string,AdminPermissionKey[]>={
  "manual-catalogue":["system.manage"],"studio-admin":["services.manage"],"contributors-admin":["users.read"],"campaign-redemptions":["users.read"],"leads-admin":["users.manage"],"client-cards-admin":["users.manage"],"audit-admin":["audit.read"],"email-admin":["system.manage"],"webhooks-admin":["system.manage"],
   notifications:["system.manage"],users:["users.read"],artists:["users.read"],producers:["users.read","services.manage"],team:["system.manage"],activity:["audit.read"],analytics:["audit.read"],
-  releases:["releases.read","releases.review","distribution.retry"],"distribution-queue":["releases.review"],"delivery-failed":["distribution.retry"],delivery:["releases.read"],updates:["updates.review","takedowns.review"],takedowns:["takedowns.review"],fraud:["fraud.read"],
+  releases:["releases.read","releases.review","distribution.retry"],"content-id-requests":["releases.review"],"distribution-queue":["releases.review"],"delivery-failed":["distribution.retry"],delivery:["releases.read"],updates:["updates.review","takedowns.review"],takedowns:["takedowns.review"],fraud:["fraud.read"],
   payments:["payouts.review","royalties.reconcile"],revenue:["payouts.review","royalties.reconcile"],royalties:["payouts.review"],"earnings-entry":["royalties.import"],reconciliation:["royalties.reconcile"],kyc:["kyc.review"],
   settings:["system.manage"],integrations:["system.manage"],health:["system.manage"],content:["system.manage"],newsletter:["system.manage"],
   "managed-services":["services.manage"],"playlist-reviews":["services.manage"],operations:["services.manage","users.read"],reviews:["services.manage"],support:["services.manage"],promotions:["system.manage"],"timed-playlists":["services.manage"],contracts:["services.manage"],growth:["audit.read"],"referrals-admin":["fraud.read","wallets.adjust"]

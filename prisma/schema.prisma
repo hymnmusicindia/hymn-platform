@@ -224,6 +224,8 @@ model User {
   adminMembership               AdminMembership?
   managedServiceRequests        ManagedServiceRequest[]
   distributionOrders            DistributionOrder[]
+  contentIdAccess               ContentIdAccess?
+  reviewedContentIdAccess       ContentIdAccess[]                  @relation("ContentIdAccessReviewer")
   checkoutOrders                CheckoutOrder[]
   couponRedemptions             CouponRedemption[]
   beatPurchases                 BeatPurchase[]
@@ -371,6 +373,7 @@ model Release {
   promotionRedemptions        PromotionRedemption[]
   subscriptionUsage           SubscriptionReleaseUsage?
   distributionOrder           DistributionOrder?
+  contentIdAccessRecords      ContentIdAccess[]                    @relation("ContentIdAccessRelease")
   identifierHistory           ExternalIdentifierHistory[]
   artistIdentities            ReleaseArtistIdentity[]
   studioReleaseHandoff        StudioReleaseHandoff?
@@ -2387,10 +2390,33 @@ model DistributionOrder {
   user              User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
   release           Release?              @relation(fields: [releaseId], references: [id], onDelete: Restrict)
   review            PurchaseReview?
+  contentIdAccess  ContentIdAccess?
   createdAt         DateTime              @default(now()) @map("created_at")
 
   @@index([userId, paymentStatus])
   @@map("distribution_orders")
+}
+
+model ContentIdAccess {
+  id                  Int               @id @default(autoincrement())
+  userId              Int               @unique @map("user_id")
+  releaseId           Int               @map("release_id")
+  distributionOrderId Int?              @unique @map("distribution_order_id")
+  status              String            @default("pending")
+  channelUrl          String?           @map("channel_url")
+  feeAmount           Int               @default(200) @map("fee_amount")
+  requestedAt         DateTime          @default(now()) @map("requested_at")
+  reviewedAt          DateTime?         @map("reviewed_at")
+  reviewedById        Int?              @map("reviewed_by_id")
+  reviewReason        String?           @map("review_reason")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  release             Release           @relation("ContentIdAccessRelease", fields: [releaseId], references: [id], onDelete: Restrict)
+  distributionOrder   DistributionOrder? @relation(fields: [distributionOrderId], references: [id], onDelete: Restrict)
+  reviewedBy          User?             @relation("ContentIdAccessReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, requestedAt])
+  @@map("content_id_access")
 }
 
 model PurchaseReview {

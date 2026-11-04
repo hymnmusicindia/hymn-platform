@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { firstReleaseAttribution } from "@/lib/first-release-flow";
 import { amendmentSourceRevision } from '@/lib/release-amendment-revision';
+import { normalizeContentIdAccessStatus } from "@/lib/content-id-access";
 import { redirect } from 'next/navigation';
 
 function firstValue(value?: string | string[]) {
@@ -21,6 +22,7 @@ function firstValue(value?: string | string[]) {
 export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ amend?: string | string[]; draft?: string | string[]; submitted?: string | string[]; edit?: string | string[]; audioAssetId?: string | string[]; correctionField?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; stage?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
   const user = await getCurrentUserForPage();
   const params = (await searchParams) ?? {};
+  const contentIdAccess = user ? await prisma.contentIdAccess.findUnique({ where: { userId: user.id }, select: { status: true, channelUrl: true } }) : null;
   const legacyAmendmentId = Number(firstValue(params.amend));
   if (Number.isSafeInteger(legacyAmendmentId) && legacyAmendmentId > 0) redirect(`/dashboard/releases/${legacyAmendmentId}?tab=requests`);
   const requestedId = Number(firstValue(params.amend) ?? firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? firstValue(params.draft) ?? "");
@@ -95,7 +97,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
             <div className="mx-auto w-full max-w-[1440px]">
               {explicitCampaign && campaignDraftEligible && editingRelease?.paymentStatus !== "paid" && campaignEligibility && !campaignEligibility.eligible ? <p role="status" className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>The first-release offer is not currently available for this account. Your draft is saved. Check your existing releases or review the displayed price before continuing.</p> : null}
               {hasActiveSubscription && !hasReleaseAllowance && selectedPlan === "one_time" ? <p role="status" className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Your subscription release allowance is used up. You can submit this release with a one-time payment and apply any available HYMN credits at checkout.</p> : null}
-              <ReleaseForm amendmentSourceRevision={amendmentMode && editingRelease ? amendmentSourceRevision(editingRelease) : undefined} amendmentMode={amendmentMode} key={editingRelease?.id ?? "new-release"} returnedFromSubmission={firstValue(params.submitted) === "1"} userName={user.name} initialStage={firstValue(params.stage) ? Number(firstValue(params.stage)) : amendmentMode ? 3 : undefined} selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} audioLibraryPrefill={audioLibraryPrefill} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={firstReleaseOffer} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
+              <ReleaseForm amendmentSourceRevision={amendmentMode && editingRelease ? amendmentSourceRevision(editingRelease) : undefined} amendmentMode={amendmentMode} contentIdAccessStatus={normalizeContentIdAccessStatus(contentIdAccess?.status)} contentIdChannelUrl={contentIdAccess?.channelUrl} key={editingRelease?.id ?? "new-release"} returnedFromSubmission={firstValue(params.submitted) === "1"} userName={user.name} initialStage={firstValue(params.stage) ? Number(firstValue(params.stage)) : amendmentMode ? 3 : undefined} selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} audioLibraryPrefill={audioLibraryPrefill} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={firstReleaseOffer} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">
