@@ -5,3 +5,4 @@
 @media(prefers-reduced-motion:reduce){.cover img{transition:none}}
 
 .viewport::-webkit-scrollbar{display:none;width:0;height:0}
+.loading{animation:preview-spin 1s linear infinite}@keyframes preview-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.loading{animation:none}}

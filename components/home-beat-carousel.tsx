@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Pause, Play } from 'lucide-react';
+import { ArrowRight, Loader2, Pause, Play } from 'lucide-react';
 import styles from './home-beat-carousel.module.css';
 type Preview = { id: number; title: string; genre: string; bpm: number; artwork: string; price: number; src: string; fallbackSrc?: string };
 export function HomeBeatCarousel({ beats }: { beats: Preview[] }) {
@@ -53,7 +53,7 @@ export function HomeBeatCarousel({ beats }: { beats: Preview[] }) {
     <div className={styles.viewport} ref={viewport} tabIndex={0} role="region" aria-label="Beat previews. Swipe to explore." onMouseEnter={() => setInteracting(true)} onMouseLeave={() => setInteracting(false)} onFocusCapture={() => setInteracting(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) setInteracting(false); }} onPointerDown={() => setPaused(true)} onWheel={() => setPaused(true)}>
       {beats.map(beat => <article key={beat.id} className={styles.card}>
         <button type="button" className={styles.cover} onClick={() => void toggle(beat)} aria-label={`${active === beat.id && playing ? 'Pause' : 'Play'} ${beat.title}`} aria-busy={active === beat.id && busy}>
-          <img src={beat.artwork} alt={`${beat.title} cover`} loading="lazy" width={200} height={200}/><span>{active === beat.id && playing ? <Pause size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}</span>
+          <img src={beat.artwork} alt={`${beat.title} cover`} loading="lazy" width={200} height={200}/><span>{active === beat.id && busy ? <Loader2 size={17} className={styles.loading}/> : active === beat.id && playing ? <Pause size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}</span>
         </button><div className={styles.copy}><small>{beat.genre} · {beat.bpm} BPM</small><h3 title={beat.title}>{beat.title}</h3><div><strong>₹{beat.price.toLocaleString('en-IN')}</strong><Link href="/beat-store#beat-catalog" aria-label={`View ${beat.title} in Beat Store`}>View beat <ArrowRight size={13}/></Link></div></div>
       </article>)}
     </div>

@@ -20,4 +20,5 @@
 .root { color:var(--text);border-color:var(--border); }
 .compact{margin:16px 24px 8px;padding:22px 0;gap:20px}.compact .intro h2{font-size:28px}.compact .summary{font-size:11px;margin:9px 0 10px}.compact .card{min-height:208px;padding:16px;gap:14px}.compact .card blockquote{font-size:12px;line-height:1.65}.compact .intro h2 br{display:none}
 .compact .intro h2 span::before{content:' '}
+.root .intro{padding-right:0}
 @media(max-width:760px){.compact{margin:12px 16px 4px;padding:18px 0;gap:8px}.compact .intro{padding-right:100px}.compact .intro h2{font-size:23px;margin-top:9px}.compact .summary{display:none}.compact .motionControl{bottom:0!important}.compact .card{width:238px;flex-basis:238px;min-height:200px}.compact .viewport{margin:0}}
