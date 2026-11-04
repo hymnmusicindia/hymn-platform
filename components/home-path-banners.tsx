@@ -92,7 +92,7 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
       </section>),
     beats: (<section id="beats" className="landing-beats shell py-10">
         <div className="landing-section-heading"><div><p className="landing-eyebrow">Beatstore</p><h2>A new sound. A new beginning.</h2></div><Link prefetch={false} href="/beat-store">Browse all beats <ArrowRight size={16}/></Link></div>
-        <HomeBeatCarousel beats={catalog.slice(0, 8).map(beat => ({ id: beat.id, title: beat.title, genre: beat.genre, bpm: beat.bpm, artwork: artworkPreviewUrl(beat.coverImage, 320), price: beat.startingPrice, src: beat.previewUrl || `/api/beats/${beat.id}/audio` }))}/>
+        <HomeBeatCarousel beats={catalog.slice(0, 8).map(beat => ({ id: beat.id, title: beat.title, genre: beat.genre, bpm: beat.bpm, artwork: artworkPreviewUrl(beat.coverImage, 320), price: beat.startingPrice, src: beat.previewUrl || beat.fileUrl || `/api/beats/${beat.id}/audio`, fallbackSrc: beat.fileUrl || `/api/beats/${beat.id}/audio` }))}/>
       </section>),
     journey: <div id="journey" className="landing-banner landing-journey"><MusicLifecycleBanner compact={!signedIn} /></div>,
     producers: <div id="producers" className="landing-banner landing-producers"><HomeProducerInvitation /></div>,

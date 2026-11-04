@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Pause, Play } from 'lucide-react';
 import styles from './home-beat-carousel.module.css';
-type Preview = { id: number; title: string; genre: string; bpm: number; artwork: string; price: number; src: string };
+type Preview = { id: number; title: string; genre: string; bpm: number; artwork: string; price: number; src: string; fallbackSrc?: string };
 export function HomeBeatCarousel({ beats }: { beats: Preview[] }) {
   const viewport = useRef<HTMLDivElement>(null), audio = useRef<HTMLAudioElement>(null), request = useRef(0);
   const [active, setActive] = useState<number | null>(null), [playing, setPlaying] = useState(false), [busy, setBusy] = useState(false);
@@ -28,10 +28,24 @@ export function HomeBeatCarousel({ beats }: { beats: Preview[] }) {
     const player = audio.current; if (!player) return;
     const ticket = ++request.current; setMessage('');
     if (active === beat.id && !player.paused) { player.pause(); setBusy(false); return; }
-    player.pause(); if (active !== beat.id) { player.src = beat.src; setActive(beat.id); }
-    setBusy(true);
-    try { await player.play(); if (ticket === request.current) setBusy(false); }
-    catch { if (ticket === request.current) { setBusy(false); setPlaying(false); setMessage('Preview unavailable. Open the Beat Store to try again.'); } }
+    player.pause(); setActive(beat.id); setBusy(true);
+    const sources = active === beat.id && player.src && !player.error
+      ? [...new Set([player.src, beat.src, beat.fallbackSrc].filter(Boolean))]
+      : [...new Set([beat.src, beat.fallbackSrc].filter(Boolean))];
+    for (const source of sources) {
+      if (ticket !== request.current) return;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        if (player.getAttribute('src') !== source || player.error) { player.src = source!; player.load(); }
+        await Promise.race([player.play(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Preview timed out')), 12000); })]);
+        if (ticket === request.current) { setBusy(false); setPlaying(true); } return;
+      } catch (error) {
+        if (ticket !== request.current) return;
+        player.pause();
+        if (error instanceof Error && error.name === 'NotAllowedError') { setBusy(false); setMessage('Tap play again to start the preview.'); return; }
+      } finally { clearTimeout(timer); }
+    }
+    if (ticket === request.current) { setBusy(false); setPlaying(false); setMessage('Preview unavailable. Open the Beat Store to try again.'); }
   }
   if (!beats.length) return <p className={styles.empty}>New beats are on their way. <Link href="/beat-store">Explore the Beat Store <ArrowRight size={14}/></Link></p>;
   return <div className={styles.root}>
@@ -43,7 +57,7 @@ export function HomeBeatCarousel({ beats }: { beats: Preview[] }) {
         </button><div className={styles.copy}><small>{beat.genre} · {beat.bpm} BPM</small><h3 title={beat.title}>{beat.title}</h3><div><strong>₹{beat.price.toLocaleString('en-IN')}</strong><Link href="/beat-store#beat-catalog" aria-label={`View ${beat.title} in Beat Store`}>View beat <ArrowRight size={13}/></Link></div></div>
       </article>)}
     </div>
-    <audio ref={audio} preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setBusy(false); }} onError={() => { setPlaying(false); setBusy(false); setMessage('Preview unavailable. Open the Beat Store to try again.'); }}/>
+    <audio ref={audio} preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setBusy(false); }}/>
     {message && <p role="status" className={styles.message}>{message}</p>}
   </div>;
 }

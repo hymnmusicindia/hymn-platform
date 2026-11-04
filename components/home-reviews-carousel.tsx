@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import type { CSSProperties } from "react";
-import { BadgeCheck, Pause, Play, Quote } from "lucide-react";
+import { BadgeCheck, Quote } from "lucide-react";
 import styles from "./home-reviews-carousel.module.css";
 
 type Review = {
@@ -23,7 +22,6 @@ function reviewPriority(a: Review, b: Review) {
 }
 
 export function HomeReviewsCarousel({ reviews, compact = false }: { reviews: Review[]; compact?: boolean }) {
-  const [paused, setPaused] = useState(false);
 
   const byUser = new Map<number, Review>();
   for (const review of reviews) {
@@ -46,9 +44,9 @@ export function HomeReviewsCarousel({ reviews, compact = false }: { reviews: Rev
     </div>;
   }
   return <section className={`${styles.root} ${compact ? styles.compact : ''}`} aria-label="Customer reviews">
-    <div className={styles.intro}><p className={styles.eyebrow}><span aria-hidden="true"/>ARTIST REVIEWS</p><h2>Real artists.<br/><span>Real experiences.</span></h2><p className={styles.summary}>In their own words. From their own journey.</p>{moving&&<button type="button" className={styles.motionControl} aria-pressed={paused} onClick={()=>setPaused(value=>!value)}>{paused?<Play size={13} aria-hidden="true"/>:<Pause size={13} aria-hidden="true"/>}{paused?'Resume reviews':'Pause reviews'}</button>}</div>
+    <div className={styles.intro}><p className={styles.eyebrow}><span aria-hidden="true"/>ARTIST REVIEWS</p><h2>Real artists.<br/><span>Real experiences.</span></h2><p className={styles.summary}>In their own words. From their own journey.</p></div>
     <div className={styles.viewport} tabIndex={0} role="region" aria-label="Artist reviews. Hover or focus here to pause." aria-live="off">
-      <div className={styles.track} data-moving={moving} data-paused={paused} style={{"--review-duration":`${duration}s`} as CSSProperties}>{cards()}{moving&&cards(true)}</div>
+      <div className={styles.track} data-moving={moving} style={{"--review-duration":`${duration}s`} as CSSProperties}>{cards()}{moving&&cards(true)}</div>
     </div>
   </section>;
 }
