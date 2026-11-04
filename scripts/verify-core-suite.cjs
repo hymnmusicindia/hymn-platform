@@ -16,5 +16,12 @@ if (!fs.existsSync(npmCli)) throw Error('Run the regression suite through npm te
     });
     if (code !== 0) { process.exitCode = code; return; }
   }
-  console.log(`PASS all ${suites.length} core regression groups.`);
+  for (const script of ['verify-request-boundaries.ts', 'verify-draft-request-boundaries.ts', 'verify-validator-update-semantics.ts']) {
+    const code = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, ['--import', 'tsx', `scripts/${script}`], { env, stdio: 'inherit', windowsHide: true });
+      child.on('error', reject); child.on('exit', code => resolve(code ?? 1));
+    });
+    if (code !== 0) { process.exitCode = code; return; }
+  }
+  console.log(`PASS all ${suites.length} core regression groups and request/update boundary regressions.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

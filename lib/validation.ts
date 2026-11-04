@@ -114,7 +114,9 @@ export const paymentVerifySchema = z.object({
   items: z.array(orderItemSchema).min(1)
 });
 
-export const artistProfileUpdateSchema = artistProfileFields.partial().superRefine(requireProducerArtistName);
+// PATCH must preserve omitted flags. Zod 4 applies nested defaults even when
+// fields are optional, so the creation defaults must not enter this schema.
+export const artistProfileUpdateSchema = artistProfileFields.partial().extend({ hasLiveMusic: z.boolean().optional(), isProducer: z.boolean().optional() }).superRefine(requireProducerArtistName);
 
 export function normalizeInstagramUrl(value: string) {
   const normalized = value.trim();
@@ -209,7 +211,7 @@ export const distributionTrackSchema = z.object({
   musicalKey: z.string().optional(),
   explicitContent: z.boolean(),
   dolbyAtmos: z.boolean(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   artistProfileIds: z.array(z.number().int().positive()).min(1, "Select at least one saved primary artist card."),
   featuredArtistProfileIds: z.array(z.number().int().positive()).optional(),
   remixerProfileIds: z.array(z.number().int().positive()).optional()
@@ -239,7 +241,7 @@ const distributionMetadataBaseSchema = z.object({
   youtubeContentIdEnabled: z.boolean().optional(),
   youtubeContentIdChannelUrl: z.string().nullable().optional(),
   monetisationAccepted: z.boolean().optional(),
-  monetisationClauses: z.record(z.boolean()).optional(),
+  monetisationClauses: z.record(z.string(), z.boolean()).optional(),
   copyrightOwner: z.string().min(1),
   labelName: z.string().nullable().optional(),
   publishingRights: z.string().trim().min(1, "P-Line is required."),

@@ -24,6 +24,18 @@ This audit covered customer, distribution, billing, referral, studio, team and d
 
 The beat-store artwork grid was inspected and preserved. No beat-store redesign was shipped as part of this audit.
 
+## Dependency security fixes
+
+The runtime dependency scan initially reported **19 advisories: 1 critical, 10 high and 8 moderate**. After patching, the clean production lockfile scan reports **8 moderate, 0 high and 0 critical**.
+
+- Updated Next.js to **16.4.5** and its ESLint configuration to the matching version, following the [official framework security advisories](https://github.com/vercel/next.js/security).
+- Updated Axios to **1.21.0**, Sharp to **0.35.5**, Nodemailer to **10.3.1**, source-map-js to **1.2.2** and follow-redirects to **1.16.2**.
+- Patched brace-expansion to **1.1.21 / 2.1.7** on the applicable dependency branches. Refreshed a stale lock entry using the registry's exact version, tarball URL and integrity hash.
+- Patched deepmerge-ts to **8.0.2**, retaining Prisma **6.19.3**. Prisma schema/config validation passed; no database migration or Prisma downgrade was performed.
+- Migrated Zod to **4.6.7**, adapting record schemas and licence-consent error customization using its [official migration guide](https://zod.dev/v4/changelog). Explicitly removed creation defaults from partial artist/task update schemas so changing one field cannot reset producer flags, task priority, approval requirements, dependencies or checklists. Added regression tests for omitted versus explicitly cleared fields.
+
+The core and financial regression suites were rerun against the patched dependencies. New request/update regressions now run automatically through `npm test`.
+
 ## Passed checks
 
 - **15 core regression groups:** performance architecture, first-release promotion, artist profiles, integration contract/failure matrix, producer/contributor identity, analytics, migration safety, payment signatures, subscriptions, payment enforcement, storage/media integrity, release states/identifiers, payouts and services.
@@ -39,6 +51,8 @@ The beat-store artwork grid was inspected and preserved. No beat-store redesign 
 This is broad regression coverage, not proof that every possible interaction on the website is defect-free. The full authenticated page sweep hit the local machine's memory limit during development compilation. Purchase/support full-page checks and the remaining role/page sweep were therefore not certified by that run. Smaller library, support/access, team and service fixtures supplied additional coverage, but do not replace every full-page integration scenario.
 
 Real payment settlement, inbox delivery, partner ingestion and installation on physical devices were not exercised during this audit. Existing production customer records were not modified.
+
+**Outstanding dependency work:** eight moderate advisories remain in the legacy ExcelJS/archive chain: archiver, archiver-utils, exceljs, glob, minimatch, readdir-glob, rimraf and zip-stream. This needs a compatible spreadsheet/archive migration and import/export regression coverage. The dependency scan is therefore not completely clean.
 
 ## Reproduce key checks
 
