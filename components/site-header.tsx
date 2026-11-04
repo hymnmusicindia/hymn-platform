@@ -20,6 +20,7 @@ import { SubscriptionButton, SubscriptionOptions } from "@/components/subscripti
 import { SmartHelpToggle } from "@/components/smart-help-toggle";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { MusicAppInstall } from "@/components/music-app-install";
+import { MusicAppUpdate } from "@/components/music-app-update";
 
 type SiteHeaderProps = {
   user?: SessionPayload | null;
@@ -456,6 +457,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               <div>
                 <p className="site-notification-title">Notifications{unreadCount > 0 && <span className="site-notification-count">{unreadCount}</span>}</p>
                 <p className="site-notification-subtitle">{unreadCount ? `${unreadCount} unread ${unreadCount === 1 ? "update" : "updates"}` : "All caught up"}</p>
+                <a href="/music/app/notifications" className="mt-2 inline-block text-xs underline underline-offset-4" style={{ color: "var(--text)" }}>Phone alert settings</a>
               </div>
               <div className="site-notification-heading-actions"><button type="button" onClick={markAllNotificationsRead} disabled={unreadCount === 0} className="site-notification-mark-all" aria-label="Mark all as read" title="Mark all as read"><CheckCheck size={16} /><span>Read all</span></button><button type="button" className="site-notification-close" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)}><X size={18}/></button></div>
             </div>
@@ -640,6 +642,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         transition: "background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease"
       }}
     >
+      <MusicAppUpdate />
       <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-1 px-3 py-2 sm:min-h-[4.5rem] sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
         <Link prefetch={false} href="/" className="header-brand flex min-w-0 shrink items-center" aria-label="HYMN Music home">
           <Image src="/assets/hymn-logo-320.webp" alt="HYMN Music Logo" width={156} height={52} className="h-7 w-auto max-w-24 object-contain sm:h-9 sm:max-w-none lg:h-10" style={{ filter: "var(--logo-filter)" }} priority />

@@ -245,7 +245,15 @@ export async function sendStudioMessage(input: { orderPublicId: string; userId: 
   if (!order.paidAt) throw new Error("Pay for the service to open the conversation.");
   if (input.callbackPhone && (order.customerId !== input.userId || !/^\+?[0-9 ()-]{8,20}$/.test(input.callbackPhone))) throw new Error("Only the client can request a callback with a valid phone number.");
   const key = `chat:${order.id}:${input.userId}:${input.idempotencyKey}`;
-  return prisma.studioMessage.upsert({ where: { idempotencyKey: key }, create: { orderId: order.id, senderUserId: input.userId, kind: input.callbackPhone ? "CALLBACK" : "USER", body: input.body.trim(), metadata: input.callbackPhone ? { phone: input.callbackPhone, state: "REQUESTED" } : undefined, idempotencyKey: key }, update: {}, include: { sender: { select: { name: true } } } });
+  return prisma.$transaction(async tx => {
+    const message = await tx.studioMessage.upsert({ where: { idempotencyKey: key }, create: { orderId: order.id, senderUserId: input.userId, kind: input.callbackPhone ? "CALLBACK" : "USER", body: input.body.trim(), metadata: input.callbackPhone ? { phone: input.callbackPhone, state: "REQUESTED" } : undefined, idempotencyKey: key }, update: {}, include: { sender: { select: { name: true } } } });
+    const recipient = order.customerId === input.userId ? order.engineerParty.claimedByUserId : order.customerId;
+    if (recipient && recipient !== input.userId) {
+      const eventKey = `studio:message:${message.id}:${recipient}`;
+      await tx.notification.upsert({ where: { eventKey }, create: { eventKey, userId: recipient, title: input.callbackPhone ? "Callback requested" : "New Studio message", body: "Open your HYMN Studio project to view the message.", type: "system", href: `/studio/orders/${order.publicId}`, actionLabel: "Open project" }, update: {} });
+    }
+    return message;
+  });
 }
 
 export async function createStudioDelivery(input: { orderPublicId: string; engineerUserId: number; studioFileIds: number[]; note?: string; idempotencyKey: string }) {

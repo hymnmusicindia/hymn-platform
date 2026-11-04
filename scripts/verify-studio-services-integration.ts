@@ -62,6 +62,12 @@ async function main() {
   await transitionStudioOrder({ orderId: order.id, to: "IN_PROGRESS", actorUserId: customer.id, actorType: "CUSTOMER", reason: "Source files uploaded", correlationId: `source-${stamp}` });
   await sendStudioMessage({ orderPublicId: order.publicId, userId: customer.id, body: "The vocal stems are uploaded and ready.", idempotencyKey: `message-${stamp}` });
   assert.equal(await prisma.studioMessage.count({ where: { orderId: order.id, idempotencyKey: `chat:${order.id}:${customer.id}:message-${stamp}` } }), 1);
+  await sendStudioMessage({ orderPublicId: order.publicId, userId: customer.id, body: "The vocal stems are uploaded and ready.", idempotencyKey: `message-${stamp}` });
+  const chatMessage = await prisma.studioMessage.findUniqueOrThrow({ where: { idempotencyKey: `chat:${order.id}:${customer.id}:message-${stamp}` } });
+  assert.equal(await prisma.notification.count({ where: { eventKey: `studio:message:${chatMessage.id}:${engineerUser.id}`, userId: engineerUser.id } }), 1, "Message retries create exactly one recipient notification");
+  assert.equal(await prisma.notification.count({ where: { eventKey: `studio:message:${chatMessage.id}:${customer.id}` } }), 0, "The sender must not be notified of their own message");
+  const reply = await sendStudioMessage({ orderPublicId: order.publicId, userId: engineerUser.id, body: "Files received", idempotencyKey: `reply-${stamp}` });
+  assert.equal(await prisma.notification.count({ where: { eventKey: `studio:message:${reply.id}:${customer.id}`, userId: customer.id } }), 1, "Engineer replies notify the customer");
 
   async function delivery(version: number) {
     const uploaded = await localPrivateStorage.upload({ ownerUserId: engineerUser.id, assetType: "private_studio_delivery", fileName: `delivery-${version}.wav`, mimeType: "audio/wav", bytes: fixtureWav() });

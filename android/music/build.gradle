@@ -5,7 +5,7 @@ android {
     namespace 'fun.hymnmusic.app'
     compileSdk 36
     defaultConfig {
-        applicationId 'fun.hymnmusic.app'
+        applicationId project.hasProperty('musicNotificationTest') ? 'fun.hymnmusic.app.notificationtest' : 'fun.hymnmusic.app'
         minSdk 26
         targetSdk 35
         versionCode releaseInfo.versionCode
@@ -13,6 +13,16 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     buildFeatures { buildConfig true }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            maxHeapSize = '768m'
+            systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+            systemProperty 'sun.net.client.defaultConnectTimeout', '20000'
+            systemProperty 'sun.net.client.defaultReadTimeout', '30000'
+            jvmArgs '--add-opens=java.base/java.lang=ALL-UNNAMED', '--add-opens=java.base/java.util=ALL-UNNAMED', '--add-opens=java.base/java.io=ALL-UNNAMED', '--add-opens=java.base/java.net=ALL-UNNAMED', '--add-opens=java.base/java.security=ALL-UNNAMED', '--add-opens=java.base/java.text=ALL-UNNAMED', '--add-opens=java.base/jdk.internal.access=ALL-UNNAMED', '--add-opens=java.desktop/java.awt.font=ALL-UNNAMED', '--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED'
+        }
+    }
     if (signingFile.exists()) {
         def credentials = new Properties()
         signingFile.withInputStream { credentials.load(it) }
@@ -24,12 +34,14 @@ dependencies {
     implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
     implementation 'androidx.core:core:1.15.0'
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'androidx.work:work-runtime:2.10.1'
     implementation 'androidx.credentials:credentials:1.6.0'
     implementation 'androidx.credentials:credentials-play-services-auth:1.6.0'
     implementation 'com.google.android.libraries.identity.googleid:googleid:1.2.1'
     implementation 'com.google.android.gms:play-services-auth:21.3.0'
     implementation 'com.razorpay:checkout:1.6.41'
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.16.1'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 }

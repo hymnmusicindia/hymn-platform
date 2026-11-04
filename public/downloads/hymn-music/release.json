@@ -1,9 +1,9 @@
 {
-  "version": "1.0.4",
-  "versionCode": 5,
+  "version": "1.0.5",
+  "versionCode": 6,
   "packageName": "fun.hymnmusic.app",
-  "file": "hymn-music-1.0.4-c3c66c5667bb.apk",
-  "size": 4799880,
-  "sha256": "c3c66c5667bb2d04e84eddd6083f35c1cf777f123552bf8f6ef87ab66073a2f9",
-  "publishedAt": "2026-11-04T10:47:08.135Z"
+  "file": "hymn-music-1.0.5-ab0e9ea651c2.apk",
+  "size": 5163405,
+  "sha256": "ab0e9ea651c2adef8925f26a62c260053b21de026e7e07278925aa884c0f602e",
+  "publishedAt": "2026-11-04T18:14:05.970Z"
 }

@@ -36,6 +36,12 @@ public final class MusicWebActivity extends Activity {
     final Handler handler = new Handler(Looper.getMainLooper());
     CancellationSignal googleCancellation;
     Runnable googleDeadline;
+    boolean notificationSyncBusy, notificationScreenActive;
+    String pendingNotificationAccount, pendingNotificationHref;
+    final Runnable notificationTick = new Runnable() { public void run() {
+        if (!notificationScreenActive) return;
+        syncPhoneNotifications(); handler.postDelayed(this, 15000);
+    }};
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -81,6 +87,7 @@ public final class MusicWebActivity extends Activity {
             @Override public void doUpdateVisitedHistory(WebView view,String url,boolean reload) { updateGoogle(url); }
             @Override public void onPageFinished(WebView view, String url) {
                 progress.setVisibility(View.GONE); CookieManager.getInstance().flush(); updateGoogle(url);
+                syncPhoneNotifications();
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if(request.isForMainFrame()) { failure.setVisibility(View.VISIBLE); progress.setVisibility(View.GONE); }
@@ -109,16 +116,78 @@ public final class MusicWebActivity extends Activity {
             }
         });
         web.setDownloadListener((url,agent,disposition,mime,size)->prepareDownload(url,disposition,mime));
+        receiveNotificationIntent(getIntent());
         if(saved==null||web.restoreState(saved)==null) web.loadUrl(initialUrl(getIntent()));
+    }
+    void receiveNotificationIntent(Intent intent) {
+        pendingNotificationAccount = intent.getStringExtra("notificationAccount");
+        pendingNotificationHref = intent.getStringExtra("notificationHref");
+    }
+    void syncPhoneNotifications() {
+        if (notificationSyncBusy || isDestroyed()) return;
+        notificationSyncBusy = true;
+        String cookies = CookieManager.getInstance().getCookie(MusicNavigation.ORIGIN);
+        worker.execute(() -> {
+            String verified = "";
+            try { MusicPhoneNotifications.captureSession(this, cookies); verified = MusicPhoneNotifications.sync(this); }
+            catch (Exception ignored) { /* A transient outage must not sign the user out. WorkManager retries. */ }
+            final String account = verified;
+            runOnUiThread(() -> {
+                notificationSyncBusy = false;
+                if (isDestroyed()) return;
+                // Ignore late authentication results after WebView sign-out or account switching.
+                if (!MusicNotificationPolicy.sessionCookie(cookies).equals(MusicNotificationPolicy.sessionCookie(CookieManager.getInstance().getCookie(MusicNavigation.ORIGIN)))) return;
+                if (pendingNotificationHref != null && !account.isEmpty()) {
+                    if (account.equals(pendingNotificationAccount)) web.loadUrl(MusicNotificationPolicy.destination(pendingNotificationHref));
+                    pendingNotificationHref = null; pendingNotificationAccount = null;
+                }
+                if (!account.isEmpty() && notificationScreenActive) askForPhoneNotifications();
+            });
+        });
+    }
+    void askForPhoneNotifications() {
+        // Explain the purpose after sign-in, rather than showing an unexplained OS prompt at launch.
+        android.content.SharedPreferences choice = getSharedPreferences("hymn_notification_choice", MODE_PRIVATE);
+        if (choice.getBoolean("asked", false)) return;
+        choice.edit().putBoolean("asked", true).apply();
+        new AlertDialog.Builder(this).setTitle("Stay in the loop")
+            .setMessage("Get release approvals, correction requests, live-release updates, beat purchases and HYMN messages on your phone. You can change each category in Android notification settings.")
+            .setNegativeButton("Not now", (dialog, which) -> {})
+            .setPositiveButton("Enable alerts", (dialog, which) -> {
+                choice.edit().putBoolean("enabled", true).apply();
+                if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 73);
+            }).show();
     }
     int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     String initialUrl(Intent intent){String url=intent.getDataString();return MusicNavigation.initial(url);}
     boolean route(String url) {
+        if (MusicNavigation.internal(url) && "/music/app/notifications".equals(Uri.parse(url).getPath())) {
+            showPhoneNotificationSettings(); return true;
+        }
         if(MusicNavigation.internal(url))return false;
         Uri uri=Uri.parse(url);
         if("https".equals(uri.getScheme())&&"accounts.google.com".equals(uri.getHost())&&web!=null&&MusicNavigation.internal(web.getUrl())){googleSignIn();return true;}
         if(url.startsWith("blob:")||url.startsWith("data:"))return true;
         external(url);return true;
+    }
+    void showPhoneNotificationSettings() {
+        new AlertDialog.Builder(this).setTitle("Phone notifications")
+            .setItems(new String[]{"Enable phone alerts", "Pause phone alerts", "Android notification settings"}, (dialog, which) -> {
+                android.content.SharedPreferences choice = getSharedPreferences("hymn_notification_choice", MODE_PRIVATE);
+                if (which == 0) {
+                    choice.edit().putBoolean("enabled", true).putBoolean("asked", true).apply();
+                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 73);
+                    else if (!androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled()) openPhoneNotificationSettings();
+                    else toast("Phone alerts enabled.");
+                } else if (which == 1) {
+                    choice.edit().putBoolean("enabled", false).putBoolean("asked", true).apply();
+                    androidx.core.app.NotificationManagerCompat.from(this).cancelAll(); toast("Phone alerts paused. Your HYMN inbox is unchanged.");
+                } else openPhoneNotificationSettings();
+            }).setNegativeButton("Close", null).show();
+    }
+    void openPhoneNotificationSettings() {
+        startActivity(new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName()));
     }
     void external(String url) {
         try {
@@ -190,9 +259,9 @@ public final class MusicWebActivity extends Activity {
     }
     void toast(String message){if(!isDestroyed())Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
     @Override public void onBackPressed(){if(web.canGoBack())web.goBack();else super.onBackPressed();}
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);web.loadUrl(initialUrl(intent));}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);receiveNotificationIntent(intent);if(pendingNotificationHref!=null)syncPhoneNotifications();else web.loadUrl(initialUrl(intent));}
     @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);web.saveState(state);}
-    @Override protected void onPause(){super.onPause();web.onPause();CookieManager.getInstance().flush();}
-    @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();}
-    @Override protected void onDestroy(){if(upload!=null)upload.onReceiveValue(null);if(googleDeadline!=null)handler.removeCallbacks(googleDeadline);if(googleCancellation!=null)googleCancellation.cancel();worker.shutdownNow();web.destroy();super.onDestroy();}
+    @Override protected void onPause(){super.onPause();notificationScreenActive=false;handler.removeCallbacks(notificationTick);web.onPause();CookieManager.getInstance().flush();syncPhoneNotifications();}
+    @Override protected void onResume(){super.onResume();notificationScreenActive=true;if(web!=null)web.onResume();handler.removeCallbacks(notificationTick);handler.post(notificationTick);}
+    @Override protected void onDestroy(){notificationScreenActive=false;handler.removeCallbacks(notificationTick);if(upload!=null)upload.onReceiveValue(null);if(googleDeadline!=null)handler.removeCallbacks(googleDeadline);if(googleCancellation!=null)googleCancellation.cancel();worker.shutdownNow();web.destroy();super.onDestroy();}
 }

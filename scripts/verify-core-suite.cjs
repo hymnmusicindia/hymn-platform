@@ -16,7 +16,7 @@ if (!fs.existsSync(npmCli)) throw Error('Run the regression suite through npm te
     });
     if (code !== 0) { process.exitCode = code; return; }
   }
-  for (const script of ['verify-request-boundaries.ts', 'verify-draft-request-boundaries.ts', 'verify-validator-update-semantics.ts']) {
+  for (const script of ['verify-request-boundaries.ts', 'verify-draft-request-boundaries.ts', 'verify-validator-update-semantics.ts', 'verify-music-phone-notifications.ts']) {
     const code = await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ['--import', 'tsx', `scripts/${script}`], { env, stdio: 'inherit', windowsHide: true });
       child.on('error', reject); child.on('exit', code => resolve(code ?? 1));
