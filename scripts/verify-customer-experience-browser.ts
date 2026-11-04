@@ -83,6 +83,7 @@ async function main() {
       let status = 0;
       try {
         const response = await navigate(route); status = response?.status() || 0;
+        if (route === '/audio-library') await page.waitForURL('**/library?view=files', { timeout: 120000, waitUntil: 'domcontentloaded' });
         if (route === '/distribution') await page.waitForURL('**/distribution/start', { timeout: 120000,waitUntil:'domcontentloaded' });
         if (route === '/royalty-payouts') await page.waitForURL('**/payout', { timeout: 120000,waitUntil:'domcontentloaded' });
         if (route === '/first-release-free') await page.waitForURL('**/first-release', { timeout: 120000,waitUntil:'domcontentloaded' });

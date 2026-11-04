@@ -44,7 +44,7 @@
     "db:backfill:spotify": "tsx scripts/backfill-legacy-spotify.ts",
     "db:migrate:deploy": "tsx scripts/deploy-production-migrations.ts",
     "db:verify:production": "tsx scripts/verify-production-database-target.ts",
-    "test": "npm run test:performance-execution && npm run test:first-release && npm run test:direnote-contract && npm run test:producer-lifecycle && npm run test:analytics && npm run test:migration-safety && npm run test:razorpay && npm run test:subscriptions && npm run test:payment-enforcement && npm run test:storage && npm run test:release-status && npm run test:distribution-idempotency && npm run test:payout && npm run test:managed-services && npm run test:studio-services",
+    "test": "node scripts/verify-core-suite.cjs",
     "test:first-release": "tsx scripts/verify-first-release-funnel.ts && tsx scripts/verify-artist-profile-validation.ts",
     "test:distribution-pricing": "tsx scripts/verify-distribution-pricing.ts",
     "test:growth": "tsx scripts/verify-growth-domain.ts",

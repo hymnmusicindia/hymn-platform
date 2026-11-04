@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/access";
 import { deleteDraftReleaseForUser } from "@/lib/distribution-db";
+import { recordId } from "@/lib/record-id";
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
-  const id = Number((await params).id);
-  if (!Number.isInteger(id)) return NextResponse.json({ error: "Release not found." }, { status: 404 });
+  const id = recordId((await params).id);
+  if (!id) return NextResponse.json({ error: "Release not found." }, { status: 404 });
   try {
     const result = await deleteDraftReleaseForUser(auth.user.id, id);
     if (result === "not_found") return NextResponse.json({ error: "Release not found." }, { status: 404 });

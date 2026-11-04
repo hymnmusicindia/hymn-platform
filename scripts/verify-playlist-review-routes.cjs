@@ -36,7 +36,8 @@ const request = body => new Request('https://hymn.fixture/api/playlist-reviews',
   allowed=false;assert.equal((await admin.GET()).status,403);assert.equal((await admin.POST(request({ action:'moderate' }))).status,403);
   allowed=true;const before=writes;assert.equal((await admin.POST(request({ action:'settle',id:1,reference:'real_transfer_123' }))).status,403);assert.equal(writes,before);
   const moderation=await admin.POST(request({ action:'moderate',id:1,status:'APPROVED',note:'Verified ownership evidence.' }));assert.equal(moderation.status,200);assert.equal(calls.at(-1)[1],null);
-  payoutAllowed=true;assert.equal((await admin.POST(request({ action:'settle',id:1,reference:'real_transfer_123' }))).status,200);
+  payoutAllowed=true;assert.equal((await admin.POST(request({ action:'settle',id:1,reference:'real_transfer_123' }))).status,400,'A settlement must include the amount actually paid');
+  assert.equal((await admin.POST(request({ action:'settle',id:1,reference:'real_transfer_123',paidAmount:1500 }))).status,200);
   let known=true, legacy=0;
   mocks['@/lib/playlist-review-webhook']={ processPlaylistReviewWebhook: async () => known };
   mocks['@/lib/payment-webhooks']={ receiveRazorpayEvent:async()=>{legacy++;return{id:1}},processRazorpayEvent:async()=>{} };

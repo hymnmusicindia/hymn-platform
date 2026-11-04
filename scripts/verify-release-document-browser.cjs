@@ -27,7 +27,7 @@ async function main() {
       return route.fulfill({json:{artists:[{id:10,name:'Fixture Artist'}],profiles:[],sessions:[],requests:[]}});
     });
     await page.goto('https://hymn.fixture/');await page.addStyleTag({path:path.join(out,'global.css')});await page.addStyleTag({path:path.join(out,'ui.css')});await page.addScriptTag({path:path.join(out,'ui.js')});
-    await page.locator('.record-review-details>section').filter({has:page.getByRole('heading',{name:'Rights & ownership',exact:true})}).getByRole('button',{name:/Edit/}).click();
+    await page.locator('[data-release-section="5"]').scrollIntoViewIfNeeded();
     await page.getByRole('button',{name:/Original\/Exclusive Licensed/}).click();
     await page.getByRole('dialog').getByRole('button',{name:'Non-Exclusive Licensed',exact:true}).click();
     const file=page.locator('input[type=file][accept="application/pdf"]').first();await expect(file).toHaveCount(1);

@@ -34,7 +34,7 @@ assert.match(distribution, /syncReleaseContributions/);
 assert.match(producerRoleRoute, /prisma\.\$transaction/, "Producer role and identity changes must be atomic.");
 assert.match(producerRoleRoute, /contributorPartyId: party\.id/, "Producer profiles must link to the account's canonical contributor identity.");
 assert.match(producerRoleRoute, /beat\.updateMany[\s\S]*enabled: false/, "Revoking producer access must remove its inventory from sale.");
-assert.match(producerStore, /user: \{ role: "PRODUCER", status: "ACTIVE" \}/, "Public producer profiles must belong to active Producer accounts.");
+assert.match(producerStore, /user: \{ role: \{ in: \["PRODUCER", "ADMIN"\] \}, status: "ACTIVE" \}/, "Public producer profiles must belong to active producer/admin accounts; customer and disabled accounts remain excluded.");
 assert.match(producerProfilesRoute, /status: 410/, "Disconnected free-form producer creation must stay retired.");
 assert.match(producerReset, /--confirm=RESET_ALL_PRODUCERS/, "The producer reset must require explicit confirmation.");
 assert.match(producerReset, /salesPreserved/, "The producer reset must preserve financial history.");

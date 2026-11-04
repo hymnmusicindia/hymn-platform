@@ -6,19 +6,33 @@ import { requireUser } from "@/lib/access";
 import { draftTitleForSave } from "@/lib/draft-policy";
 import { getDetailedReleaseByUserId } from "@/lib/distribution-db";
 import { resolvePrivateReleaseArtworkUrl } from '@/lib/release-asset-resolution';
+import { recordId } from '@/lib/record-id';
+import { readJsonBody, RequestBodyError } from '@/lib/request-body';
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(); if ("error" in user) return user.error;
-  const release = await getDetailedReleaseByUserId(user.session.sub, Number((await params).id));
+  const id = recordId((await params).id);
+  if (!id) return NextResponse.json({ error: "Invalid draft." }, { status: 400 });
+  const release = await getDetailedReleaseByUserId(user.session.sub, id);
   if (!release || release.status !== "draft") return NextResponse.json({ error: "Draft not found." }, { status: 404 });
   return NextResponse.json({ draft: release });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(); if ("error" in user) return user.error;
-  const id = Number((await params).id);
+  const id = recordId((await params).id);
+  if (!id) return NextResponse.json({ error: "Invalid draft." }, { status: 400 });
   const release = await getDetailedReleaseByUserId(user.session.sub, id);
   if (!release || release.status !== "draft") return NextResponse.json({ error: "Draft not found." }, { status: 404 });
-  const body = await request.json().catch(() => ({}));
+  let body: Record<string, any>;
+  try {
+    const parsed = await readJsonBody(request, 2 * 1024 * 1024);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return NextResponse.json({ error: "A draft object is required." }, { status: 400 });
+    body = parsed as Record<string, any>;
+    if (body.metadata !== undefined && (!body.metadata || typeof body.metadata !== 'object' || Array.isArray(body.metadata))) return NextResponse.json({ error: "Draft metadata must be an object." }, { status: 400 });
+  } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
+  }
   const metadata = typeof body.metadata === "object" && body.metadata ? body.metadata : {};
   const { prisma } = await import("@/lib/prisma");
   try {

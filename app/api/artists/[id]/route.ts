@@ -4,10 +4,10 @@ import { archiveArtistProfile, updateArtistProfile } from "@/lib/db";
 import { parseAppleArtistId, parseSpotifyArtistId } from "@/lib/spotify";
 import { artistProfileUpdateSchema, normalizeInstagramUrl } from "@/lib/validation";
 import { refreshSpotifyArtistPhoto } from "@/lib/spotify-artist-photos";
+import { recordId } from "@/lib/record-id";
 
 function profileId(params: { id: string }) {
-  const id = Number(params.id);
-  return Number.isInteger(id) && id > 0 ? id : null;
+  return recordId(params.id);
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

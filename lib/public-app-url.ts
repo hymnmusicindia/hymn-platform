@@ -5,7 +5,7 @@ function usableOrigin(value: string | null | undefined, production: boolean) {
   try {
     const url = new URL(value.trim());
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    const hostname = url.hostname.toLowerCase();
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
     if (production && (LOCAL_HOSTNAMES.has(hostname) || hostname.endsWith(".local"))) return null;
     return url.origin;
   } catch {
