@@ -1,6 +1,8 @@
 # HYMN Music customer Android app and email sign-in
 
-The customer app is the native `android/music` module (`fun.hymnmusic.app`). The staff app remains `android/app` (`fun.hymnmusic.team`). Customer screens use Android views, the document picker, MediaPlayer and HTTPS JSON APIs. The app does not render website HTML. Razorpay's official Android checkout SDK handles payment entry; HYMN's existing server endpoints verify signatures, payment capture, ownership, pricing, release reviews and entitlements.
+The customer app is the `android/music` module (`fun.hymnmusic.app`). From version 1.0.4 its launcher is `MusicWebActivity`, displaying the live HYMN website in a WebView at the user's request. Website navigation, layouts and customer workflows are authoritative. The former native screens remain non-exported legacy code and are not launched. The staff app remains `android/app` (`fun.hymnmusic.team`). Existing server endpoints still verify payment signatures, capture, ownership, pricing, release reviews and entitlements.
+
+The wrapper provides system-bar/keyboard insets, persisted WebView cookies, document-picker uploads, authenticated streamed downloads, generated-file downloads up to 25 MB, back navigation, loading progress and connection retry. Only exact HTTPS HYMN pages navigate within the main WebView. External links and payment-app schemes use Android intents; local file navigation and mixed content are blocked. The wrapper never ignores certificate errors. Google account selection uses Credential Manager and copies the server-issued HttpOnly session into the WebView; email sign-in uses the website form. Website changes appear without rebuilding the APK; wrapper changes still require an APK update.
 
 ## Email sign-in
 
@@ -8,7 +10,7 @@ The customer app is the native `android/music` module (`fun.hymnmusic.app`). The
 
 Codes expire after ten minutes. Requests and attempts have persistent limits; resends invalidate older challenges. A keyed code digest is bound to the email and challenge ID. Verification consumes a locked database row in the same transaction as identity creation. Session cookies use the existing HttpOnly session system. The native app stores its cookie and recovery state in Android encrypted preferences. No schema migration or new environment secret is needed; the existing email configuration and user session secret are used.
 
-## Native workflows
+## Customer workflows available through the website
 
 - Email signup/login, profile, preferences, appearance and logout.
 - Artist profiles and explicit store identity confirmation.
