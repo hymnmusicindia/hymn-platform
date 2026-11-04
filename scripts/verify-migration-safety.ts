@@ -85,6 +85,12 @@ for (const migration of migrations) {
   assert.ok(sql.trim(), `${migration.name} has an empty migration.sql.`);
   assert.doesNotMatch(sql, /accept-data-loss/i);
 }
+const contentIdMigration = readFileSync(path.join(migrationDirectory, "20261105030000_content_id_access", "migration.sql"), "utf8");
+assert.match(contentIdMigration, /ADD COLUMN IF NOT EXISTS "youtube_content_id_enabled"/);
+assert.match(contentIdMigration, /ADD COLUMN IF NOT EXISTS "youtube_content_id_channel_url"/);
+assert.match(contentIdMigration, /CREATE TABLE IF NOT EXISTS "content_id_access"/);
+assert.match(contentIdMigration, /jsonb_typeof\("metadata"->'youtubeContentIdEnabled'\)/);
+assert.doesNotMatch(contentIdMigration, /^\s*(DROP|DELETE|TRUNCATE)\b/im, "Content ID migration must preserve existing schema objects and data.");
 
 const deploymentGuide = readFileSync(path.join(root, "docs", "database-deployment.md"), "utf8");
 for (const requirement of ["backup", "migrate deploy", "rollback", "brand-new empty database", "restore"]) {

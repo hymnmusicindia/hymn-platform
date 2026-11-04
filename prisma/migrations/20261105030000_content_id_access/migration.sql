@@ -1,4 +1,22 @@
-CREATE TABLE "content_id_access" (
+ALTER TABLE "releases"
+ADD COLUMN IF NOT EXISTS "youtube_content_id_enabled" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS "youtube_content_id_channel_url" TEXT;
+
+UPDATE "releases"
+SET "youtube_content_id_enabled" = CASE
+      WHEN jsonb_typeof("metadata"->'youtubeContentIdEnabled') = 'boolean'
+        THEN ("metadata"->>'youtubeContentIdEnabled')::boolean
+      ELSE false
+    END,
+    "youtube_content_id_channel_url" = CASE
+      WHEN jsonb_typeof("metadata"->'youtubeContentIdChannelUrl') = 'string'
+        THEN "metadata"->>'youtubeContentIdChannelUrl'
+      ELSE NULL
+    END
+WHERE "metadata" ? 'youtubeContentIdEnabled'
+   OR "metadata" ? 'youtubeContentIdChannelUrl';
+
+CREATE TABLE IF NOT EXISTS "content_id_access" (
   "id" SERIAL NOT NULL,
   "user_id" INTEGER NOT NULL,
   "release_id" INTEGER NOT NULL,
@@ -20,9 +38,9 @@ CREATE TABLE "content_id_access" (
   CONSTRAINT "content_id_access_reviewed_by_id_fkey" FOREIGN KEY ("reviewed_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
-CREATE UNIQUE INDEX "content_id_access_user_id_key" ON "content_id_access"("user_id");
-CREATE UNIQUE INDEX "content_id_access_distribution_order_id_key" ON "content_id_access"("distribution_order_id");
-CREATE INDEX "content_id_access_status_requested_at_idx" ON "content_id_access"("status", "requested_at");
+CREATE UNIQUE INDEX IF NOT EXISTS "content_id_access_user_id_key" ON "content_id_access"("user_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "content_id_access_distribution_order_id_key" ON "content_id_access"("distribution_order_id");
+CREATE INDEX IF NOT EXISTS "content_id_access_status_requested_at_idx" ON "content_id_access"("status", "requested_at");
 
 INSERT INTO "content_id_access" (
   "user_id", "release_id", "distribution_order_id", "status", "channel_url",

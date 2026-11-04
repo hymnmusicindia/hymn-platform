@@ -337,6 +337,8 @@ model Release {
   audioUrl                    String?                             @map("audio_url")
   paymentStatus               String?                             @default("pending") @map("payment_status")
   metadata                    Json?
+  youtubeContentIdEnabled     Boolean                             @default(false) @map("youtube_content_id_enabled")
+  youtubeContentIdChannelUrl  String?                             @map("youtube_content_id_channel_url")
   draftCompletionPercent      Int                                 @default(0) @map("draft_completion_percent")
   lastEditedAt                DateTime?                           @map("last_edited_at")
   missingFields               Json?                               @map("missing_fields")
