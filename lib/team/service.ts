@@ -56,6 +56,7 @@ async function dependencies(tx: Tx, a: Actor, id: string, ids: string[]) {
 
 export async function teamMutation(identity: Actor, resource: string, input: unknown) {
   if (resource.startsWith('chat-')) return (await import('./chat')).chatMutation(identity, resource, input);
+  if (resource === "consultations") return teamWrite(identity, (tx, actor) => import("./consultations").then(({ consultationMutation }) => consultationMutation(tx, actor, input)));
   return teamWrite(identity, (tx,a)=>teamMutationTx(tx,a,resource,input));
 }
 
@@ -366,6 +367,7 @@ export async function teamMutationTx(tx:Tx,a:Actor,resource:string,input:unknown
 export { acceptTeamInvitation } from './invitations';
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if (resource === "consultations") return (await import("./consultations")).consultationRead(a, params);
   if (resource.startsWith('artist-')) return (await import('./artist-journey')).artistRead(a,resource,params);
   if (resource.startsWith('chat-')) return (await import('./chat')).chatRead(a, resource, params);
   if (resource.startsWith("workstation")) return (await import("./work-station")).stationRead(a,resource,params);

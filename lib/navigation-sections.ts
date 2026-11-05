@@ -22,7 +22,7 @@ export const adminModuleKey = (key?: string) => ({ "distribution-queue": "releas
 const teamSections: Record<string, string[]> = {
   Home: ["overview"],
   "Work-station": ["work-station", "work", "tasks", "projects", "approvals", "calendar", "availability"],
-  "Contacts & growth": ["contacts", "acquisition", "crm", "customer-calls", "referral"],
+  "Contacts & growth": ["contacts", "acquisition", "crm", "consultations", "customer-calls", "referral"],
   Messages: ["inbox", "chat", "emails"],
   "Quality & reports": ["creator-applications", "release-qc", "reports"],
   Leadership: ["leadership"],

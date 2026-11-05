@@ -11,6 +11,15 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("team_fixture");
+    if (process.argv.includes("--consultation-only") || process.argv.includes("--consultation-build")) {
+      await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-consultation-portal.ts"]);
+      if (process.argv.includes("--consultation-build")) {
+        await run(["node_modules/prisma/build/index.js", "generate"]);
+        await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
+      }
+      return;
+    }
     if (process.argv.includes("--admin-data-only")) {
       await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-admin-workspace.ts"]);

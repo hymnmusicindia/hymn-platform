@@ -23,6 +23,19 @@ enum AccountStatus {
   BANNED
 }
 
+enum ConsultationStatus {
+  NEW_LEAD
+  UNASSIGNED
+  ASSIGNED
+  CALLBACK_SCHEDULED
+  CONTACTED
+  CONSULTATION_COMPLETED
+  FOLLOW_UP_REQUIRED
+  CONVERTED
+  NOT_INTERESTED
+  LOST
+}
+
 enum ProducerApplicationStatus {
   PENDING
   APPROVED
@@ -136,6 +149,7 @@ enum StudioPaymentPurpose {
 model User {
   teamMemberships TeamMember[]
   clientCards TeamClient[]
+  consultationRequests ConsultationRequest[]
   studioTipsEnabled Boolean @default(true) @map("studio_tips_enabled")
   studioVouches StudioVouch[]
   studioShowcaseCredits StudioShowcase[] @relation("ShowcaseArtist")
@@ -3407,6 +3421,7 @@ model TeamWorkspace {
   acquisitionEvidence AcquisitionRevenueEvidence[]
   acquisitionEmailTemplates AcquisitionEmailTemplate[]
   acquisitionEmailEvents AcquisitionEmailEvent[]
+  consultations ConsultationRequest[]
   @@map("team_workspaces")
 }
 
@@ -3446,6 +3461,9 @@ model TeamMember {
   messages TeamMessage[]
   comments TeamComment[]
   notifications TeamNotification[]
+  assignedConsultations ConsultationRequest[]
+  consultationActivities ConsultationActivity[]
+  pushSubscriptions TeamPushSubscription[]
   prospects TeamProspect[]
   outreach TeamOutreach[]
   reports TeamWeeklyReport[]
@@ -3810,8 +3828,34 @@ model TeamNotification {
   readAt DateTime?
   createdAt DateTime @default(now())
   member TeamMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  pushDelivery TeamPushDelivery?
   @@index([memberId, readAt, createdAt])
   @@map("team_notifications")
+}
+
+model TeamPushSubscription {
+  id String @id @default(cuid())
+  memberId String
+  endpoint String @unique @db.Text
+  p256dh String @db.Text
+  auth String @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member TeamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  @@index([memberId, updatedAt])
+  @@map("team_push_subscriptions")
+}
+
+model TeamPushDelivery {
+  notificationId String @id
+  attempts Int @default(0)
+  lockedUntil DateTime?
+  deliveredAt DateTime?
+  lastError String?
+  createdAt DateTime @default(now())
+  notification TeamNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  @@index([deliveredAt, lockedUntil, createdAt])
+  @@map("team_push_deliveries")
 }
 
 model TeamAudit {
@@ -4185,6 +4229,7 @@ model TeamClient {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
   events TeamCalendarEvent[]
   welcomeJobs TeamClientWelcome[]
+  consultations ConsultationRequest[]
   @@index([workspaceId, status])
   @@index([workspaceId, mergedIntoId])
   @@map("team_clients")
@@ -4215,6 +4260,7 @@ model TeamCalendarEvent {
   assignee TeamMember @relation("CalendarAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
   client TeamClient? @relation(fields: [clientId], references: [id], onDelete: Restrict)
   appointmentMessages TeamAppointmentMessage[]
+  consultation ConsultationRequest?
   @@index([workspaceId, startsAt, endsAt])
   @@index([assigneeId, status, startsAt])
   @@map("team_calendar_events")
@@ -4247,6 +4293,64 @@ model TeamClientWelcome {
   client TeamClient @relation(fields: [clientId], references: [id], onDelete: Restrict)
   @@index([status, createdAt])
   @@map("team_client_welcomes")
+}
+
+model ConsultationRequest {
+  id String @id @default(cuid())
+  workspaceId String @map("workspace_id")
+  userId Int @map("user_id")
+  clientId String @map("client_id")
+  assignedMemberId String? @map("assigned_member_id")
+  calendarEventId String? @unique @map("calendar_event_id")
+  fullName String @map("full_name")
+  email String
+  phoneE164 String @map("phone_e164")
+  dialCode String @map("dial_code")
+  interests String[] @default([])
+  otherRequirement String @default("") @map("other_requirement")
+  source String @default("website")
+  campaign String?
+  referralUrl String? @map("referral_url")
+  utm Json @default("{}")
+  landingPageUrl String @default("/") @map("landing_page_url")
+  referrer String?
+  firstTouchSource String @default("website") @map("first_touch_source")
+  latestTouchSource String @default("website") @map("latest_touch_source")
+  preferredCallback DateTime? @map("preferred_callback")
+  consentAt DateTime @map("consent_at")
+  consentVersion String @default("consultation-privacy-v1") @map("consent_version")
+  marketingConsent Boolean @default(false) @map("marketing_consent")
+  funnelEvents String[] @default([]) @map("funnel_events")
+  idempotencyKey String @map("idempotency_key")
+  status ConsultationStatus @default(NEW_LEAD)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  client TeamClient @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  assignedMember TeamMember? @relation(fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  calendarEvent TeamCalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
+  activities ConsultationActivity[]
+  @@unique([userId, idempotencyKey])
+  @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, assignedMemberId, status])
+  @@index([userId, createdAt])
+  @@index([workspaceId, preferredCallback])
+  @@map("consultation_requests")
+}
+
+model ConsultationActivity {
+  id String @id @default(cuid())
+  consultationId String @map("consultation_id")
+  actorMemberId String? @map("actor_member_id")
+  kind String
+  message String @default("")
+  metadata Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  consultation ConsultationRequest @relation(fields: [consultationId], references: [id], onDelete: Restrict)
+  actorMember TeamMember? @relation(fields: [actorMemberId], references: [id], onDelete: SetNull)
+  @@index([consultationId, createdAt])
+  @@map("consultation_activities")
 }
 
 // Server-owned, per-release artist mapping. Never copied from customer metadata.

@@ -7,7 +7,7 @@ import { SiteHeader } from "@/components/site-header";
 import Link from "next/link";
 import { TeamSetup } from "@/components/team/setup";
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Team OS", robots: { index: false, follow: false } };
+export const metadata = { title: "Team OS", manifest: "/team/manifest.webmanifest", robots: { index: false, follow: false } };
 export default async function TeamPage({ searchParams }: { searchParams: Promise<{ workspace?: string }> }) {
   const session = await getSession(); if (!session) redirect("/login?next=/team");
   const selected = await searchParams;

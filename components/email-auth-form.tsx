@@ -3,9 +3,9 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { ArrowRight, Mail, RefreshCw } from 'lucide-react';
 import styles from './email-auth-form.module.css';
 
-export function EmailAuthForm({ signup = false, returnTo, onAuthenticated, dark = false }: { signup?: boolean; returnTo?: string; onAuthenticated?: () => Promise<void> | void; dark?: boolean }) {
+export function EmailAuthForm({ signup = false, initialName = "", returnTo, onAuthenticated, dark = false }: { signup?: boolean; initialName?: string; returnTo?: string; onAuthenticated?: () => Promise<void> | void; dark?: boolean }) {
   const id = useId(), locked = useRef(false), controller = useRef<AbortController | null>(null);
-  const [email, setEmail] = useState(''), [name, setName] = useState(''), [code, setCode] = useState('');
+  const [email, setEmail] = useState(''), [name, setName] = useState(initialName), [code, setCode] = useState('');
   const [challenge, setChallenge] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState(''), [resendAt, setResendAt] = useState(0), [seconds, setSeconds] = useState(0);
   useEffect(() => { const tick = () => setSeconds(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000))); tick(); const timer = window.setInterval(tick, 1000); return () => clearInterval(timer); }, [resendAt]);
   useEffect(() => () => controller.current?.abort(), []);

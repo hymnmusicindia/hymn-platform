@@ -7,6 +7,9 @@ import { TeamError } from "@/lib/team/policy";
 import { teamMutation, teamRead, acceptTeamInvitation, teamWrite } from "@/lib/team/service";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { recoverTeamRead, teamDatabaseErrorCode } from "@/lib/team/read-recovery";
+import { emailLayout, emailText } from "@/lib/email/email-templates";
+import { sendTransactionalEmail } from "@/lib/email/send-transactional-email";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -67,6 +70,37 @@ export async function POST(request: Request, context: Context) {
     if (resource === "clients-save" && result && typeof result === "object" && "id" in result) {
       const clientId = String(result.id);
       after(async () => { const { processClientWelcomes } = await import("@/lib/team/client-welcome"); await processClientWelcomes(clientId, 1); });
+    }
+    if (resource === "consultations" && result && typeof result === "object" && "calendarEventId" in result && typeof result.calendarEventId === "string") {
+      const eventId = result.calendarEventId;
+      after(async () => { const { processAppointments } = await import("@/lib/team/appointments"); await processAppointments(eventId, 4); });
+    }
+    if (resource === "consultations" && result && typeof result === "object" && "callbackCancelled" in result && result.callbackCancelled === true && "id" in result) {
+      const consultationId = String(result.id);
+      after(async () => {
+        const { prisma } = await import("@/lib/prisma");
+        const consultation = await prisma.consultationRequest.findUnique({ where: { id: consultationId }, select: { fullName: true, email: true, updatedAt: true } });
+        if (!consultation) { console.error("CONSULTATION_CANCELLATION_NOTICE_MISSING_RECORD", { consultationId }); return; }
+        const title = "Your HYMN consultation callback was cancelled";
+        const email = {
+          title,
+          greeting: `Hi ${consultation.fullName},`,
+          body: "The callback time previously reserved for you has been cancelled. The HYMN team will contact you to arrange another convenient time.",
+          ctaLabel: "Visit HYMN",
+          ctaUrl: getPublicAppUrl()
+        };
+        const delivery = await sendTransactionalEmail({
+          to: consultation.email,
+          subject: title,
+          template: "consultation_callback_cancelled",
+          html: emailLayout(email),
+          text: emailText(email),
+          eventKey: `consultation:${consultationId}:callback-cancel:${consultation.updatedAt.getTime()}`,
+          entityType: "consultation_request",
+          entityId: consultationId
+        });
+        if (!["sent", "duplicate_skipped"].includes(delivery.status)) console.error("CONSULTATION_CANCELLATION_EMAIL_NOT_SENT", { consultationId, status: delivery.status });
+      });
     }
     if (["calendar-save", "calendar-handoff"].includes(resource) && result && typeof result === "object" && "id" in result) {
       const eventId = String(result.id);

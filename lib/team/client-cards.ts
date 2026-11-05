@@ -130,20 +130,40 @@ export async function importWorkspaceClientAccounts(workspaceId: string) {
   }, { maxWait: 10000, timeout: 30000 });
 }
 
-export async function ensureAccountClientCard(userId: number) {
-  const account = await prisma.user.findUnique({
+export async function ensureAccountClientCard(userId: number, options: { syncMobileToCard?: boolean; mobile?: string } = {}) {
+  const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, role: true, status: true, name: true, email: true, mobile: true, contactEmail: true, onboardingPurpose: true, onboardingUserType: true }
   });
-  if (!account || (account.role !== UserRole.CUSTOMER && account.role !== UserRole.PRODUCER) || ["BANNED", "DELETION_SCHEDULED"].includes(account.status)) return null;
+  if (!user || (user.role !== UserRole.CUSTOMER && user.role !== UserRole.PRODUCER) || ["BANNED", "DELETION_SCHEDULED"].includes(user.status)) return null;
+  const account = { ...user, mobile: options.mobile ?? user.mobile };
   const workspace = await prisma.teamWorkspace.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
   if (!workspace) return null;
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM team_workspaces WHERE id = ${workspace.id} FOR UPDATE`;
     const owner = await tx.teamMember.findFirst({ where: { workspaceId: workspace.id, status: "ACTIVE", role: { owner: true } }, orderBy: { joinedAt: "asc" }, select: { id: true } });
     if (!owner) return null;
+    if (options.mobile !== undefined) {
+      const updated = await tx.user.updateMany({
+        where: { id: userId, role: UserRole.CUSTOMER, status: "ACTIVE" },
+        data: { mobile: options.mobile }
+      });
+      if (updated.count !== 1) throw new Error("Customer account is no longer active.");
+    }
     const count = await importAccounts(tx, workspace.id, owner.id, [account]);
-    return { createdOrLinked: count > 0 };
+    const card = await tx.teamClient.findUnique({ where: { userId: account.id }, select: { id: true, phone: true, alternatePhones: true } });
+    let contactCardSynced = Boolean(card);
+    if (card && options.syncMobileToCard) {
+      const phone = normalisePhone(account.mobile);
+      const previousPhone = normalisePhone(card.phone);
+      const alternatePhones = [...new Set([
+        ...card.alternatePhones.map(normalisePhone),
+        ...(previousPhone && previousPhone !== phone ? [previousPhone] : [])
+      ].filter(value => value && value !== phone))];
+      await tx.teamClient.update({ where: { id: card.id }, data: { phone, alternatePhones, version: { increment: 1 } } });
+      contactCardSynced = true;
+    }
+    return { createdOrLinked: count > 0 || Boolean(card), contactCardSynced };
   }, { maxWait: 10000, timeout: 30000 });
 }
 

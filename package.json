@@ -46,7 +46,9 @@
     "db:migrate:deploy": "tsx scripts/deploy-production-migrations.ts",
     "db:verify:production": "tsx scripts/verify-production-database-target.ts",
     "test": "node scripts/verify-core-suite.cjs",
+    "test:consultation": "tsx scripts/verify-consultation-domain.ts",
     "test:first-release": "tsx scripts/verify-first-release-funnel.ts && tsx scripts/verify-artist-profile-validation.ts",
+    "test:artist-profile-correction": "tsx scripts/verify-artist-profile-correction.ts",
     "test:distribution-pricing": "node --conditions=react-server --import tsx scripts/verify-distribution-pricing.ts && node --conditions=react-server --import tsx scripts/verify-content-id-review-eligibility.ts",
     "test:growth": "tsx scripts/verify-growth-domain.ts",
     "test:acquisition-revenue": "node --conditions=react-server --import tsx scripts/verify-acquisition-revenue.ts",
@@ -120,6 +122,7 @@
     "server-only": "^0.0.1",
     "sharp": "0.35.5",
     "tesseract.js": "^7.0.0",
+    "web-push": "^3.6.7",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -130,6 +133,7 @@
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.21",
     "embedded-postgres": "^18.4.0-beta.17",
     "eslint": "^9.39.5",
@@ -159,10 +163,10 @@
     "exceljs": {
       "uuid": "11.1.1"
     },
+    "source-map-js": "1.2.2",
+    "follow-redirects": "1.16.2",
     "brace-expansion@>=1.0.0 <2.0.0": "1.1.21",
     "brace-expansion@>=2.0.0 <3.0.0": "2.1.7",
-    "deepmerge-ts": "8.0.2",
-    "source-map-js": "1.2.2",
-    "follow-redirects": "1.16.2"
+    "deepmerge-ts": "8.0.2"
   }
 }

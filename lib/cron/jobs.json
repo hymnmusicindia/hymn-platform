@@ -35,6 +35,12 @@
     "flag": "TEAM_AUTOMATION_ENABLED"
   },
   {
+    "id": "team-push",
+    "method": "GET",
+    "seconds": 60,
+    "purpose": "Deliver queued team workspace notifications to opted-in Android and web devices"
+  },
+  {
     "id": "team-performance",
     "method": "GET",
     "seconds": 60,
