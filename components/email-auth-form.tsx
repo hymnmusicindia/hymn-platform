@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { ArrowRight, Mail, RefreshCw } from 'lucide-react';
 import styles from './email-auth-form.module.css';
 
-export function EmailAuthForm({ signup = false, initialName = "", returnTo, onAuthenticated, dark = false }: { signup?: boolean; initialName?: string; returnTo?: string; onAuthenticated?: () => Promise<void> | void; dark?: boolean }) {
+export function EmailAuthForm({ signup = false, askForName = signup, showCallbackErrors = false, initialName = "", returnTo, onAuthenticated, dark = false }: { signup?: boolean; askForName?: boolean; showCallbackErrors?: boolean; initialName?: string; returnTo?: string; onAuthenticated?: () => Promise<void> | void; dark?: boolean }) {
   const id = useId(), locked = useRef(false), controller = useRef<AbortController | null>(null);
   const [email, setEmail] = useState(''), [name, setName] = useState(initialName), [code, setCode] = useState('');
   const [challenge, setChallenge] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState(''), [resendAt, setResendAt] = useState(0), [seconds, setSeconds] = useState(0);
@@ -20,7 +20,13 @@ export function EmailAuthForm({ signup = false, initialName = "", returnTo, onAu
       if (action === 'request') { setChallenge(data.challenge); setCode(''); setResendAt(Date.now() + data.resendAfter * 1000); setMessage(data.message); }
       else {
         const destination = typeof data.redirectPath === 'string' && data.redirectPath.startsWith('/') && !data.redirectPath.startsWith('//') ? data.redirectPath : '/';
-        if (onAuthenticated) { try { await onAuthenticated(); } catch { window.location.assign(destination); } }
+        if (onAuthenticated) {
+          try { await onAuthenticated(); }
+          catch (callbackError) {
+            if (showCallbackErrors) throw callbackError;
+            window.location.assign(destination);
+          }
+        }
         else window.location.assign(destination);
       }
     } catch (e) { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : 'Please try again.'); else setError('The request timed out. Check your connection and try again.'); }
@@ -30,7 +36,7 @@ export function EmailAuthForm({ signup = false, initialName = "", returnTo, onAu
   return <form className={styles.form} data-tone={dark ? 'dark' : undefined} onSubmit={submit} aria-busy={busy}>
     <div className={styles.heading}><Mail size={17}/><span>{challenge ? 'Check your email' : 'Continue with email'}</span><small>No password needed</small></div>
     {busy ? <div className={styles.loading} role="status"><span className={styles.ring}/><strong>H</strong><span>{challenge ? 'Verifying your code…' : 'Sending your secure code…'}</span></div> : <>
-      {!challenge && signup && <label htmlFor={`${id}-name`}>Your name <input id={`${id}-name`} autoComplete="name" value={name} onChange={e => setName(e.target.value)} maxLength={100} placeholder="Artist or full name" /></label>}
+      {!challenge && signup && askForName && <label htmlFor={`${id}-name`}>Your name <input id={`${id}-name`} autoComplete="name" value={name} onChange={e => setName(e.target.value)} maxLength={100} placeholder="Artist or full name" /></label>}
       <label htmlFor={`${id}-email`}>Email address <input id={`${id}-email`} type="email" autoComplete="email" inputMode="email" required maxLength={254} value={email} disabled={!!challenge} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></label>
       {challenge && <label htmlFor={`${id}-code`}>Six-digit code <input id={`${id}-code`} className={styles.code} autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} minLength={6} required autoFocus value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" /></label>}
       <button className={styles.primary} type="submit">{challenge ? 'Verify & continue' : 'Send me a code'}<ArrowRight size={16}/></button>

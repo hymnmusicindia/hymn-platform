@@ -202,12 +202,22 @@ export function ConsultationPortal() {
   }
 
   async function completeAuthentication() {
-    const response = await fetch("/api/consultation?mode=profile", { cache: "no-store" });
-    const result = await response.json() as { account?: Account; error?: string };
-    if (!response.ok || !result.account) throw new Error(result.error || "HYMN sign-in could not be confirmed. Please try again.");
-    setAccount(result.account);
-    setDraft(current => addEvent({ ...current, fullName: current.fullName || result.account!.name }, "AUTHENTICATION_COMPLETED"));
-    setStep(3);
+    let lastError = "HYMN sign-in could not be confirmed. Please try again.";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise(resolve => window.setTimeout(resolve, attempt * 200));
+      const response = await fetch("/api/consultation?mode=profile", { cache: "no-store", credentials: "same-origin" });
+      const result = await response.json().catch(() => ({})) as { account?: Account; error?: string };
+      if (response.ok && result.account) {
+        setAccount(result.account);
+        setDraft(current => addEvent({ ...current, fullName: current.fullName || result.account!.name }, "AUTHENTICATION_COMPLETED"));
+        setError("");
+        setStep(3);
+        return;
+      }
+      lastError = result.error || lastError;
+      if (response.status !== 401) break;
+    }
+    throw new Error(lastError);
   }
 
   function continueName(event: FormEvent<HTMLFormElement>) {
@@ -290,7 +300,6 @@ export function ConsultationPortal() {
   return <main className={`${styles.page} ${step > 0 ? styles.wizardPage : ""}`}>
     <header className={styles.topbar}>
       <Link href="/" aria-label="HYMN Music home" className={styles.brand}><Image src="/assets/hymn-logo-320.webp" alt="HYMN Music" width={156} height={52} className={styles.logo} priority /></Link>
-      <span className={styles.topline}>ARTIST CONSULTATION</span>
       <Link href="/" className={styles.exitLink}>Back to HYMN <ArrowRight size={14}/></Link>
     </header>
 
@@ -325,7 +334,7 @@ export function ConsultationPortal() {
       {step === 2 ? <section className={styles.formStep}>
         <span className={styles.eyebrow}>02 / YOUR ACCOUNT</span><h1>Continue with HYMN</h1><p>Sign in or create your account to save your consultation.</p>
         <div className={styles.authCard}>
-          <EmailAuthForm signup initialName={draft.fullName} returnTo="/consultation" onAuthenticated={completeAuthentication}/>
+          <EmailAuthForm signup askForName={false} initialName={draft.fullName} returnTo="/consultation" onAuthenticated={completeAuthentication} showCallbackErrors/>
           <div className={styles.authDivider}><span/>or<span/></div>
           <GoogleAuthButton label="Continue with Google" expectedRole="customer" appearance="quiet" className={styles.googleButton} onAuthenticated={completeAuthentication}/>
         </div>
