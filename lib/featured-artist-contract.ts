@@ -20,21 +20,29 @@ export async function matchFeaturedArtistName(name: string, page: (page: number)
   return "profile-required";
 }
 
-export async function featuredArtistProvisionIssues(payload: Pick<DireNotePayload,"tracks" | "featuring_artists">, lookup: (name: string) => Promise<FeaturedArtistMatch>) {
+export async function artistProvisionIssues(payload: Pick<DireNotePayload,"artists" | "featuring_artists" | "tracks">, lookup: (name: string) => Promise<FeaturedArtistMatch>) {
   const candidates = new Map<string,{name:string;field:string}>();
-  for (const [trackIndex,track] of payload.tracks.entries()) for (const [index,artist] of (track.featuring_artists ?? []).entries()) {
-    if (!artist.instagram_url?.trim() && artist.name?.trim()) candidates.set(normalized(artist.name),{name:artist.name,field:`tracks.${trackIndex}.featuring_artists.${index}.instagram_url`});
+  const add = (artists: DireNotePayload["artists"], path: string) => {
+    for (const [index,artist] of (artists ?? []).entries()) {
+      if (!artist.instagram_url?.trim() && artist.name?.trim() && !candidates.has(normalized(artist.name))) candidates.set(normalized(artist.name),{name:artist.name,field:`${path}.${index}.instagram_url`});
+    }
+  };
+  add(payload.artists,"artists");
+  for (const [trackIndex,track] of payload.tracks.entries()) {
+    add(track.artists,`tracks.${trackIndex}.artists`);
+    add(track.featuring_artists,`tracks.${trackIndex}.featuring_artists`);
   }
-  for (const [index,artist] of (payload.featuring_artists ?? []).entries()) {
-    if (!artist.instagram_url?.trim() && artist.name?.trim() && !candidates.has(normalized(artist.name))) candidates.set(normalized(artist.name),{name:artist.name,field:`featuring_artists.${index}.instagram_url`});
-  }
+  add(payload.featuring_artists,"featuring_artists");
   const issues: Array<{field:string;message:string}> = [];
   for (const {name,field} of candidates.values()) {
     try {
-      if (await lookup(name) === "profile-required") issues.push({field,message:`Add an artist profile with Instagram for ${name}. HYMN could not identify a unique existing featured artist by name.`});
+      if (await lookup(name) === "profile-required") issues.push({field,message:`Add an Instagram profile link for ${name}. HYMN could not identify a unique existing artist profile by name.`});
     } catch {
-      issues.push({field,message:`HYMN could not verify the featured artist ${name}. Try again, or add their artist profile with Instagram.`});
+      issues.push({field,message:`HYMN could not verify the artist profile for ${name}. Try again, or add their Instagram profile link.`});
     }
   }
   return issues;
 }
+
+/** @deprecated Use artistProvisionIssues; retained for existing internal callers. */
+export const featuredArtistProvisionIssues = artistProvisionIssues;

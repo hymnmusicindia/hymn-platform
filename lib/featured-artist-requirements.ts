@@ -4,7 +4,7 @@ import { prisma } from "./prisma";
 import { getDireNoteConfig } from "./direnote/direnote-config";
 import { requestDireNoteV24 } from "./direnote/v24-client";
 import { reserveDireNoteRequest, enforceDireNoteResponseLimit } from "./direnote-rate-limit";
-import { matchFeaturedArtistName, featuredArtistProvisionIssues, type FeaturedArtistMatch } from "./featured-artist-contract";
+import { matchFeaturedArtistName, artistProvisionIssues, type FeaturedArtistMatch } from "./featured-artist-contract";
 import type { DireNotePayload } from "./direnote";
 
 const pending = new Map<string,Promise<FeaturedArtistMatch>>();
@@ -30,4 +30,6 @@ export async function resolveFeaturedArtistName(name: string): Promise<FeaturedA
   pending.set(key,request);
   try { return await request; } finally { pending.delete(key); }
 }
-export const getFeaturedArtistProvisionIssues = (payload: Pick<DireNotePayload,"tracks"|"featuring_artists">) => featuredArtistProvisionIssues(payload,resolveFeaturedArtistName);
+export const getArtistProvisionIssues = (payload: Pick<DireNotePayload,"artists"|"tracks"|"featuring_artists">) => artistProvisionIssues(payload,resolveFeaturedArtistName);
+/** @deprecated Use getArtistProvisionIssues. */
+export const getFeaturedArtistProvisionIssues = getArtistProvisionIssues;

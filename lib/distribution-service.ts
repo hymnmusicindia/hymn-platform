@@ -2,7 +2,7 @@ import { assertCurrentAutomaticQc, assertAutomaticQcSources } from "./distributi
 import { automaticReleaseRiskHold } from "./distribution-automation-risk";
 import { distributionAutomationDecision } from "./distribution-automation-policy";
 import { loadArtistAmendment, artistAmendmentPayload, acceptArtistAmendment } from '@/lib/release-artist-amendment';
-import { getFeaturedArtistProvisionIssues } from "./featured-artist-requirements";
+import { getArtistProvisionIssues } from "./featured-artist-requirements";
 import { conflictsWithHistoricalIdentity, assertReleaseArtistVerification, releaseArtistProfiles, selectedReleaseArtistIds, snapshotMatchesCard } from '@/lib/release-artist-verification';
 import {
   buildDireNotePayload,
@@ -36,6 +36,7 @@ import { snapshotTrackContributions } from "@/lib/contributor-identity";
 import { ensureDireNoteArtistMapping, verifyReleaseArtistMappings, flagArtistMappingReview } from "@/lib/direnote-artist-mapping";
 import { verifiedArtistStoreLinks } from '@/lib/artist-store-links';
 import { direNoteAcknowledgement } from './direnote-submission-evidence';
+import { artistInstagramCorrection } from './artist-profile-correction';
 
 export async function persistDireNoteArtistIds(releaseId: number, artists: Array<{ name: string; artistId: string }>, attemptId?: number) {
   if (!artists.length) return [] as number[];
@@ -179,7 +180,7 @@ export async function buildDireNotePayloadForRelease(release: Release, options: 
 export async function validateRelease(release: Release, options: { siteUrl?: string; adminConfirmedExistingArtists?: boolean; replaceProviderIdentifiers?: boolean } = {}) {
   const payload = await buildDireNotePayloadForRelease(release, options);
   const validation = validationResult(payload, options);
-  if (validation.ok) validation.issues.push(...await getFeaturedArtistProvisionIssues(payload));
+  if (validation.ok) validation.issues.push(...await getArtistProvisionIssues(payload));
   return { ...validation, ok:validation.issues.length === 0 };
 }
 
@@ -320,14 +321,28 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   const previousAttempt = options.correctionReingest ? await ensureCurrentDireNoteAttempt(releaseId) : null;
   const validation = validationResult(payload, { ...options, replaceProviderIdentifiers: Boolean(options.correctionReingest) });
   if (validation.ok) {
-    validation.issues.push(...await getFeaturedArtistProvisionIssues(payload));
+    validation.issues.push(...await getArtistProvisionIssues(payload));
     validation.ok = validation.issues.length === 0;
   }
   const redactedPayload = redactDireNotePayload(payload);
 
   if (!validation.ok) {
-    const reason = validation.issues.map((issue) => issue.message).join(" ") || "DireNote validation failed.";
-    await updateDetailedReleaseStatus(releaseId, "changes_requested", reason, correctionReview(validation.issues, reason, "DireNote preflight validation"), { manualOverride: true, actorType: "system", notify: !amendment });
+    const hasArtistInstagramIssue = validation.issues.some(issue => /(?:^|\.)instagram_url$/.test(issue.field));
+    const reason = hasArtistInstagramIssue
+      ? "HYMN needs an Instagram profile link for an artist it could not match to an existing artist profile. Add the link to the saved artist profile, then resubmit this release to HYMN for review."
+      : validation.issues.map((issue) => issue.message).join(" ") || "DireNote validation failed.";
+    const review = hasArtistInstagramIssue ? {
+      reason,
+      issueType: "artist_profile" as const,
+      severity: "required_correction" as const,
+      fields: validation.issues.slice(0, 20).map(issue => {
+        const artistName = issue.message.match(/for (.+?)\./)?.[1];
+        return { field: "artistProfile.instagram_url", label: artistName ? `Instagram profile for ${artistName}` : "Artist Instagram profile", note: `HYMN could not match this artist to a unique existing artist profile. Add the Instagram profile link or @handle to the saved artist profile.` };
+      }),
+      adminInternalNote: "Artist profile provisioning requires a customer Instagram profile link or handle.",
+      reviewedBy: "HYMN delivery review"
+    } : correctionReview(validation.issues, reason, "HYMN preflight validation");
+    await updateDetailedReleaseStatus(releaseId, "changes_requested", reason, review, { manualOverride: true, actorType: "system", notify: !amendment });
     await logDistributionEvent({
       releaseId,
       requestPayload: redactedPayload,
@@ -426,11 +441,21 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
           ? "DireNote cannot accept uploads because its Google Drive storage quota is full. The release is safe and was not rejected; free or increase storage on the DireNote account, then retry sending."
         : response.error || parsed.message || `DireNote API returned ${status}.`;
       console.error("[DireNote] Provider rejected submission", { releaseId, httpStatus: response.httpStatus, message, response: redactDireNoteDiagnostic(data) });
+      const profileCorrection = [400, 422].includes(status) ? artistInstagramCorrection(message, release.releaseTitle || release.trackName || release.title) : null;
+      const customerReason = profileCorrection?.reason ?? message;
+      const review = profileCorrection ? {
+        reason: profileCorrection.reason,
+        issueType: "artist_profile" as const,
+        severity: "required_correction" as const,
+        fields: [{ field: profileCorrection.field, label: profileCorrection.label, note: profileCorrection.problem }],
+        adminInternalNote: "Artist profile provisioning requires a customer Instagram profile link or handle.",
+        reviewedBy: "HYMN delivery review"
+      } : [400, 422].includes(status) ? correctionReview([{ field: "direnote", message }], message, "HYMN delivery review") : undefined;
       await updateDetailedReleaseStatus(
         releaseId,
         mode.releaseStatus,
-        message,
-        [400, 422].includes(status) ? correctionReview([{ field: "direnote", message }], message, "DireNote provider review") : undefined,
+        customerReason,
+        review,
         { manualOverride: [400, 422].includes(status), actorType: "system", notify: !amendment }
       );
       await finishDistributionSubmission(claim.attempt.id, { state: uncertain ? "reconciliation_required" : mode.retryable ? "retryable" : "failed", httpStatus: response.httpStatus, safeError: message.slice(0, 500), responseRedacted: { message, warnings: parsed.warnings } });
