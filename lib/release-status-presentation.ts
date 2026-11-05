@@ -1,4 +1,10 @@
 export type ReleaseStatusTone = "neutral" | "progress" | "success" | "warning" | "danger";
+export function customerRelease<T extends { direNoteSyncError?: string | null; direNoteLastAttemptedAt?: string | null }>(release: T): Omit<T, "direNoteSyncError" | "direNoteLastAttemptedAt"> {
+  const customerSafe = { ...release };
+  delete customerSafe.direNoteSyncError;
+  delete customerSafe.direNoteLastAttemptedAt;
+  return customerSafe;
+}
 export function releaseUpcLabel(release: {upcCode?:string|null;metadata?:Record<string,unknown>|null}) {
   const provider=release.metadata?.direNote as {identifierAssignmentPending?:boolean}|undefined;
   return provider?.identifierAssignmentPending ? `UPC awaiting assignment${release.upcCode?` (previous: ${release.upcCode})`:''}` : release.upcCode || 'UPC pending';

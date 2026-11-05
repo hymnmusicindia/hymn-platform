@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ReleasePortal } from "@/components/release-portal";
 import { getCurrentUserForPage } from "@/lib/access";
 import { listDetailedReleasesByUser } from "@/lib/distribution-db";
+import { customerRelease } from "@/lib/release-status-presentation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -14,7 +15,7 @@ export default async function ReleasePortalPage({ searchParams }: { searchParams
   }
 
   const params = (await searchParams) ?? {};
-  const releases = await listDetailedReleasesByUser(user.id);
+  const releases = (await listDetailedReleasesByUser(user.id)).map(customerRelease);
   const selectedReleaseId = params.releaseId ? Number(params.releaseId) : null;
 
   return (

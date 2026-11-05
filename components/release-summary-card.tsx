@@ -11,7 +11,6 @@ import { Disc3, Gift, Pencil, Settings, X } from "lucide-react";
 import { amendmentStatusLabel } from '@/lib/release-amendment-presentation';
 import type { Release } from "@/lib/types";
 import { showFirstReleaseBadge } from "@/lib/first-release-flow";
-import { releaseSyncHealth } from "@/lib/release-status-presentation";
 import { useSubscriptionLabel } from "@/components/subscription-label-context";
 import {
   getReleasePortalBadgeStyle,
@@ -33,7 +32,6 @@ export function ReleaseSummaryCard({
 }) {
   const title = release.releaseTitle?.trim() || release.trackName || "Untitled release";
   const stage = getReleasePortalStage(release);
-  const syncHealth = releaseSyncHealth(release);
   const trackCount = getReleasePortalTrackCount(release);
   const needsCorrection = stage === "changes_requested";
   const primaryActionLabel = release.status === "draft" ? "Edit" : needsCorrection ? "Fix release" : actionLabel;
@@ -124,7 +122,6 @@ export function ReleaseSummaryCard({
         </span>
       </div>
 
-      {syncHealth ? <p className="mt-2 text-xs" role="status" title={syncHealth.detail} style={{color:"var(--warning)"}}>{syncHealth.label}</p> : null}
       <h3 className="release-summary-title mt-3 text-[17px] font-semibold leading-tight" title={title} style={{ color: "var(--text)" }}>
         {title}
       </h3>

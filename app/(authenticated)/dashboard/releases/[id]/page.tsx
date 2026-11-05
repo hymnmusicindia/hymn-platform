@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ReleaseManage } from "@/components/release-portal";
 import { getCurrentUserForPage } from "@/lib/access";
 import { listDetailedReleasesByUser } from "@/lib/distribution-db";
+import { customerRelease } from "@/lib/release-status-presentation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -13,7 +14,7 @@ export default async function ReleaseManagePage({ params, searchParams }: { para
 
   const { id } = await params;
   const releaseId = Number(id);
-  const releases = await listDetailedReleasesByUser(user.id);
+  const releases = (await listDetailedReleasesByUser(user.id)).map(customerRelease);
   const release = Number.isInteger(releaseId) ? releases.find((item) => item.id === releaseId) : undefined;
 
   if (!release) {

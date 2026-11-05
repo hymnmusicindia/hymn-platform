@@ -31,7 +31,7 @@ import {
   isReleaseUnfinished
 } from "@/lib/release-portal";
 import { automaticStatusCopy } from "@/lib/release-status-engine";
-import { effectiveReleaseStatus, releaseSyncHealth, releaseUpcLabel } from "@/lib/release-status-presentation";
+import { effectiveReleaseStatus, releaseUpcLabel } from "@/lib/release-status-presentation";
 import { ReleaseSummaryCard } from "@/components/release-summary-card";
 import catalogueStyles from "./release-catalogue.module.css";
 
@@ -251,7 +251,6 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
   const latestAmendment = changeRequests.find(item => ['metadata_update', 'asset_update'].includes(item.requestType)) ?? release.amendment;
   const amendmentActive = latestAmendment && activeAmendmentStatuses.includes(latestAmendment.status);
   const title = release.releaseTitle?.trim() || release.trackName;
-  const syncHealth = releaseSyncHealth(release);
   const promoLink = release.presaveSpotify || release.presaveApple || release.exclusiveSpotify || release.exclusiveApple;
   const portalStatus = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
   const alreadyDistributed = ["sent", "sent_to_distributor", "distributor_processing", "processing", "delivered", "scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(portalStatus);
@@ -307,7 +306,6 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
         <div className={detailStyles.cover}>{release.artworkUrl ? <Image src={artworkPreviewUrl(release.artworkUrl, 320)} alt={`${title} cover artwork`} fill sizes="(max-width: 600px) 160px, 280px" className="object-cover" unoptimized /> : <Sparkles size={44}/>}</div>
         <div className={detailStyles.summary}>
           <div className={detailStyles.badges}><span>{getReleasePortalStageLabel(getReleasePortalStage(release), release)}</span><span>{release.releaseType}</span></div>
-          {syncHealth ? <p role="status" style={{color:"var(--warning)"}}>{syncHealth.label}. {syncHealth.detail}</p> : null}
           <h1>{title}</h1>
           <p className={detailStyles.byline}><strong>{release.artistName}</strong><span>{getReleasePortalDateLabel(release)}</span><span>{getReleasePortalTrackCount(release)} track{getReleasePortalTrackCount(release) === 1 ? "" : "s"}</span></p>
           <div className={detailStyles.bottom}>

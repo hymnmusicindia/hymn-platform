@@ -1355,6 +1355,7 @@ export function AdminControlCenter({
                     </div>
                   </div>
                 </div> : null}
+                {reviewTab === "overview" && selectedRelease.direNoteSyncError ? <aside className="rounded-xl border border-amber-400/25 bg-amber-400/5 p-4" aria-label="Internal distribution status check"><p className="text-xs font-semibold uppercase tracking-wide text-amber-200">Internal status check · retry pending</p><p className="mt-2 break-words text-xs leading-5 text-amber-100/80">{selectedRelease.direNoteSyncError}</p><p className="mt-2 text-[11px] text-amber-100/60">This is an operational lookup issue. It does not indicate a track failure or undo a recorded partner acknowledgement.</p></aside> : null}
                 {reviewTab === "metadata" ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     {[
