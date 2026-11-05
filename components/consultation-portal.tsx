@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, Headphones, LoaderCircle, Music2, ShieldCheck, Sparkles } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
 import { EmailAuthForm } from "@/components/email-auth-form";
 import { GoogleAuthButton } from "@/components/google-auth-button";
 import { contactNumberToE164, contactPhoneCountries } from "@/lib/contact-phone-countries";
@@ -286,9 +287,9 @@ export function ConsultationPortal() {
     else setStep(0);
   }
 
-  return <main className={styles.page}>
+  return <main className={`${styles.page} ${step > 0 ? styles.wizardPage : ""}`}>
     <header className={styles.topbar}>
-      <Link href="/" aria-label="HYMN Music home" className={styles.brand}><span className={styles.brandMark}>H</span><span>HYMN<small>MUSIC</small></span></Link>
+      <Link href="/" aria-label="HYMN Music home" className={styles.brand}><Image src="/assets/hymn-logo-320.webp" alt="HYMN Music" width={156} height={52} className={styles.logo} priority /></Link>
       <span className={styles.topline}>ARTIST CONSULTATION</span>
       <Link href="/" className={styles.exitLink}>Back to HYMN <ArrowRight size={14}/></Link>
     </header>
@@ -298,31 +299,21 @@ export function ConsultationPortal() {
       <div className={styles.progressTrack} role="progressbar" aria-valuemin={1} aria-valuemax={5} aria-valuenow={step}><span style={{ width: `${progress * 20}%` }}/></div>
     </div> : null}
 
-    <div className={styles.shell}>
+    <div className={`${styles.shell} ${step > 0 ? styles.wizardShell : ""}`}>
       {step === 0 ? <section className={styles.hero}>
         <div className={styles.heroCopy}>
-          <span className={styles.eyebrow}><Sparkles size={14}/> A free, focused conversation</span>
-          <h1>Your music career deserves a <em>better strategy.</em></h1>
-          <p>Whether you are an independent artist, producer, engineer or entering the music industry, HYMN can help you understand a practical next move.</p>
-          <button type="button" className={styles.primaryButton} onClick={() => { record("CTA_CLICKED"); setStep(1); if (account) setDraft(current => ({ ...current, fullName: current.fullName || account.name })); }}>
-            Book your free consultation <ArrowRight size={18}/>
-          </button>
+          <span className={styles.eyebrow}><Sparkles size={14}/> ARTIST CONSULTATION</span>
+          <h1>Your next move<br/>in music, made clear.</h1>
+          <p>A free, focused conversation about your music goals.</p>
           <span className={styles.freeNote}><Check size={14}/> No charge. No obligation.</span>
         </div>
-        <div className={styles.heroArtwork} aria-hidden="true">
-          <div className={styles.soundDisc}><div/><div/><div/><span>H</span></div>
-          <div className={styles.artLabel}><span>HYMN MUSIC</span><strong>Find your next move.</strong></div>
-          <span className={styles.artNote}>01 — YOUR CAREER, IN FOCUS</span>
-        </div>
-        <div className={styles.trustStrip}>
-          <div><Music2/><span><strong>Music distribution</strong><small>Releases, rights & next steps</small></span></div>
-          <div><Headphones/><span><strong>Creative services</strong><small>Beats, mix & mastering</small></span></div>
-          <div><ShieldCheck/><span><strong>Real HYMN guidance</strong><small>Talk through your goals</small></span></div>
-        </div>
+        <button type="button" className={styles.heroNextButton} onClick={() => { record("CTA_CLICKED"); setStep(1); if (account) setDraft(current => ({ ...current, fullName: current.fullName || account.name })); }}>
+          <span>Next</span><ArrowRight size={25} strokeWidth={1.5}/>
+        </button>
       </section> : null}
 
       {step === 1 ? <section className={styles.formStep}>
-        <span className={styles.eyebrow}>LET’S START WITH YOU</span><h1>First, what should we call you?</h1><p>This helps us make your consultation personal and useful.</p>
+        <span className={styles.eyebrow}>01 / ABOUT YOU</span><h1>What’s your name?</h1>
         <form onSubmit={continueName} className={styles.form}>
           <label htmlFor="consultation-name">Full name</label>
           <input id="consultation-name" name="name" autoComplete="name" autoFocus maxLength={120} required value={draft.fullName} onChange={event => { setDraft(current => ({ ...current, fullName: event.target.value })); setError(""); }} placeholder="Your full name"/>
@@ -332,19 +323,18 @@ export function ConsultationPortal() {
       </section> : null}
 
       {step === 2 ? <section className={styles.formStep}>
-        <span className={styles.eyebrow}>YOUR HYMN ACCOUNT</span><h1>Continue with HYMN</h1><p>Sign in or create your HYMN account. Your verified account lets us keep your consultation with your profile.</p>
+        <span className={styles.eyebrow}>02 / YOUR ACCOUNT</span><h1>Continue with HYMN</h1><p>Sign in or create your account to save your consultation.</p>
         <div className={styles.authCard}>
           <EmailAuthForm signup initialName={draft.fullName} returnTo="/consultation" onAuthenticated={completeAuthentication}/>
           <div className={styles.authDivider}><span/>or<span/></div>
           <GoogleAuthButton label="Continue with Google" expectedRole="customer" appearance="quiet" className={styles.googleButton} onAuthenticated={completeAuthentication}/>
         </div>
-        <p className={styles.securityNote}><ShieldCheck size={15}/> HYMN uses your existing sign-in. We never ask you to create a separate consultation password.</p>
+        <p className={styles.securityNote}><ShieldCheck size={15}/> Your HYMN sign-in keeps your request with your profile.</p>
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
       </section> : null}
 
       {step === 3 ? <section className={styles.formStep}>
-        <span className={styles.eyebrow}>A WAY TO REACH YOU</span><h1>Where can our team reach you?</h1>
-        <p>We will use this number to discuss your requirements, coordinate your consultation and help you find the right HYMN services.</p>
+        <span className={styles.eyebrow}>03 / CONTACT</span><h1>Where can we reach you?</h1>
         {account ? <div className={styles.accountPill}><CheckCircle2 size={16}/><span>Signed in as <strong>{account.email}</strong></span></div> : null}
         <form onSubmit={continuePhone} className={styles.form}>
           <label htmlFor="consultation-country">Phone number</label>
@@ -356,29 +346,29 @@ export function ConsultationPortal() {
             </div>
             <input id="consultation-phone" aria-label="Phone number" type="tel" inputMode="tel" autoComplete="tel-national" maxLength={24} required value={draft.phone} onChange={event => { setDraft(current => ({ ...current, phone: event.target.value })); setError(""); }} placeholder="Phone number"/>
           </div>
-          <p className={styles.privacy}><ShieldCheck size={15}/>Your information is handled according to HYMN’s <Link href="/privacy-policy" target="_blank">Privacy Policy</Link> and used to respond to this consultation request.</p>
+          <p className={styles.privacy}><ShieldCheck size={15}/>Used only to arrange your consultation. <Link href="/privacy-policy" target="_blank">Privacy policy</Link></p>
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
           <button className={styles.primaryButton} type="submit">Continue <ArrowRight size={17}/></button>
         </form>
       </section> : null}
 
       {step === 4 ? <section className={styles.formStep}>
-        <span className={styles.eyebrow}>YOUR GOALS</span><h1>What are you looking to achieve?</h1><p>Select everything that applies. We will connect you with the right people from the HYMN team.</p>
+        <span className={styles.eyebrow}>04 / YOUR GOALS</span><h1>What do you need help with?</h1><p>Select all that apply.</p>
         <div className={styles.choiceGrid} role="group" aria-label="Select services that interest you">
           {CONSULTATION_INTERESTS.map(item => {
             const active = draft.interests.includes(item.id);
             return <button key={item.id} type="button" aria-pressed={active} onClick={() => toggleInterest(item.id)} className={`${styles.choiceCard} ${active ? styles.choiceSelected : ""}`}>
-              <span className={styles.choiceCheck}>{active ? <Check size={13}/> : null}</span><strong>{item.title}</strong><small>{item.detail}</small>
+              <span className={styles.choiceCheck}>{active ? <Check size={13}/> : null}</span><strong>{item.title}</strong>
             </button>;
           })}
         </div>
         {draft.interests.includes("OTHER") ? <label className={styles.otherLabel} htmlFor="other-requirement">Tell us what you are looking for.<textarea id="other-requirement" rows={4} maxLength={2000} required value={draft.otherRequirement} onChange={event => setDraft(current => ({ ...current, otherRequirement: event.target.value }))} placeholder="Share a little context so we can prepare."/></label> : null}
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
-        <button type="button" className={styles.primaryButton} onClick={() => { if (!draft.interests.length) { setError("Choose at least one service to continue."); return; } if (draft.interests.includes("OTHER") && !draft.otherRequirement.trim()) { setError("Tell us what you are looking for."); return; } setError(""); setStep(5); }}>Choose a callback time <ArrowRight size={17}/></button>
+        <button type="button" className={styles.primaryButton} onClick={() => { if (!draft.interests.length) { setError("Choose at least one service to continue."); return; } if (draft.interests.includes("OTHER") && !draft.otherRequirement.trim()) { setError("Tell us what you are looking for."); return; } setError(""); setStep(5); }}>Next <ArrowRight size={17}/></button>
       </section> : null}
 
       {step === 5 ? <section className={styles.formStep}>
-        <span className={styles.eyebrow}>YOUR CALLBACK</span><h1>When would you like to speak with us?</h1><p>Choose an available time. Callback times use team working hours and are shown in your selected timezone.</p>
+        <span className={styles.eyebrow}>05 / CALLBACK</span><h1>Choose a callback time</h1><p>Times shown in your local timezone.</p>
         <div className={styles.timeZoneRow}><label htmlFor="consultation-timezone">Show times in</label><select id="consultation-timezone" value={timeZone} onChange={event => setTimeZone(event.target.value)}><option value="Asia/Kolkata">India Standard Time (IST)</option>{visitorTimeZone ? <option value={visitorTimeZone}>{visitorTimeZone.replaceAll("_", " ")}</option> : null}</select></div>
         {loadingSlots ? <div className={styles.loading}><LoaderCircle size={18} className={styles.spin}/> Checking team availability…</div> : null}
         {!loadingSlots && slots && hasSlots ? <>
@@ -390,7 +380,7 @@ export function ConsultationPortal() {
         {!slots && !loadingSlots ? <div className={styles.noSlots}><CalendarDaysIcon/><div><strong>Availability could not be checked.</strong><p>Try again to confirm a real time, or return to your service selections.</p><button type="button" onClick={() => { setSlots(null); setError(""); setSlotRetry(value => value + 1); }}>Try again</button></div></div> : null}
         {slots && (!hasSlots || draft.callbackAt) ? <div className={styles.selectedServices}><span>CONSULTATION FOCUS</span><p>{draft.interests.map(id => serviceTitles.get(id)).filter(Boolean).join(" · ")}</p></div> : null}
         <form className={styles.consentForm} onSubmit={submitConsultation}>
-          <p className={styles.privacyNotice}>HYMN will use your name, verified account email, phone number, service interests, callback preference, and campaign or referral details to review and manage this consultation, arrange your callback, and contact you. You can request access, correction, or deletion of eligible information through <Link href="/contact" target="_blank">Contact Support</Link>. Read the <Link href="/privacy-policy" target="_blank">Privacy Policy</Link> for more information.</p>
+          <p className={styles.privacyNotice}>We use your name, email, phone, selections and referral details to arrange and manage this consultation. Request access, correction or deletion via <Link href="/contact" target="_blank">Support</Link>. <Link href="/privacy-policy" target="_blank">Privacy policy</Link>.</p>
           <label className={styles.checkboxLabel}><input type="checkbox" checked={draft.consent} onChange={event => setDraft(current => ({ ...current, consent: event.target.checked }))}/><span>I agree that HYMN may use the details I provided to respond to and manage this consultation request. See the <Link href="/privacy-policy" target="_blank">Privacy Policy</Link>.</span></label>
           <label className={styles.checkboxLabel}><input type="checkbox" checked={draft.marketingConsent} onChange={event => setDraft(current => ({ ...current, marketingConsent: event.target.checked }))}/><span>Optional: email me HYMN news and music-industry updates. This is not required for a consultation.</span></label>
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
