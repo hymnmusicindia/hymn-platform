@@ -37,6 +37,7 @@ import { ensureDireNoteArtistMapping, verifyReleaseArtistMappings, flagArtistMap
 import { verifiedArtistStoreLinks } from '@/lib/artist-store-links';
 import { direNoteAcknowledgement } from './direnote-submission-evidence';
 import { artistInstagramCorrection } from './artist-profile-correction';
+import { distributionPayloadIdentity } from './distribution-idempotency';
 
 export async function persistDireNoteArtistIds(releaseId: number, artists: Array<{ name: string; artistId: string }>, attemptId?: number) {
   if (!artists.length) return [] as number[];
@@ -217,19 +218,57 @@ function httpErrorMode(status: number, providerReason?: string) {
 export async function submitRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean; amendmentRequestId?: number; automaticQcRevision?: string } = {}) {
   return prisma.$transaction(async lock => {
     const rows = await lock.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${releaseId}::integer) AS locked`;
-    if (!rows[0]?.locked) {
-      const release = await getDetailedReleaseById(releaseId);
-      // An accepted *earlier* attempt is not acknowledgement of this action.
-      // In particular, a corrected package may still be awaiting approval.
-      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, inProgress: true, retryable: true, retryAfterSeconds: 10, error: "Another release action is running. This approval or delivery request has not been processed. Try again shortly." };
-    }
+    if (!rows[0]?.locked) throw new Error("RELEASE_ACTION_LOCK_BUSY");
     const syncing = await lock.$queryRaw<Array<{ active: boolean }>>`SELECT EXISTS (SELECT 1 FROM "cron_leases" WHERE "lease_key" = ${`direnote-release-sync:${releaseId}`} AND "leased_until" > NOW()) AS active`;
     if (syncing[0]?.active) {
       const release = await getDetailedReleaseById(releaseId);
       return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, inProgress: true, retryable: true, retryAfterSeconds: 10, error: "A release status refresh is running. This approval or delivery request has not been processed. Try again shortly." };
     }
     return submitLockedRelease(releaseId, options);
-  }, { timeout: 180_000, maxWait: 5000 });
+  }, { timeout: 180_000, maxWait: 5000 }).catch(async error => {
+    if (!(error instanceof Error) || error.message !== "RELEASE_ACTION_LOCK_BUSY") throw error;
+    // A short blocking lock waits for the active provider request to commit its
+    // attempt before reporting. The follow-up transaction then distinguishes
+    // accepted, processing, and still-busy refreshes without a blind retry.
+    return prisma.$transaction(async lock => {
+      await lock.$executeRaw`SET LOCAL lock_timeout = '1500ms'`;
+      await lock.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${releaseId}::integer)`;
+      const syncing = await lock.$queryRaw<Array<{ active: boolean }>>`SELECT EXISTS (SELECT 1 FROM "cron_leases" WHERE "lease_key" = ${`direnote-release-sync:${releaseId}`} AND "leased_until" > NOW()) AS active`;
+      if (syncing[0]?.active) {
+        const release = await getDetailedReleaseById(releaseId);
+        return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, inProgress: true, retryable: true, retryAfterSeconds: 10, error: "A release status refresh is running. Your approval request has not been sent yet." };
+      }
+      const attempt = await lock.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true }, orderBy: { id: "desc" }, select: { state: true, providerStatus: true, providerReference: true, payloadHash: true, idempotencyKey: true } });
+      const release = await getDetailedReleaseById(releaseId);
+      let matchesCurrentPackage = false;
+      if (release && attempt) {
+        try {
+          const payload = await buildDireNotePayloadForRelease(release, { ...options, replaceProviderIdentifiers: Boolean(options.correctionReingest) });
+          const identity = distributionPayloadIdentity(releaseId, payload);
+          matchesCurrentPackage = identity.payloadHash === attempt.payloadHash || identity.idempotencyKey === attempt.idempotencyKey;
+        } catch { /* An unbuildable or changed package cannot inherit prior acceptance. */ }
+      }
+      if (attempt?.state === "submitted" && matchesCurrentPackage) return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: true, duplicate: true, retryable: false, acceptedWhileBusy: true, providerStatus: attempt.providerStatus, providerReference: attempt.providerReference };
+      const inFlight = attempt?.state === "processing" || attempt?.state === "reconciliation_required";
+      if (inFlight) return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, inProgress: true, retryable: true, retryAfterSeconds: 10, error: "DireNote submission is still being confirmed. HYMN has not confirmed acceptance yet; check Submission history before retrying." };
+      return submitLockedRelease(releaseId, options);
+    }, { timeout: 180_000, maxWait: 5000 }).catch(async lockError => {
+      if (!(lockError instanceof Error) || !/lock timeout|canceling statement due to statement timeout/i.test(lockError.message)) throw lockError;
+      const release = await getDetailedReleaseById(releaseId);
+      const attempt = await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true }, orderBy: { id: "desc" }, select: { state: true, providerStatus: true, providerReference: true, payloadHash: true, idempotencyKey: true } });
+      let matchesCurrentPackage = false;
+      if (release && attempt) {
+        try {
+          const payload = await buildDireNotePayloadForRelease(release, { ...options, replaceProviderIdentifiers: Boolean(options.correctionReingest) });
+          const identity = distributionPayloadIdentity(releaseId, payload);
+          matchesCurrentPackage = identity.payloadHash === attempt.payloadHash || identity.idempotencyKey === attempt.idempotencyKey;
+        } catch { /* An unbuildable or changed package cannot inherit prior acceptance. */ }
+      }
+      if (attempt?.state === "submitted" && matchesCurrentPackage) return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: true, duplicate: true, retryable: false, acceptedWhileBusy: true, providerStatus: attempt.providerStatus, providerReference: attempt.providerReference };
+      const inFlight = attempt?.state === "processing" || attempt?.state === "reconciliation_required";
+      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, inProgress: true, retryable: inFlight, retryAfterSeconds: 10, error: inFlight ? "DireNote submission is still being confirmed. HYMN has not confirmed acceptance yet; check Submission history before retrying." : "Another release action is still finishing. HYMN has not confirmed this package yet; check Submission history before trying again." };
+    });
+  });
 }
 
 async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean; amendmentRequestId?: number; automaticQcRevision?: string }) {

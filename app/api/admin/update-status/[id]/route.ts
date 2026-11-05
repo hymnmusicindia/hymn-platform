@@ -58,7 +58,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const queueEntry = submission.duplicate ? null : await syncQueueStage(Number(id), "sent_to_direnote", actorId, "HYMN approval automatically delivered this release to DireNote.", { syncReleaseStatus: false });
       if (!submission.duplicate) await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_AUTO_DELIVERED", details: { note: payload.note ?? null } });
       const submittedRelease = await getDetailedReleaseById(Number(id));
-      const sync = submittedRelease?.upcCode
+      // The provider acknowledgement is authoritative for this action. Status
+      // refresh acquires the same release lock as submission, so running it
+      // inline can turn a successful send into a misleading contention result.
+      const sync = submittedRelease?.upcCode && !submission.submitted
         ? await syncDireNoteRelease(Number(id), actorId).catch(() => null)
         : null;
       const release = sync ? await getDetailedReleaseById(Number(id)) : submittedRelease;
