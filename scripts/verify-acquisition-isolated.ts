@@ -47,6 +47,11 @@ async function main() {
       await run(['--conditions=react-server','--import','tsx','scripts/verify-team-call-plan.ts']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-daily-call-scheduler.ts']);return;
     }
+    if(process.argv.includes('--daily-work-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-team-daily-work.ts']);
+      return;
+    }
     if(process.argv.includes('--subscription-recurrence-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-subscription-recurrence-db.ts']);return;

@@ -42,9 +42,17 @@ async function main() {
   const researchEdit = { id: first.id, version: first.version, email: first.email, phone: first.phone, sourceUrl: first.sourceUrl, evidence: first.evidence, notes: "Corrected source verification", contactEligibility: first.contactEligibility, verified: false };
   await teamMutation(researcher, "prospect-research-save", researchEdit);
   assert.equal((await prisma.teamTask.findUniqueOrThrow({ where: { id: researcherTask.id } })).status, "TODO", "Quality correction reopens an unmet daily target.");
+  assert.equal((await prisma.teamCalendarEvent.findUniqueOrThrow({ where: { followUpTaskId: (await prisma.teamTask.findUniqueOrThrow({ where: { eventKey: `${first.id}:call` } })).id } })).status, "CANCELLED", "Invalidated source evidence cancels the scheduled call.");
   const corrected = await prisma.teamProspect.findUniqueOrThrow({ where: { id: first.id } });
-  await teamMutation(researcher, "prospect-research-save", { ...researchEdit, version: corrected.version, verified: true });
+  const ready = await teamMutation(researcher, "prospect-research-save", { ...researchEdit, version: corrected.version, verified: true });
   assert.equal((await prisma.teamTask.findUniqueOrThrow({ where: { id: researcherTask.id } })).status, "COMPLETED");
+  assert.equal(ready.stage, "READY_TO_CONTACT", "A source-verified eligible contact is automatically marked ready.");
+  assert.equal(ready.ownerId, caller.id, "A ready contact is automatically assigned through caller rotation.");
+  const callTask = await prisma.teamTask.findUniqueOrThrow({ where: { eventKey: `${first.id}:call` } });
+  const callAppointment = await prisma.teamCalendarEvent.findUniqueOrThrow({ where: { followUpTaskId: callTask.id } });
+  assert.equal(callAppointment.status, "SCHEDULED", "A ready contact is automatically given an internal call appointment.");
+  assert.equal(callAppointment.assigneeId, caller.id);
+  assert.equal(callAppointment.clientId, first.clientId);
   const otherResearcher = await prisma.teamMember.findUniqueOrThrow({ where: { id: researchers[1].id }, include: { role: true } });
   await assert.rejects(teamMutation(otherResearcher, "prospect-research-save", { ...researchEdit, version: corrected.version + 1 }), /unavailable/);
   const progress = await acquisitionRead(researcher, "acquisition-targets", new URLSearchParams()) as { items: { researched: number }[] };

@@ -256,7 +256,13 @@ export async function teamMutationTx(tx:Tx,a:Actor,resource:string,input:unknown
       await syncProspectContact(tx, id, a);
       await audit(tx, a, "prospect.research_updated", id, { verified, contactEligibility: row.contactEligibility });
       await syncDailyCrmWork(tx, a);
-      return row;
+      try {
+        await (await import("./callback-calendar")).syncProspectCallCalendar(tx, a, row.id);
+      } catch (error) {
+        if (!(error instanceof TeamError) || error.status !== 409) throw error;
+        await audit(tx, a, "prospect.call_schedule_deferred", row.id, { reason: "No available callback slot; the assigned call remains in the queue." });
+      }
+      return tx.teamProspect.findUniqueOrThrow({ where: { id: row.id } });
     }
     if (["prospect-update", "prospect-call-save"].includes(resource)) {
       demand(a, "crm.prospects.view"); demand(a, "crm.outreach.manage"); const data = prospectUpdateSchema.parse(input);
