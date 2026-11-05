@@ -1,5 +1,5 @@
 import "server-only";
-import { Prisma, ConsultationStatus, UserRole } from "@prisma/client";
+import { Prisma, ConsultationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { contactNumberToE164 } from "@/lib/contact-phone-countries";
 import { activeWindows, acceptsAssignmentsNow } from "@/lib/team/availability-rules";
@@ -87,7 +87,7 @@ async function eligibleMembers(db: Prisma.TransactionClient | typeof prisma, wor
 
 export async function consultationProfile(userId: number) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, mobile: true, role: true, status: true } });
-  if (!user || user.status !== "ACTIVE" || user.role === UserRole.ADMIN) throw new ConsultationPortalError("Sign in with an active HYMN artist or producer account to continue.", 403);
+  if (!user || user.status !== "ACTIVE") throw new ConsultationPortalError("Sign in with an active HYMN account to continue.", 403);
   return { id: user.id, name: user.name, email: user.email, mobile: user.mobile };
 }
 
@@ -167,8 +167,8 @@ export async function submitConsultation(userId: number, raw: unknown) {
   if (callbackAt && (callbackAt <= new Date() || callbackAt.getTime() > Date.now() + 14 * 86400_000)) {
     throw new ConsultationPortalError("Choose a callback time within the next two weeks.", 400);
   }
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, role: true, status: true } });
-  if (!user || user.status !== "ACTIVE" || user.role === UserRole.ADMIN) throw new ConsultationPortalError("Sign in with an active HYMN artist or producer account to continue.", 403);
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, status: true } });
+  if (!user || user.status !== "ACTIVE") throw new ConsultationPortalError("Sign in with an active HYMN account to continue.", 403);
   const workspace = await prisma.teamWorkspace.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
   if (!workspace) throw new ConsultationPortalError("Consultation booking is temporarily unavailable. Please try again later.", 503);
 

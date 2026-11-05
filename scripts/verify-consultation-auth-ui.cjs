@@ -52,11 +52,11 @@ async function main() {
     await page.route('**/api/consultation?mode=profile', async route => {
       profileCalls++;
       if (profileCalls < 3) await route.fulfill({ status: 401, json: { error: 'Sign in to HYMN to continue.' } });
-      else await route.fulfill({ status: 200, json: { account: { id: 17, name: 'Test Artist', email: 'artist@example.test', mobile: null } } });
+      else await route.fulfill({ status: 200, json: { account: { id: 17, name: 'Test Customer', email: 'customer@example.test', mobile: null } } });
     });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.getByRole('button', { name: 'Next' }).click();
-    await page.getByLabel('Full name').fill('Test Artist');
+    await page.getByLabel('Full name').fill('Test Customer');
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByText('Continue with email').waitFor();
     assert.equal(await page.getByLabel('Your name').count(), 0, 'The account step reuses the name entered on step one.');
@@ -69,12 +69,12 @@ async function main() {
         ? { status: 202, json: { challenge: 'fixture-challenge', resendAfter: 30, message: 'Check your inbox.' } }
         : { status: 200, json: { signedIn: true, redirectPath: '/consultation' } });
     });
-    await page.getByLabel('Email address').fill('artist@example.test');
+    await page.getByLabel('Email address').fill('customer@example.test');
     await page.getByRole('button', { name: 'Send me a code' }).click();
     await page.getByLabel('Six-digit code').fill('123456');
     await page.getByRole('button', { name: 'Verify & continue' }).click();
     await page.getByLabel('Phone number').waitFor();
-    assert.equal(profileCalls, 3, 'OTP proceeds after a transient session-cookie propagation delay.');
+    assert.equal(profileCalls, 3, 'A customer account can proceed after transient session-cookie propagation.');
 
     const googlePage = await browser.newPage({ viewport: { width: 390, height: 780 } });
     await googlePage.addInitScript(() => { window.process = { env: { NODE_ENV: 'production', NEXT_PUBLIC_GOOGLE_CLIENT_ID: 'fixture-google-client' } }; });
@@ -84,11 +84,11 @@ async function main() {
       googleProfileCalls++;
       await route.fulfill(googleProfileCalls < 3
         ? { status: 401, json: { error: 'Sign in to HYMN to continue.' } }
-        : { status: 200, json: { account: { id: 18, name: 'Google Artist', email: 'google@example.test', mobile: null } } });
+        : { status: 200, json: { account: { id: 18, name: 'Google Member', email: 'google@example.test', mobile: null } } });
     });
     await googlePage.goto(`http://127.0.0.1:${server.address().port}`);
     await googlePage.getByRole('button', { name: 'Next' }).click();
-    await googlePage.getByLabel('Full name').fill('Google Artist');
+    await googlePage.getByLabel('Full name').fill('Google Member');
     await googlePage.getByRole('button', { name: 'Continue' }).click();
     let googleAttempts = 0;
     await googlePage.route('**/api/auth/google', async route => {
@@ -102,8 +102,8 @@ async function main() {
     await googlePage.getByRole('button', { name: 'Mock Google sign in' }).click();
     await googlePage.getByLabel('Phone number').waitFor();
     assert.equal(googleAttempts, 2, 'Google can be retried after a failed response.');
-    assert.equal(googleProfileCalls, 3, 'Google proceeds after a transient session-cookie propagation delay.');
-    console.log('PASS consultation auth UI: prior name reused, OTP transient-session retry, Google error/retry, both auth paths advance to contact step, responsive header.');
+    assert.equal(googleProfileCalls, 3, 'A Google-authenticated member can proceed after transient session-cookie propagation.');
+    console.log('PASS consultation auth UI: prior name reused, customer OTP and Google accounts proceed, transient-session retry, Google error/retry, both auth paths advance to contact step, responsive header.');
   } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));
