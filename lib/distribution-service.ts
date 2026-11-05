@@ -441,7 +441,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
           ? "DireNote cannot accept uploads because its Google Drive storage quota is full. The release is safe and was not rejected; free or increase storage on the DireNote account, then retry sending."
         : response.error || parsed.message || `DireNote API returned ${status}.`;
       console.error("[DireNote] Provider rejected submission", { releaseId, httpStatus: response.httpStatus, message, response: redactDireNoteDiagnostic(data) });
-      const profileCorrection = [400, 422].includes(status) ? artistInstagramCorrection(message, release.releaseTitle || release.trackName || release.title) : null;
+      const profileCorrection = [400, 422].includes(status) ? artistInstagramCorrection(message, release.releaseTitle || release.trackName) : null;
       const customerReason = profileCorrection?.reason ?? message;
       const review = profileCorrection ? {
         reason: profileCorrection.reason,

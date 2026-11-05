@@ -156,7 +156,7 @@ function CorrectionWorkspace({ release, onFix }: { release: Release; onFix: (fie
   const [resubmitStatus, setResubmitStatus] = useState("");
   const [resubmitting, startResubmitting] = useTransition();
   const selectedIssue = issues.find((issue) => issue.field === selectedField) ?? issues[0];
-  const artistProfileCorrection = selectedIssue ? artistInstagramCorrectionCopy(selectedIssue, release.correctionReason || release.rejectionReason, release.releaseTitle || release.trackName || release.title) : null;
+  const artistProfileCorrection = selectedIssue ? artistInstagramCorrectionCopy(selectedIssue, release.correctionReason || release.rejectionReason, release.releaseTitle || release.trackName) : null;
   const requiredResolved = requiredCount === 0 || issues.every((issue) => resolvedFields.has(issue.field));
 
   function resubmit() {

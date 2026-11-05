@@ -1,4 +1,4 @@
-import type { DireNotePayload } from "./direnote";
+import type { DireNoteArtist, DireNotePayload } from "./direnote";
 
 export type FeaturedArtistMatch = "known" | "profile-required";
 const normalized = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
@@ -22,7 +22,7 @@ export async function matchFeaturedArtistName(name: string, page: (page: number)
 
 export async function artistProvisionIssues(payload: Pick<DireNotePayload,"artists" | "featuring_artists" | "tracks">, lookup: (name: string) => Promise<FeaturedArtistMatch>) {
   const candidates = new Map<string,{name:string;field:string}>();
-  const add = (artists: DireNotePayload["artists"], path: string) => {
+  const add = (artists: DireNoteArtist[] | undefined, path: string) => {
     for (const [index,artist] of (artists ?? []).entries()) {
       if (!artist.instagram_url?.trim() && artist.name?.trim() && !candidates.has(normalized(artist.name))) candidates.set(normalized(artist.name),{name:artist.name,field:`${path}.${index}.instagram_url`});
     }
