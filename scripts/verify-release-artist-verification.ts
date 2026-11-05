@@ -4,6 +4,7 @@ import { approveReleaseArtistProfiles, assertReleaseArtistVerification, artistId
 import { persistDireNoteArtistIds } from '../lib/distribution-service';
 import { buildDireNotePayload } from '../lib/direnote';
 import { updateArtistProfile } from '../lib/db';
+import { normalizeInstagramUrl } from '../lib/validation';
 import type { ArtistProfile, Release } from '../lib/types';
 
 async function main() {
@@ -100,6 +101,15 @@ async function main() {
     assert.equal((await prisma.artistCard.findUniqueOrThrow({where:{id:optionalCard.id}})).youtubeUrl,null,'YouTube can be cleared and is never required for approval.');
     assert.equal((await getArtistVerification(user.id,optionalDraft.id)).artists.length,0);
     assert.equal((await prisma.releaseArtistIdentity.findUniqueOrThrow({where:{releaseId_artistCardId:{releaseId:optionalLive.id,artistCardId:optionalCard.id}}})).youtubeUrl,optionalCard.youtubeUrl,'Removing an optional link preserves prior delivered mappings.');
+    assert.equal(await updateArtistProfile(other.id, optionalCard.id, { instagramUrl: 'https://instagram.com/wrong_owner' }), null, 'A different account cannot edit another user’s artist card.');
+    assert.equal(await updateArtistProfile(user.id, 999999, { instagramUrl: 'https://instagram.com/missing_card' }), null, 'An unknown card id cannot be edited.');
+    const instagramSaved = await updateArtistProfile(user.id, optionalCard.id, { instagramUrl: normalizeInstagramUrl('@direnote_artist') });
+    assert.equal(instagramSaved?.name, optionalCard.artistName, 'Adding Instagram never renames the saved artist identity.');
+    assert.equal(instagramSaved?.instagramUrl, 'https://instagram.com/direnote_artist');
+    const instagramCard = await prisma.artistCard.findUniqueOrThrow({ where: { id: optionalCard.id } });
+    assert.equal(instagramCard.direNoteArtistId, null, 'Changing identity links invalidates the stale provider artist binding.');
+    const instagramSnapshot = await prisma.releaseArtistIdentity.findUniqueOrThrow({ where: { releaseId_artistCardId: { releaseId: optionalLive.id, artistCardId: optionalCard.id } } });
+    assert.equal(instagramSnapshot.providerArtistId, '9400', 'The old provider artist binding remains attached to the historical release snapshot.');
     console.log('PASS artist verification: exact live-card trigger, ownership, explicit link approval, manual corrections, future defaults, immutable payloads, delayed responses, quarantined identity reuse, featured artists, and profile-editor protection.');
   } finally { globalThis.fetch = originalFetch; }
 }

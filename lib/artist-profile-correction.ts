@@ -7,6 +7,10 @@ export type ArtistInstagramCorrection = {
   label: string;
 };
 
+export function normalizeArtistCardName(value: string) {
+  return value.normalize("NFC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
 export function artistInstagramCorrection(message: string, releaseTitle: string): ArtistInstagramCorrection | null {
   const match = message.match(/artist\s+["']([^"']{1,150})["']\s+was not found in the database[\s\S]*?instagram_url\s+is required to create a new artist profile/i);
   if (!match) return null;
@@ -35,6 +39,8 @@ export function artistInstagramCorrectionCopy(issue: { field: string; label: str
     artistName,
     reason: releaseReason || `An Instagram profile is required to match ${name} for distribution.`,
     problem: issue.note || `HYMN could not match ${name} to an artist profile.`,
-    action: `Add the Instagram profile link or @handle for ${name} to that artist's saved profile. Keep the credited name unchanged, then save and resubmit "${releaseTitle}" to HYMN for review.`
+    action: `Add the Instagram profile link or @handle for ${name} to that artist's saved profile. Keep the credited name unchanged, then save and resubmit "${releaseTitle}" to HYMN for review.`,
+    field: issue.field,
+    label: issue.label
   };
 }
