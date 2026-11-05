@@ -57,6 +57,14 @@ async function main() {
   assert.equal((await submitConsultation(customer.id, makeInput(idempotencyKey, slot))).duplicate, true, "Retrying the same request must not create a second consultation.");
   assert.equal(await prisma.consultationRequest.count({ where: { userId: customer.id } }), 1);
 
+  const callbackOnlyCustomer = await createCustomer("lead-callback-only");
+  const callbackOnly = await submitConsultation(callbackOnlyCustomer.id, makeInput("7930a8a6-aac8-4b99-891a-94ae201fab2c", null));
+  assert.equal(callbackOnly.status, "ASSIGNED", "A callback request without a chosen slot is assigned internally immediately.");
+  assert.equal(callbackOnly.assigned, true);
+  const callbackOnlySaved = await prisma.consultationRequest.findUniqueOrThrow({ where: { id: callbackOnly.id } });
+  assert.equal(callbackOnlySaved.assignedMemberId, caller.id);
+  assert.equal(callbackOnlySaved.calendarEventId, null, "No calendar slot is reserved before HYMN contacts the customer.");
+
   const concurrentUsers = await Promise.all([createCustomer("lead-two"), createCustomer("lead-three")]);
   const competingSlot = new Date(slot.getTime() + 30 * 60_000);
   const concurrent = await Promise.allSettled(concurrentUsers.map((user, index) => submitConsultation(user.id, makeInput(`44b393e${index}-9a6d-4fbe-912d-726a20a3d22${index}`, competingSlot))));

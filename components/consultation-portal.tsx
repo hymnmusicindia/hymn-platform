@@ -34,7 +34,6 @@ type Draft = {
   firstTouchSource: string;
   latestTouchSource: string;
 };
-type SlotData = { timezone: string; dates: { date: string; slots: string[] }[] };
 type Account = { id: number; name: string; email: string; mobile: string | null };
 type Confirmation = { id: string; fullName: string; email: string; phone: string; interests: Interest[]; preferredCallback: string | null; status: (typeof CONSULTATION_STATUSES)[number]; assigned: boolean };
 type Stored = { step?: number; draft?: Partial<Draft> };
@@ -63,14 +62,6 @@ function addEvent(draft: Draft, event: FunnelEvent): Draft {
   return { ...draft, funnelEvents: draft.funnelEvents.includes(event) ? draft.funnelEvents : [...draft.funnelEvents, event] };
 }
 
-function formatSlot(date: string, timeZone: string, reference?: string) {
-  return new Intl.DateTimeFormat("en-IN", { weekday: "short", month: "short", day: "numeric", timeZone }).format(reference ? new Date(reference) : new Date(`${date}T12:00:00+05:30`));
-}
-
-function formatTime(value: string, timeZone: string) {
-  return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", timeZone, hour12: true }).format(new Date(value));
-}
-
 const statusMessage: Record<Confirmation["status"], string> = {
   NEW_LEAD: "Your consultation request has been received.",
   UNASSIGNED: "Your request is received. Our team will arrange the right contact.",
@@ -89,19 +80,11 @@ export function ConsultationPortal() {
   const [step, setStep] = useState(0);
   const [hydrated, setHydrated] = useState(false);
   const [account, setAccount] = useState<Account | null>(null);
-  const [slots, setSlots] = useState<SlotData | null>(null);
-  const [selectedDate, setSelectedDate] = useState("");
-  const [timeZone, setTimeZone] = useState("Asia/Kolkata");
-  const [visitorTimeZone, setVisitorTimeZone] = useState("");
   const [countrySearch, setCountrySearch] = useState("");
-  const [slotRetry, setSlotRetry] = useState(0);
-  const [loadingSlots, setLoadingSlots] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const selectedCountry = contactPhoneCountries.find(country => country.code === draft.countryCode) || contactPhoneCountries[0];
-  const selectedDateSlots = slots?.dates.find(item => item.date === selectedDate)?.slots || [];
-  const hasSlots = Boolean(slots?.dates.some(item => item.slots.length));
   const progress = Math.max(0, Math.min(5, step - 1));
   const progressLabel = step > 0 && step < 6 ? `Step ${step} of 5` : "";
   const serviceTitles = useMemo(() => new Map(CONSULTATION_INTERESTS.map(item => [item.id, item.title])), []);
@@ -146,8 +129,6 @@ export function ConsultationPortal() {
     };
     setDraft(addEvent(restored, "CONSULTATION_PAGE_VIEWED"));
     setStep(restoredStep);
-    const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (browserZone && browserZone !== "Asia/Kolkata") setVisitorTimeZone(browserZone);
     setHydrated(true);
     void fetch("/api/consultation?mode=profile", { cache: "no-store" }).then(async response => {
       if (!response.ok) {
@@ -176,26 +157,6 @@ export function ConsultationPortal() {
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ step, draft } satisfies Stored)); }
     catch (cause) { console.warn("Consultation draft could not be saved in this browser session.", cause); }
   }, [draft, hydrated, step, confirmation]);
-
-  useEffect(() => {
-    if (step !== 5 || !account || slots || loadingSlots) return;
-    let active = true;
-    setLoadingSlots(true);
-    fetch("/api/consultation?mode=slots", { cache: "no-store" })
-      .then(async response => {
-        const result = await response.json() as SlotData & { error?: string };
-        if (!response.ok) throw new Error(result.error || "Callback availability could not be loaded.");
-        if (active) {
-          setSlots(result);
-          const availableDates = result.dates.filter(item => item.slots.length).map(item => item.date);
-          setSelectedDate(current => availableDates.includes(current) ? current : availableDates[0] || "");
-          setDraft(current => current.callbackAt && !result.dates.some(item => item.slots.includes(current.callbackAt!)) ? { ...current, callbackAt: null, consent: false } : current);
-        }
-      })
-      .catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Callback availability could not be loaded."); })
-      .finally(() => { if (active) setLoadingSlots(false); });
-    return () => { active = false; };
-  }, [account, loadingSlots, slotRetry, slots, step]);
 
   function record(event: FunnelEvent) {
     setDraft(current => addEvent(current, event));
@@ -256,18 +217,11 @@ export function ConsultationPortal() {
     setError("");
   }
 
-  function selectCallback(value: string | null) {
-    setDraft(current => ({ ...current, callbackAt: value, consent: false }));
-    if (value) record("SLOT_SELECTED");
-    setError("");
-  }
-
   async function submitConsultation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!account || busy) return;
     if (!draft.interests.length) { setError("Choose at least one service so we can connect you with the right team."); return; }
     if (draft.interests.includes("OTHER") && !draft.otherRequirement.trim()) { setError("Tell us a little more about the other service you need."); return; }
-    if (hasSlots && !draft.callbackAt) { setError("Choose an available callback time, or wait until no slots are available to request an arranged callback."); return; }
     if (!draft.consent) { setError("Please agree to the consultation privacy notice to submit your request."); return; }
     setBusy(true);
     setError("");
@@ -377,23 +331,14 @@ export function ConsultationPortal() {
       </section> : null}
 
       {step === 5 ? <section className={styles.formStep}>
-        <span className={styles.eyebrow}>05 / CALLBACK</span><h1>Choose a callback time</h1><p>Times shown in your local timezone.</p>
-        <div className={styles.timeZoneRow}><label htmlFor="consultation-timezone">Show times in</label><select id="consultation-timezone" value={timeZone} onChange={event => setTimeZone(event.target.value)}><option value="Asia/Kolkata">India Standard Time (IST)</option>{visitorTimeZone ? <option value={visitorTimeZone}>{visitorTimeZone.replaceAll("_", " ")}</option> : null}</select></div>
-        {loadingSlots ? <div className={styles.loading}><LoaderCircle size={18} className={styles.spin}/> Checking team availability…</div> : null}
-        {!loadingSlots && slots && hasSlots ? <>
-          <div className={styles.dateChoices} role="group" aria-label="Available callback dates">{slots.dates.filter(item => item.slots.length).map(item => <button key={item.date} type="button" className={selectedDate === item.date ? styles.dateActive : ""} aria-pressed={selectedDate === item.date} onClick={() => { setSelectedDate(item.date); selectCallback(null); }}>{formatSlot(item.date, timeZone, item.slots[0])}</button>)}</div>
-          <div className={styles.slotGrid} role="group" aria-label="Available callback times">{selectedDateSlots.map(value => <button key={value} type="button" className={draft.callbackAt === value ? styles.slotActive : ""} aria-pressed={draft.callbackAt === value} onClick={() => selectCallback(value)}>{formatTime(value, timeZone)}</button>)}</div>
-          {draft.callbackAt ? <div className={styles.selectedSlot}><CheckCircle2 size={17}/><span>Selected: <strong>{formatSlot(selectedDate, timeZone, draft.callbackAt)} · {formatTime(draft.callbackAt, timeZone)}</strong> ({timeZone === "Asia/Kolkata" ? "IST" : timeZone})</span></div> : null}
-        </> : null}
-        {!loadingSlots && slots && !hasSlots ? <div className={styles.noSlots}><CalendarDaysIcon/><div><strong>No callback times are available right now.</strong><p>You can still send your request. The HYMN team will contact you to arrange a convenient time.</p></div></div> : null}
-        {!slots && !loadingSlots ? <div className={styles.noSlots}><CalendarDaysIcon/><div><strong>Availability could not be checked.</strong><p>Try again to confirm a real time, or return to your service selections.</p><button type="button" onClick={() => { setSlots(null); setError(""); setSlotRetry(value => value + 1); }}>Try again</button></div></div> : null}
-        {slots && (!hasSlots || draft.callbackAt) ? <div className={styles.selectedServices}><span>CONSULTATION FOCUS</span><p>{draft.interests.map(id => serviceTitles.get(id)).filter(Boolean).join(" · ")}</p></div> : null}
+        <span className={styles.eyebrow}>05 / CALLBACK</span><h1>Request a callback</h1><p>Send your request now. The HYMN team will assign it and contact you to arrange a time.</p>
+        <div className={styles.selectedServices}><span>CONSULTATION FOCUS</span><p>{draft.interests.map(id => serviceTitles.get(id)).filter(Boolean).join(" · ")}</p></div>
         <form className={styles.consentForm} onSubmit={submitConsultation}>
           <p className={styles.privacyNotice}>We use your name, email, phone, selections and referral details to arrange and manage this consultation. Request access, correction or deletion via <Link href="/contact" target="_blank">Support</Link>. <Link href="/privacy-policy" target="_blank">Privacy policy</Link>.</p>
           <label className={styles.checkboxLabel}><input type="checkbox" checked={draft.consent} onChange={event => setDraft(current => ({ ...current, consent: event.target.checked }))}/><span>I agree that HYMN may use the details I provided to respond to and manage this consultation request. See the <Link href="/privacy-policy" target="_blank">Privacy Policy</Link>.</span></label>
           <label className={styles.checkboxLabel}><input type="checkbox" checked={draft.marketingConsent} onChange={event => setDraft(current => ({ ...current, marketingConsent: event.target.checked }))}/><span>Optional: email me HYMN news and music-industry updates. This is not required for a consultation.</span></label>
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
-          <button className={styles.primaryButton} type="submit" disabled={busy || loadingSlots || !slots || (hasSlots && !draft.callbackAt)}>{busy ? <><LoaderCircle size={17} className={styles.spin}/> Sending request…</> : <>Confirm my free consultation <ArrowRight size={17}/></>}</button>
+          <button className={styles.primaryButton} type="submit" disabled={busy}>{busy ? <><LoaderCircle size={17} className={styles.spin}/> Sending request…</> : <>Request my free consultation <ArrowRight size={17}/></>}</button>
         </form>
       </section> : null}
 
@@ -405,7 +350,7 @@ export function ConsultationPortal() {
           <div><span>HYMN ACCOUNT</span><strong>{confirmation.email}</strong></div>
           <div><span>PHONE</span><strong>{confirmation.phone}</strong></div>
           <div><span>CONSULTATION FOCUS</span><strong>{confirmation.interests.map(id => serviceTitles.get(id) || id).join(", ")}</strong></div>
-          <div><span>CALLBACK</span><strong>{confirmation.preferredCallback ? `${new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeStyle: "short", timeZone, hour12: true }).format(new Date(confirmation.preferredCallback))} ${timeZone === "Asia/Kolkata" ? "IST" : timeZone}` : "HYMN will contact you to arrange a time"}</strong></div>
+          <div><span>CALLBACK</span><strong>{confirmation.preferredCallback ? `${new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeStyle: "short", timeZone: "Asia/Kolkata", hour12: true }).format(new Date(confirmation.preferredCallback))} IST` : "HYMN will contact you to arrange a time"}</strong></div>
           <div><span>STATUS</span><strong>{statusMessage[confirmation.status]}</strong></div>
         </div>
         <Link href="/" className={styles.primaryButton}>Return to HYMN <ArrowRight size={17}/></Link>
@@ -414,8 +359,4 @@ export function ConsultationPortal() {
 
     {step === 0 ? <footer className={styles.footer}><span>HYMN MUSIC · BUILT FOR THE NEXT CHAPTER</span><Link href="/privacy-policy">Privacy</Link></footer> : null}
   </main>;
-}
-
-function CalendarDaysIcon() {
-  return <span className={styles.calendarIcon} aria-hidden="true"><span/><span/><i/></span>;
 }

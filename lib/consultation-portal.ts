@@ -199,7 +199,7 @@ export async function submitConsultation(userId: number, raw: unknown) {
 
     const assignee = await chooseAssignee(tx, workspace.id, data.interests, callbackAt);
     let calendarEventId: string | null = null;
-    if (callbackAt && !assignee) throw new ConsultationPortalError("That callback time is no longer available. Choose another time or request a callback without selecting a slot.", 409);
+    if (callbackAt && !assignee) throw new ConsultationPortalError("That callback time is no longer available. Choose another time or submit without selecting a time.", 409);
     if (callbackAt && assignee) {
       const event = await tx.teamCalendarEvent.create({
         data: {
