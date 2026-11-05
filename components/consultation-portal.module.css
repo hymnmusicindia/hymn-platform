@@ -229,6 +229,10 @@
 }
 
 .form .primaryButton { width: fit-content; min-width: 170px; }
+.callbackPreference { display: block; margin-top: 18px; color: #282825; font-size: 12px; font-weight: 650; }
+.callbackInput { width: min(100%, 380px); min-height: 46px; margin-top: 8px; padding: 0 2px; border: 0; border-bottom: 1px solid #c9c9c3; border-radius: 0; background: transparent; color: #191917; font: inherit; font-size: 14px; }
+.callbackInput:focus { outline: 0; border-color: #565952; box-shadow: 0 1px 0 #565952; }
+.callbackDisclaimer { max-width: 560px; margin: 8px 0 18px; color: #74746f; font-size: 11px; line-height: 1.55; }
 .authCard { margin-top: 18px; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .authCard :global(form) { margin-top: 0; }
 .authDivider { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: #858580; font-size: 11px; }

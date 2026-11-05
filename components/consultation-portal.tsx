@@ -20,7 +20,7 @@ type Draft = {
   countryCode: string;
   interests: Interest[];
   otherRequirement: string;
-  callbackAt: string | null;
+  callbackAt: string;
   consent: boolean;
   marketingConsent: boolean;
   idempotencyKey: string;
@@ -41,7 +41,7 @@ type Stored = { step?: number; draft?: Partial<Draft> };
 const STORAGE_KEY = "hymn-consultation-draft-v1";
 const emptyUtm: UTM = { source: "", medium: "", campaign: "", content: "", term: "" };
 const newDraft = (): Draft => ({
-  fullName: "", phone: "", dialCode: "91", countryCode: "IN", interests: [], otherRequirement: "", callbackAt: null,
+  fullName: "", phone: "", dialCode: "91", countryCode: "IN", interests: [], otherRequirement: "", callbackAt: "",
   consent: false, marketingConsent: false, idempotencyKey: crypto.randomUUID(), funnelEvents: ["CONSULTATION_PAGE_VIEWED"],
   utm: emptyUtm, source: "website", campaign: "", referralUrl: "", landingPageUrl: "/consultation", referrer: "",
   firstTouchSource: "website", latestTouchSource: "website"
@@ -62,11 +62,18 @@ function addEvent(draft: Draft, event: FunnelEvent): Draft {
   return { ...draft, funnelEvents: draft.funnelEvents.includes(event) ? draft.funnelEvents : [...draft.funnelEvents, event] };
 }
 
+function localDateTimeValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
 const statusMessage: Record<Confirmation["status"], string> = {
   NEW_LEAD: "Your consultation request has been received.",
   UNASSIGNED: "Your request is received. Our team will arrange the right contact.",
   ASSIGNED: "Your request is with the HYMN team. We will contact you shortly.",
-  CALLBACK_SCHEDULED: "Your callback time is reserved with the HYMN team.",
+  CALLBACK_SCHEDULED: "Your consultation request has been received.",
   CONTACTED: "The HYMN team is in touch with you.",
   CONSULTATION_COMPLETED: "Your consultation is complete.",
   FOLLOW_UP_REQUIRED: "The HYMN team will follow up with you.",
@@ -117,6 +124,7 @@ export function ConsultationPortal() {
     const restored: Draft = {
       ...defaults,
       ...storedDraft,
+      callbackAt: localDateTimeValue(storedDraft?.callbackAt),
       idempotencyKey: storedDraft?.idempotencyKey || defaults.idempotencyKey,
       utm: { ...emptyUtm, ...storedDraft?.utm, ...Object.fromEntries(Object.entries(utm).filter(([, value]) => value)) },
       referrer: storedDraft?.referrer || referrer,
@@ -222,6 +230,7 @@ export function ConsultationPortal() {
     if (!account || busy) return;
     if (!draft.interests.length) { setError("Choose at least one service so we can connect you with the right team."); return; }
     if (draft.interests.includes("OTHER") && !draft.otherRequirement.trim()) { setError("Tell us a little more about the other service you need."); return; }
+    if (!draft.callbackAt || new Date(draft.callbackAt).getTime() <= Date.now()) { setError("Choose a preferred callback date and time in the future."); return; }
     if (!draft.consent) { setError("Please agree to the consultation privacy notice to submit your request."); return; }
     setBusy(true);
     setError("");
@@ -232,7 +241,7 @@ export function ConsultationPortal() {
       const response = await fetch("/api/consultation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...submission, phone, callbackAt: draft.callbackAt, consent: true })
+        body: JSON.stringify({ ...submission, phone, callbackAt: draft.callbackAt ? new Date(draft.callbackAt).toISOString() : null, consent: true })
       });
       const result = await response.json() as Confirmation & { error?: string };
       if (!response.ok) throw new Error(result.error || "We couldn't submit your consultation request. Please try again.");
@@ -331,9 +340,12 @@ export function ConsultationPortal() {
       </section> : null}
 
       {step === 5 ? <section className={styles.formStep}>
-        <span className={styles.eyebrow}>05 / CALLBACK</span><h1>Request a callback</h1><p>Send your request now. The HYMN team will assign it and contact you to arrange a time.</p>
+        <span className={styles.eyebrow}>05 / CALLBACK</span><h1>When should we call?</h1><p>Choose a preferred date and time. This is a preference, not a confirmed booking. We may call earlier, later, or at another time.</p>
         <div className={styles.selectedServices}><span>CONSULTATION FOCUS</span><p>{draft.interests.map(id => serviceTitles.get(id)).filter(Boolean).join(" · ")}</p></div>
         <form className={styles.consentForm} onSubmit={submitConsultation}>
+          <label className={styles.callbackPreference} htmlFor="consultation-preferred-callback">Preferred date and time</label>
+          <input className={styles.callbackInput} id="consultation-preferred-callback" type="datetime-local" required value={draft.callbackAt} min={new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16)} onChange={event => setDraft(current => ({ ...current, callbackAt: event.target.value, consent: false }))}/>
+          <p className={styles.callbackDisclaimer}>We’ll try to use this as guidance. It does not guarantee a call at this exact time, and HYMN may contact you earlier.</p>
           <p className={styles.privacyNotice}>We use your name, email, phone, selections and referral details to arrange and manage this consultation. Request access, correction or deletion via <Link href="/contact" target="_blank">Support</Link>. <Link href="/privacy-policy" target="_blank">Privacy policy</Link>.</p>
           <label className={styles.checkboxLabel}><input type="checkbox" checked={draft.consent} onChange={event => setDraft(current => ({ ...current, consent: event.target.checked }))}/><span>I agree that HYMN may use the details I provided to respond to and manage this consultation request. See the <Link href="/privacy-policy" target="_blank">Privacy Policy</Link>.</span></label>
           <label className={styles.checkboxLabel}><input type="checkbox" checked={draft.marketingConsent} onChange={event => setDraft(current => ({ ...current, marketingConsent: event.target.checked }))}/><span>Optional: email me HYMN news and music-industry updates. This is not required for a consultation.</span></label>
@@ -350,7 +362,7 @@ export function ConsultationPortal() {
           <div><span>HYMN ACCOUNT</span><strong>{confirmation.email}</strong></div>
           <div><span>PHONE</span><strong>{confirmation.phone}</strong></div>
           <div><span>CONSULTATION FOCUS</span><strong>{confirmation.interests.map(id => serviceTitles.get(id) || id).join(", ")}</strong></div>
-          <div><span>CALLBACK</span><strong>{confirmation.preferredCallback ? `${new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeStyle: "short", timeZone: "Asia/Kolkata", hour12: true }).format(new Date(confirmation.preferredCallback))} IST` : "HYMN will contact you to arrange a time"}</strong></div>
+          <div><span>PREFERRED CALLBACK</span><strong>{confirmation.preferredCallback ? new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeStyle: "short", hour12: true }).format(new Date(confirmation.preferredCallback)) : "No preference provided"}. This is not a confirmed time; HYMN may call earlier or at another time.</strong></div>
           <div><span>STATUS</span><strong>{statusMessage[confirmation.status]}</strong></div>
         </div>
         <Link href="/" className={styles.primaryButton}>Return to HYMN <ArrowRight size={17}/></Link>

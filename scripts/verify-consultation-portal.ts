@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { prisma } from "../lib/prisma";
-import { ConsultationPortalError, submitConsultation } from "../lib/consultation-portal";
+import { submitConsultation } from "../lib/consultation-portal";
 import { TeamError } from "../lib/team/policy";
 import { teamMutation, teamRead } from "../lib/team/service";
 import { roleTemplates } from "../lib/team/policy";
@@ -42,7 +42,7 @@ async function main() {
   const slot = new Date(Math.ceil((Date.now() + 90 * 60_000) / (30 * 60_000)) * (30 * 60_000));
   const idempotencyKey = "e5e1025a-1faf-4d6c-86a2-b2e03e11bbd3";
   const created = await submitConsultation(customer.id, makeInput(idempotencyKey, slot));
-  assert.equal(created.status, "CALLBACK_SCHEDULED");
+  assert.equal(created.status, "ASSIGNED", "A preferred callback time is not a booked calendar appointment.");
   assert.equal(created.assigned, true);
   const saved = await prisma.consultationRequest.findUniqueOrThrow({ where: { id: created.id }, include: { user: true, client: true } });
   assert.equal(saved.assignedMemberId, caller.id);
@@ -52,8 +52,8 @@ async function main() {
   assert.equal(saved.consentVersion, "consultation-privacy-v2");
   assert.equal(saved.marketingConsent, false);
   assert.equal(saved.firstTouchSource, "instagram");
-  assert.equal((await prisma.teamCalendarEvent.findUniqueOrThrow({ where: { id: created.appointmentEventId! } })).startsAt.toISOString(), slot.toISOString());
-  assert.ok(await prisma.teamAppointmentMessage.count({ where: { eventId: created.appointmentEventId! } }) > 0, "A scheduled callback queues confirmation/reminder messages.");
+  assert.equal(saved.preferredCallback?.toISOString(), slot.toISOString());
+  assert.equal(saved.calendarEventId, null, "The preference is stored without reserving a team calendar slot.");
   assert.equal((await submitConsultation(customer.id, makeInput(idempotencyKey, slot))).duplicate, true, "Retrying the same request must not create a second consultation.");
   assert.equal(await prisma.consultationRequest.count({ where: { userId: customer.id } }), 1);
 
@@ -66,10 +66,11 @@ async function main() {
   assert.equal(callbackOnlySaved.calendarEventId, null, "No calendar slot is reserved before HYMN contacts the customer.");
 
   const concurrentUsers = await Promise.all([createCustomer("lead-two"), createCustomer("lead-three")]);
-  const competingSlot = new Date(slot.getTime() + 30 * 60_000);
-  const concurrent = await Promise.allSettled(concurrentUsers.map((user, index) => submitConsultation(user.id, makeInput(`44b393e${index}-9a6d-4fbe-912d-726a20a3d22${index}`, competingSlot))));
-  assert.equal(concurrent.filter(result => result.status === "fulfilled").length, 1, "Only one simultaneous request may reserve a member's slot.");
-  assert.equal(concurrent.filter(result => result.status === "rejected" && result.reason instanceof ConsultationPortalError && result.reason.status === 409).length, 1, "The losing request receives an availability conflict.");
+  const concurrent = await Promise.all(concurrentUsers.map((user, index) => submitConsultation(user.id, makeInput(`44b393e${index}-9a6d-4fbe-912d-726a20a3d22${index}`, slot))));
+  assert.equal(concurrent.length, 2, "Simultaneous callback preferences are both accepted without competing calendar reservations.");
+  assert.ok(concurrent.every(result => result.status === "ASSIGNED" && result.assigned));
+  const concurrentRequests = await prisma.consultationRequest.findMany({ where: { id: { in: concurrent.map(result => result.id) } } });
+  assert.ok(concurrentRequests.every(request => request.preferredCallback?.toISOString() === slot.toISOString() && request.calendarEventId === null), "Callback preferences are stored without creating calendar holds.");
 
   await prisma.consultationRequest.update({ where: { id: created.id }, data: { assignedMemberId: researcher.id } });
   const scoped = await teamRead(researcher, "consultations", new URLSearchParams());

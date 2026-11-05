@@ -103,7 +103,25 @@ async function main() {
     await googlePage.getByLabel('Phone number').waitFor();
     assert.equal(googleAttempts, 2, 'Google can be retried after a failed response.');
     assert.equal(googleProfileCalls, 3, 'A Google-authenticated member can proceed after transient session-cookie propagation.');
-    console.log('PASS consultation auth UI: prior name reused, customer OTP and Google accounts proceed, transient-session retry, Google error/retry, both auth paths advance to contact step, responsive header.');
+    await googlePage.getByLabel('Phone number').fill('9876543210');
+    await googlePage.getByRole('button', { name: 'Continue' }).click();
+    await googlePage.getByRole('button', { name: /Distribution of Songs/ }).click();
+    await googlePage.getByRole('button', { name: 'Next' }).click();
+    await googlePage.getByText('This is a preference, not a confirmed booking.').waitFor();
+    assert.equal(await googlePage.getByLabel('Preferred date and time').getAttribute('required'), '');
+    assert.equal(await googlePage.evaluate(() => document.documentElement.textContent.includes('Checking team availability')), false, 'Submitting callback preferences does not wait for a team-slot lookup.');
+    let submittedCallback;
+    await googlePage.route('**/api/consultation', async route => {
+      submittedCallback = route.request().postDataJSON().callbackAt;
+      await route.fulfill({ status: 201, json: { id: 'fixture-request', fullName: 'Google Member', email: 'google@example.test', phone: '+919876543210', interests: ['DISTRIBUTION'], preferredCallback: submittedCallback, status: 'ASSIGNED', assigned: true } });
+    });
+    await googlePage.getByLabel('Preferred date and time').fill(await googlePage.evaluate(() => new Date(Date.now() + 86400000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)));
+    await googlePage.getByRole('checkbox').nth(0).check();
+    await googlePage.getByRole('button', { name: 'Request my free consultation' }).click();
+    await googlePage.getByText('PREFERRED CALLBACK').waitFor();
+    assert.ok(submittedCallback && new Date(submittedCallback).getTime() > Date.now(), 'The chosen local preference is submitted as a future instant.');
+    assert.equal(await googlePage.getByText(/not a confirmed time; HYMN may call earlier or at another time/).count(), 1, 'Confirmation repeats that the preference is not a booking.');
+    console.log('PASS consultation auth UI: account handoff, preferred local date/time, no availability wait, preference disclaimer, submission confirmation, responsive header.');
   } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));

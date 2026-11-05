@@ -3,7 +3,6 @@ import { Prisma, ConsultationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { contactNumberToE164 } from "@/lib/contact-phone-countries";
 import { activeWindows, acceptsAssignmentsNow } from "@/lib/team/availability-rules";
-import { queueAppointment } from "@/lib/team/appointments";
 import { CONSULTATION_INTERESTS, CONSULTATION_STATUSES, consultationSlotsForMember, isConsultationSlotAvailable, selectConsultationAssignee, type ConsultationAssigneeCandidate } from "@/lib/consultation-domain";
 import { z } from "zod";
 
@@ -155,17 +154,12 @@ async function notifyMember(tx: Prisma.TransactionClient, memberId: string, titl
   }
 }
 
-function scheduleNote(interests: string[], otherRequirement: string) {
-  const labels = interests.map(id => CONSULTATION_INTERESTS.find(item => item.id === id)?.title || id).join(", ");
-  return `Consultation request · ${labels}${otherRequirement ? ` · Other: ${otherRequirement}` : ""}`;
-}
-
 export async function submitConsultation(userId: number, raw: unknown) {
   const data = submitSchema.parse(raw);
   const mobile = contactNumberToE164(data.dialCode, data.phone);
   const callbackAt = data.callbackAt ? new Date(data.callbackAt) : null;
-  if (callbackAt && (callbackAt <= new Date() || callbackAt.getTime() > Date.now() + 14 * 86400_000)) {
-    throw new ConsultationPortalError("Choose a callback time within the next two weeks.", 400);
+  if (callbackAt && (!Number.isFinite(callbackAt.getTime()) || callbackAt <= new Date())) {
+    throw new ConsultationPortalError("Choose a preferred callback time in the future.", 400);
   }
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, status: true } });
   if (!user || user.status !== "ACTIVE") throw new ConsultationPortalError("Sign in with an active HYMN account to continue.", 403);
@@ -197,28 +191,9 @@ export async function submitConsultation(userId: number, raw: unknown) {
       : await tx.teamClient.create({ data: { workspaceId: workspace.id, ownerId: owner.id, userId, name: data.fullName, email: account.email, phone: mobile, interests } });
     await tx.user.update({ where: { id: userId }, data: { name: data.fullName, mobile } });
 
-    const assignee = await chooseAssignee(tx, workspace.id, data.interests, callbackAt);
-    let calendarEventId: string | null = null;
-    if (callbackAt && !assignee) throw new ConsultationPortalError("That callback time is no longer available. Choose another time or submit without selecting a time.", 409);
-    if (callbackAt && assignee) {
-      const event = await tx.teamCalendarEvent.create({
-        data: {
-          workspaceId: workspace.id,
-          creatorId: owner.id,
-          assigneeId: assignee.id,
-          clientId: client.id,
-          title: `HYMN consultation with ${data.fullName}`,
-          kind: "CALL",
-          startsAt: callbackAt,
-          endsAt: new Date(callbackAt.getTime() + 30 * 60_000),
-          notes: scheduleNote(data.interests, data.otherRequirement),
-          status: "SCHEDULED"
-        }
-      });
-      calendarEventId = event.id;
-      await queueAppointment(tx, event);
-    }
-    const status = callbackAt ? ConsultationStatus.CALLBACK_SCHEDULED : assignee ? ConsultationStatus.ASSIGNED : ConsultationStatus.UNASSIGNED;
+    const assignee = await chooseAssignee(tx, workspace.id, data.interests, null);
+    const calendarEventId: string | null = null;
+    const status = assignee ? ConsultationStatus.ASSIGNED : ConsultationStatus.UNASSIGNED;
     const request = await tx.consultationRequest.create({
       data: {
         workspaceId: workspace.id,
