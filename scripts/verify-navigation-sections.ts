@@ -19,10 +19,11 @@ assert.equal(adminModuleKey("distribution-queue"), "releases");
 assert.equal(adminModuleKey("producers"), "operations");
 assert.equal(adminModuleAllowed("content-id-requests", ["releases.review"]), true);
 assert.equal(adminModuleAllowed("content-id-requests", ["releases.read"]), false);
-const teamKeys = "overview availability work tasks inbox projects chat contacts emails customer-calls calendar creator-applications release-qc directory approvals reports audit settings referral acquisition".split(" ");
+const teamKeys = "work-station contacts consultations work overview availability tasks inbox projects chat emails customer-calls calendar creator-applications release-qc directory approvals reports audit settings referral acquisition".split(" ");
 const team = sectionItems(teamKeys, teamSectionFor);
-assert.equal(team.length, 6);
+assert.equal(team.length, 10);
 assert.deepEqual(team.flatMap(section => section.items).sort(), teamKeys.sort());
+assert.deepEqual(["work-station", "contacts", "consultations", "work"].map(teamSectionFor), ["Today", "Contacts", "Consultations", "My Work"]);
 assert.equal(teamSectionFor("crm"), teamSectionFor("acquisition"));
 assert.equal(teamSectionFor('leadership'), 'Leadership');
 for (const profile of ["customer", "producer"]) {
@@ -42,4 +43,4 @@ for (const profile of ["customer", "producer"]) {
   assert.equal(merged.find(item => item.key === "earnings")?.group, "Money");
   assert.equal(merged.find(item => item.key === "settings")?.group, "Account & support");
 }
-console.log("PASS navigation consolidation: all 40 admin modules retained, six admin/team sections, permission subsets, legacy aliases, and customer/producer financial, profile, referral and support modules preserved.");
+console.log("PASS navigation consolidation: all 40 admin modules retained, simplified Team destinations, permission subsets, legacy aliases, and customer/producer financial, profile, referral and support modules preserved.");

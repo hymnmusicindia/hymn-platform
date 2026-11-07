@@ -26,12 +26,13 @@ import { TeamAppLinks } from "./app-download-links";
 import { TeamRichText } from "./rich-text";
 import { ResearchAcquisitionDashboard } from "./research-acquisition-dashboard";
 import { TeamConsultations } from "./consultations";
+import { TeamGlobalSearch } from "./global-search";
 import { useSearchParams } from "next/navigation";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Bell, BriefcaseBusiness, CalendarDays, CheckCheck, ChevronLeft, ClipboardList, FileBarChart, LayoutDashboard, Link2, Menu, MessageCircle, Plus, Search, ShieldCheck, Users, X } from "lucide-react";
-import { categories, onboardingTemplates, permissions as permissionKeys, pipeline, statuses, type Permission } from "@/lib/team/policy";
+import { categories, onboardingTemplates, permissions as permissionKeys, statuses, type Permission } from "@/lib/team/policy";
 import styles from "./workspace.module.css";
 
 type Member = { id: string; department: string; jobTitle: string; status: string; availability: string; user: { name: string; avatar?: string }; role: { name: string; owner: boolean } };
@@ -40,7 +41,6 @@ type Task = { eventKey?: string; id: string; title: string; description: string;
 type Project = { id: string; title: string; description: string; department: string; dueAt?: string; _count: { tasks: number } };
 type Channel = { id: string; name: string; private: boolean };
 type Message = { id: string; author: Member; body: string; createdAt: string };
-type Prospect = { id: string; name: string; ownerId: string; email?: string; contactUrl?: string; sourceUrl: string; evidence: string; buyingSignal: string; categories: string[]; score: Record<string, number>; stage: string; version: number; suppressed: boolean; verified: boolean; notes: string; followUpAt?: string };
 type Notification = { id: string; title: string; href: string; readAt?: string; createdAt: string };
 type Report = { id: string; weekStart: string; member: Member; metrics: Record<string, number>; summary: string; blockers: string; nextWeek: string };
 type Overview = { active: number; overdue: number; blocked: number; reviews: number; completed: number; workload: { ownerId: string; _count: number }[] };
@@ -59,19 +59,30 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
   const [module, setModule] = useState("work-station"); const [collapsed, setCollapsed] = useState(false); const [mobileOpen, setMobileOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]); const [total, setTotal] = useState(0); const [offset, setOffset] = useState(0); const [members, setMembers] = useState<Member[]>([]); const [roles, setRoles] = useState<Role[]>([]); const [projects, setProjects] = useState<Project[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [prospects, setProspects] = useState<Prospect[]>([]); const [notifications, setNotifications] = useState<Notification[]>([]); const [reports, setReports] = useState<Report[]>([]); const [audits, setAudits] = useState<Audit[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]); const [reports, setReports] = useState<Report[]>([]); const [audits, setAudits] = useState<Audit[]>([]);
   const [acquisitionRows, setAcquisitionRows] = useState<Record<string, any>[]>([]); const [commissionRows, setCommissionRows] = useState<Record<string, any>[]>([]); const [acquisitionDashboard, setAcquisitionDashboard] = useState<{leads:number; commissions:{status:string;amount:number;count:number}[]}>({leads:0,commissions:[]}); const [acquisitionSettings, setAcquisitionSettings] = useState<Record<string, any> | null>(null); const [acquisitionEvidence, setAcquisitionEvidence] = useState<Record<string, any>[]>([]);
   const [acquisitionPayouts, setAcquisitionPayouts] = useState<{payouts:Record<string, any>[]; minimumMinor:number; schedule:string; due:{employeeId:string;name:string;currency:string;amountMinor:number;commissionIds:string[];minimumMet:boolean}[]}>({payouts:[],minimumMinor:50000,schedule:"MONTHLY",due:[]});
   const [acquisitionEmailTemplates, setAcquisitionEmailTemplates] = useState<Record<string, any>[]>([]); const [acquisitionEmailEvents, setAcquisitionEmailEvents] = useState<Record<string, any>[]>([]);
+  const [acquisitionAdminOpen, setAcquisitionAdminOpen] = useState(false);
   const [operations, setOperations] = useState<Operations>({ beats: [], engineers: [], releases: [], orders: [] }); const [overview, setOverview] = useState<Overview | null>(null);
   const [search, setSearch] = useState(""); const [view, setView] = useState("list"); const [filter, setFilter] = useState("all"); const [selected, setSelected] = useState<string | null>(null); const [comments, setComments] = useState<Message[]>([]);
   const [modal, setModal] = useState<Modal | null>(null); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [inviteLink, setInviteLink] = useState("");
   const dialog = useRef<HTMLDialogElement>(null); const taskDialog = useRef<HTMLDialogElement>(null);
+  const acquisitionAdminOpenRef = useRef(false);
+  useEffect(() => { acquisitionAdminOpenRef.current = acquisitionAdminOpen; }, [acquisitionAdminOpen]);
   const task = module === "work-station" ? undefined : tasks.find(t => t.id === selected);
   const api = useCallback(async <T,>(resource: string, body?: unknown, options?: { signal?: AbortSignal }): Promise<T> => {
     const separator = resource.includes("?") ? "&" : "?";
+    const startedAt = performance.now();
     const response = await fetch(`/api/team/${resource}${separator}workspace=${actor.workspaceId}`, body === undefined ? { cache: "no-store", signal: options?.signal } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await response.json(); if (!response.ok) throw new Error(data.error || "Request failed."); return data as T;
+    const data = await response.json();
+    if (body === undefined) {
+      const duration = performance.now() - startedAt;
+      const resourceName = resource.split("?")[0];
+      performance.measure(`team-os:${resourceName}`, { start: startedAt, duration });
+      if (process.env.NODE_ENV !== "production") console.debug("TEAM_OS_READ", { resource: resourceName, durationMs: Math.round(duration), records: response.headers.get("X-Team-OS-Read-Count"), serverTiming: response.headers.get("Server-Timing") });
+    }
+    if (!response.ok) throw new Error(data.error || "Request failed."); return data as T;
   }, [actor.workspaceId]);
   const refresh = useCallback(async () => {
     try {
@@ -87,59 +98,106 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
         return;
       }
       const urlFilters = new URLSearchParams(location.search);
-      const result = await api<{ items: Task[]; total: number }>(`tasks?offset=${offset}&q=${encodeURIComponent(urlFilters.get("q") || "")}&status=${urlFilters.get("status") || ""}&mine=${urlFilters.get("mine") || "0"}`); setTasks(result.items); setTotal(result.total);
-      setOverview(await api<Overview>("overview")); setNotifications((await api<{ items: Notification[] }>("notifications")).items);
-      setProjects((await api<{ items: Project[] }>("projects")).items);
-      if (allowed("team.members.view")) { const directory = await api<{ items: Member[]; roles: Role[] }>("members"); setMembers(directory.items); setRoles(directory.roles); }
-      if (allowed("chat.use")) setChannels((await api<{ items: Channel[] }>("channels")).items);
-      if (allowed("crm.prospects.view")) setProspects((await api<{ items: Prospect[] }>("prospects")).items);
-      if (allowed("crm.prospects.view")) { const [leads, ledger, dashboard, templates, emailEvents] = await Promise.all([api<{items:Record<string,any>[] }>("acquisition-leads"), api<{items:Record<string,any>[] }>("acquisition-ledger"), api<typeof acquisitionDashboard>("acquisition-dashboard"), api<{items:Record<string,any>[] }>("acquisition-email-templates"), api<{items:Record<string,any>[] }>("acquisition-email-events")]); setAcquisitionRows(leads.items); setCommissionRows(ledger.items); setAcquisitionDashboard(dashboard); setAcquisitionEmailTemplates(templates.items); setAcquisitionEmailEvents(emailEvents.items); }
-      if (actor.permissions.includes("acquisition.admin") || actor.owner) { const [settings, evidence, payouts] = await Promise.all([api<Record<string,any> | null>("acquisition-settings"), api<{items:Record<string,any>[]}>("acquisition-evidence"), api<typeof acquisitionPayouts>("acquisition-payouts")]); setAcquisitionSettings(settings); setAcquisitionEvidence(evidence.items); setAcquisitionPayouts(payouts); }
-      if (allowed("reports.team.view")) setReports((await api<{ items: Report[] }>("reports")).items);
-      if (allowed("audit.view") && module === "audit") setAudits((await api<{ items: Audit[] }>("audit")).items);
-      if (module === "operations") setOperations(await api<Operations>("operations"));
+      const load = async <T,>(key: string, request: Promise<T>, apply: (value: T) => void) => request.then(apply).catch(e => { console.error(`Team OS ${key} refresh failed`, e); });
+      const jobs: Promise<unknown>[] = [];
+      if (["tasks", "work", "approvals"].includes(module)) jobs.push(load("tasks", api<{ items: Task[]; total: number }>(`tasks?offset=${offset}&q=${encodeURIComponent(urlFilters.get("q") || "")}&status=${urlFilters.get("status") || ""}&mine=${urlFilters.get("mine") || "0"}`), result => { setTasks(result.items); setTotal(result.total); }));
+      if (module === "overview") jobs.push(load("overview", api<Overview>("overview"), setOverview));
+      if (["overview", "inbox"].includes(module)) jobs.push(load("notifications", api<{items:Notification[]}>("notifications"), result => setNotifications(result.items)));
+      if (module === "projects" || modal?.type === "task") jobs.push(load("projects", api<{items:Project[]}>("projects"), result => setProjects(result.items)));
+      if (["directory", "settings"].includes(module) && allowed("team.members.view")) jobs.push(load("members", api<{items:Member[];roles:Role[]}>("members"), result => {setMembers(result.items);setRoles(result.roles);}));
+      if (module === "chat" && allowed("chat.use")) jobs.push(load("channels", api<{items:Channel[]}>("channels"), result => setChannels(result.items)));
+      if (["acquisition", "crm"].includes(module) && allowed("crm.prospects.view")) {
+        jobs.push(load("leads", api<{items:Record<string,any>[]}>("acquisition-leads"), result => setAcquisitionRows(result.items)));
+      }
+      if (["acquisition", "crm"].includes(module) && acquisitionAdminOpenRef.current && allowed("crm.prospects.view")) {
+        const [ledger,dashboard,templates,emailEvents] = await Promise.all([api<{items:Record<string,any>[]}>("acquisition-ledger"),api<typeof acquisitionDashboard>("acquisition-dashboard"),api<{items:Record<string,any>[]}>("acquisition-email-templates"),api<{items:Record<string,any>[]}>("acquisition-email-events")]);
+        setCommissionRows(ledger.items);setAcquisitionDashboard(dashboard);setAcquisitionEmailTemplates(templates.items);setAcquisitionEmailEvents(emailEvents.items);
+        if (actor.permissions.includes("acquisition.admin") || actor.owner) { const [settings,evidence,payouts]=await Promise.all([api<Record<string,any>|null>("acquisition-settings"),api<{items:Record<string,any>[]}>("acquisition-evidence"),api<typeof acquisitionPayouts>("acquisition-payouts")]);setAcquisitionSettings(settings);setAcquisitionEvidence(evidence.items);setAcquisitionPayouts(payouts); }
+      }
+      if (module === "reports") jobs.push(load("reports", api<{items:Report[]}>("reports"), result => setReports(result.items)));
+      if (module === "audit" && allowed("audit.view")) jobs.push(load("audit", api<{items:Audit[]}>("audit"), result => setAudits(result.items)));
+      if (module === "operations") jobs.push(load("operations", api<Operations>("operations"), setOperations));
+      await Promise.all(jobs);
       setError("");
-    } catch (e) { setTasks([]); setProjects([]); setMembers([]); setChannels([]); setProspects([]); setNotifications([]); setReports([]); setAudits([]); setOverview(null); setSelected(null); setOperations({ beats: [], engineers: [], releases: [], orders: [] }); setError(e instanceof Error ? e.message : "Could not load workspace."); } finally { setLoading(false); }
-  }, [api, allowed, module, offset, actor.owner, actor.permissions]);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not load workspace."); } finally { setLoading(false); }
+  }, [api, allowed, module, offset, actor.owner, actor.permissions, modal]);
   useEffect(() => { const params = new URLSearchParams(location.search); setModule(workStationModule(params.get("module") || "work-station")); setSelected(params.get("task")); const stored = localStorage.getItem("hymn-team-view"); if (stored) setView(stored); }, []);
-  useEffect(() => { const params = new URLSearchParams(routeQuery); setModule(workStationModule(params.get("mine") === "1" ? "work" : params.get("module") || "work-station")); setSearch(params.get("q") || ""); setFilter(params.get("status") || "all"); setSelected(params.get("task")); if (params.get("module") === "contacts" && params.get("client")) { setContactId(params.get("client")!); setContactComposerKey(value => value + 1); } }, [routeQuery]);
+  useEffect(() => { const params = new URLSearchParams(routeQuery); const nextModule = workStationModule(params.get("mine") === "1" ? "work" : params.get("module") || "work-station"); setModule(nextModule); setSearch(params.get("q") || ""); setFilter(params.get("status") || "all"); setSelected(params.get("task")); setContactId(nextModule === "contacts" ? params.get("client") || undefined : undefined); }, [routeQuery]);
   useEffect(() => { const handler = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setModule("search"); } }; window.addEventListener("keydown", handler); return () => window.removeEventListener("keydown", handler); }, []);
-  useEffect(() => { refresh(); const timer = setInterval(() => { if (!document.hidden) refresh(); }, 15000); return () => clearInterval(timer); }, [refresh]);
+  useEffect(() => { void refresh(); const timer = setInterval(() => { if (!document.hidden && ["overview", "inbox", "work", "tasks", "approvals", "acquisition", "crm"].includes(module)) void refresh(); }, ["acquisition", "crm"].includes(module) ? 60000 : 30000); return () => clearInterval(timer); }, [refresh, module]);
   useEffect(() => { if (module === "work-station" || !selected || tasks.some(t => t.id === selected)) return; let live = true; api<Task>(`task?id=${selected}`).then(item => { if (live) setTasks(current => [...current.filter(t => t.id !== item.id), item]); }).catch(e => { if (live) { setSelected(null); setError(e instanceof Error ? e.message : "Task unavailable."); } }); return () => { live = false; }; }, [selected, tasks, api, module]);
   useEffect(() => { if (modal) dialog.current?.showModal(); else dialog.current?.close(); }, [modal]);
   useEffect(() => { if (!task) { taskDialog.current?.close(); return; } taskDialog.current?.showModal(); api<{ items: Message[] }>(`comments?id=${task.id}`).then(data => setComments(data.items)).catch(() => setComments([])); }, [task, api]);
   useEffect(()=>{if(modal?.type!=="task"||module!=="work-station")return;void api<{items:Project[]}>("projects").then(d=>setProjects(d.items)).catch(()=>{});if(allowed("team.members.view"))void api<{items:Member[];roles:Role[]}>("members").then(d=>{setMembers(d.items);setRoles(d.roles);}).catch(e=>setError(e.message));},[modal,module,api,allowed]);
   const dailySyncDay = useRef("");
   useEffect(() => {
-    if (!allowed("crm.prospects.view")) return;
+    if (!allowed("crm.prospects.view") || !["work-station", "acquisition", "crm"].includes(module)) return;
     let active = true;
     const sync = async () => {
       const day = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
       const key = `${actor.workspaceId}:${day}`;
       if (dailySyncDay.current === key) return;
       dailySyncDay.current = key;
-      try { await api("acquisition-daily-sync", {}); if (active) await refresh(); }
+      try { await api("acquisition-daily-sync", {}); if (active && ["acquisition", "crm"].includes(module)) await refresh(); }
       catch (cause) { dailySyncDay.current = ""; if (active) setError(cause instanceof Error ? cause.message : "Daily assignments could not be refreshed."); }
     };
     void sync(); const timer = setInterval(() => void sync(), 60000);
     return () => { active = false; clearInterval(timer); };
-  }, [api, allowed, actor.workspaceId, refresh]);
-  const navigate = (destination: string) => { const next = workStationModule(destination); setSelected(null); setModule(next); setMobileOpen(false); history.pushState(null, "", `/team?workspace=${encodeURIComponent(actor.workspaceId)}&module=${next}`); };
+  }, [api, allowed, actor.workspaceId, module, refresh]);
+  const navigate = (destination: string) => {
+    const next = workStationModule(destination);
+    const params = new URLSearchParams({ workspace: actor.workspaceId, module: next });
+    if (destination === "work") params.set("bucket", "assigned");
+    setSelected(null); setModule(next); setMobileOpen(false);
+    history.pushState(null, "", `/team?${params}`);
+  };
   useEffect(() => { if (module !== "contacts") setContactComposerKey(0); }, [module]);
-  const openContacts = (id?: string) => { setContactId(id); setContactComposerKey(v => v + 1); navigate("contacts"); };
+  const openContacts = (id?: string) => {
+    setContactId(id);
+    if (!id) setContactComposerKey(value => value + 1);
+    setSelected(null); setModule("contacts"); setMobileOpen(false);
+    const params = new URLSearchParams({ workspace: actor.workspaceId, module: "contacts" });
+    if (id) params.set("client", id);
+    history.pushState(null, "", `/team?${params}`);
+  };
+  const openContactRecord = (id: string, returnModule = module, returnId = selected || "", returnQuery = search) => {
+    setContactId(id); setContactComposerKey(0); setSelected(null); setModule("contacts"); setMobileOpen(false);
+    const params = new URLSearchParams({ workspace: actor.workspaceId, module: "contacts", client: id });
+    if (returnModule && returnModule !== "contacts") {
+      params.set("returnModule", returnModule);
+      if (returnId) {
+        params.set("returnId", returnId);
+        params.set("returnParam", returnModule === "consultations" ? "consultation" : returnModule === "work" ? "task" : "prospect");
+      }
+      if (returnQuery) params.set("returnQuery", returnQuery);
+    }
+    history.pushState(null, "", `/team?${params}`);
+  };
   const mutate = async (resource: string, body: unknown) => { setBusy(true); setError(""); try { const result = await api<Record<string, unknown>>(resource, body); await refresh(); window.dispatchEvent(new Event("hymn:station-refresh")); setNotice("Saved successfully."); return result; } catch (e) { setError(e instanceof Error ? e.message : "Could not save."); return null; } finally { setBusy(false); } };
   const changeStatus = async (item: Task, status: string) => { await mutate("task-update", { id: item.id, version: item.version, status }); };
   const visibleTasks = tasks.filter(t => (module !== "work" || t.ownerId === actor.id) && (module !== "approvals" || t.status === "IN_REVIEW") && (filter === "all" || t.status === filter) && `${t.title} ${t.owner.user.name} ${t.description} ${t.project?.title || ""}`.toLowerCase().includes(search.toLowerCase()));
   const groups = [
-    { title: "Workspace", items: [{ id: "overview", title: "Work coordinator", icon: LayoutDashboard }, { id: "availability", title: "Weekly active hours", icon: CalendarDays }, { id: "work-station", title: "Work-station", icon: CheckCheck }, { id: "inbox", title: "Inbox", icon: Bell }, { id: "projects", title: "Projects", icon: BriefcaseBusiness }, ...(allowed("chat.use") ? [{ id: "chat", title: "Team Chat", icon: MessageCircle }] : []), { id: "contacts", title: "Contact database", icon: Users }, { id: "emails", title: "Team email", icon: MessageCircle },  ...(allowed("calendar.view") ? [{ id: "calendar", title: "Calendar", icon: CalendarDays }] : [])] },
+    { title: "Workspace", items: [{ id: "work-station", title: "Today", icon: CheckCheck }, { id: "contacts", title: "Contacts", icon: Users }, ...(allowed("crm.prospects.view") ? [{ id: "consultations", title: "Consultations", icon: CalendarDays }] : []), { id: "work", title: "My Work", icon: ClipboardList }, ...(allowed("crm.prospects.view") ? [{ id: "acquisition", title: "Lead research", icon: Search }] : []), { id: "overview", title: "Work coordinator", icon: LayoutDashboard }, { id: "availability", title: "Weekly active hours", icon: CalendarDays }, { id: "inbox", title: "Inbox", icon: Bell }, { id: "projects", title: "Projects", icon: BriefcaseBusiness }, ...(allowed("chat.use") ? [{ id: "chat", title: "Team Chat", icon: MessageCircle }] : []), { id: "emails", title: "Team email", icon: MessageCircle },  ...(allowed("calendar.view") ? [{ id: "calendar", title: "Calendar", icon: CalendarDays }] : [])] },
     { title: "Management", items: [...(actor.owner ? [{ id: "leadership", title: "Leadership updates", icon: FileBarChart }] : []),...(allowed("operations.producers.approve") || allowed("operations.engineers.approve") ? [{ id: "creator-applications", title: "Creator approvals", icon: ShieldCheck }] : []), ...(allowed("team.members.view") ? [{ id: "directory", title: "Team Directory", icon: Users }] : []), ...(allowed("tasks.approve") ? [{ id: "approvals", title: "Approvals", icon: ShieldCheck }] : []), ...(allowed("reports.team.view") ? [{ id: "reports", title: "Reports", icon: FileBarChart }] : []), ...(allowed("audit.view") ? [{ id: "audit", title: "Activity & Audit", icon: ClipboardList }] : []), ...(actor.owner ? [{ id: "settings", title: "Roles & Settings", icon: ShieldCheck }] : [])] },
   ];
   if (!actor.owner) groups[0].items.push({ id: "referral", title: "My referral link", icon: Link2 });
-  if (allowed("crm.prospects.view")) groups[0].items.push({ id: "acquisition", title: "Contacts & research", icon: Users }, { id: "consultations", title: "Consultations", icon: CalendarDays });
 
   const sections = sectionItems(groups.flatMap(group => group.items), item => teamSectionFor(item.id));
-  const activeSection = sections.find(section => section.items.some(item => item.id === (module === "crm" ? "acquisition" : module)));
+  const routeParams = new URLSearchParams(routeQuery);
+  const initialBucket = routeParams.get("bucket") || (routeParams.get("module") === "work" || routeParams.get("mine") === "1" ? "assigned" : "today");
+  const activeNavigationModule = module === "work-station" && initialBucket === "assigned" ? "work" : module;
+  const activeSection = sections.find(section => section.items.some(item => item.id === (activeNavigationModule === "crm" ? "acquisition" : activeNavigationModule)));
   const heading = groups.flatMap(g => g.items).find(i => i.id === (module === "crm" ? "acquisition" : module))?.title || "Overview";
+  const contactRoute = new URLSearchParams(routeQuery);
+  const returnModule = contactRoute.get("returnModule") || "contacts";
+  const returnParam = contactRoute.get("returnParam");
+  const returnId = contactRoute.get("returnId");
+  const returnParams = new URLSearchParams({ workspace: actor.workspaceId, module: returnModule });
+  if (returnParam && returnId) returnParams.set(returnParam, returnId);
+  if (contactRoute.get("returnQuery")) returnParams.set("q", contactRoute.get("returnQuery")!);
+  if (returnModule === "work-station" && contactRoute.get("returnBucket")) returnParams.set("bucket", contactRoute.get("returnBucket")!);
+  const returnHref = `/team?${returnParams}`;
+  const returnLabel = ({ "work-station": "Today", work: "My Work", acquisition: "Lead research", consultations: "Consultations", "customer-calls": "Callbacks", contacts: "Contacts", search: "Search" } as Record<string, string>)[returnModule] || "your queue";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!modal) return; const form = new FormData(event.currentTarget); const s = (key: string) => String(form.get(key) || ""); const dueAt = s("dueAt") ? new Date(`${s("dueAt")}+05:30`).toISOString() : null;
@@ -162,12 +220,12 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
   const taskToolbar = <div className={styles.toolbar}><div className={styles.segmented}>{["list", "board"].map(v => <button key={v} aria-pressed={view === v} onClick={() => { setView(v); localStorage.setItem("hymn-team-view", v); }}>{label(v)}</button>)}</div><select aria-label="Filter task status" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option>{statuses.map(s => <option key={s}>{s}</option>)}</select><span>{total} accessible tasks · page {offset / 50 + 1}</span><button disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 50))}>Previous</button><button disabled={offset + 50 >= total} onClick={() => setOffset(offset + 50)}>Next</button></div>;
 
   return <div data-dashboard-surface="team" className={`${styles.workspace} ${collapsed ? styles.collapsed : ""}`}>
-    <aside data-dashboard-sidebar className={`${styles.sidebar} ${mobileOpen ? styles.mobileOpen : ""}`}><div className={styles.brand}><span>HYMN <small>TEAM OS</small></span><button aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setCollapsed(!collapsed)}><ChevronLeft size={18} /></button><button className={styles.mobileClose} aria-label="Close navigation" onClick={() => setMobileOpen(false)}><X size={18} /></button></div><p className={styles.tagline}>One workspace.<br />Every team. Every project.</p><nav aria-label="Team workspace"><TeamSectionNavigation sections={sections} active={module === "crm" ? "acquisition" : module} unread={notifications.filter(item => !item.readAt).length} onSelect={navigate}/></nav><Link href={`/team/performance?workspace=${actor.workspaceId}`} className={styles.return}><FileBarChart size={16}/><span>My performance</span></Link><Link href="/" className={styles.return}><ArrowUpRight size={16} /><span>Back to HYMN</span></Link></aside>
-    <main data-dashboard-main className={styles.main}><header className={styles.topbar}><button className={styles.mobileMenu} aria-label="Open workspace navigation" onClick={() => setMobileOpen(!mobileOpen)}><Menu size={20} /></button><InternalWorkspaceSwitcher current={actor.workspaceId} name={actor.workspaceName} /><div><span className={styles.eyebrow}>{actor.workspaceName}</span><p>{heading}</p></div><label data-dashboard-search className={styles.search}><Search size={16} /><input aria-label="Search currently loaded workspace records" placeholder="Find tasks, people, prospects…" value={search} onChange={e => setSearch(e.target.value)} /></label><TeamAppLinks compact /><TeamPushControl />{allowed("support.reply") || allowed("crm.outreach.manage") ? <Link href={`/team?workspace=${actor.workspaceId}&module=work-station&bucket=tickets`} className={styles.primary}>Customer tickets</Link> : null}{allowed("tasks.create") ? <button className={styles.primary} onClick={() => setModal({ type: "task" })}><Plus size={16} /><span>Create task</span></button> : null}</header>
+    <aside data-dashboard-sidebar className={`${styles.sidebar} ${mobileOpen ? styles.mobileOpen : ""}`}><div className={styles.brand}><span>HYMN <small>TEAM OS</small></span><button aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setCollapsed(!collapsed)}><ChevronLeft size={18} /></button><button className={styles.mobileClose} aria-label="Close navigation" onClick={() => setMobileOpen(false)}><X size={18} /></button></div><p className={styles.tagline}>One workspace.<br />Every team. Every project.</p><nav aria-label="Team workspace"><TeamSectionNavigation sections={sections} active={activeNavigationModule === "crm" ? "acquisition" : activeNavigationModule} unread={notifications.filter(item => !item.readAt).length} onSelect={navigate}/></nav><Link href={`/team/performance?workspace=${actor.workspaceId}`} className={styles.return}><FileBarChart size={16}/><span>My performance</span></Link><Link href="/" className={styles.return}><ArrowUpRight size={16} /><span>Back to HYMN</span></Link></aside>
+    <main data-dashboard-main className={styles.main}><header className={styles.topbar}><button className={styles.mobileMenu} aria-label="Open workspace navigation" onClick={() => setMobileOpen(!mobileOpen)}><Menu size={20} /></button><InternalWorkspaceSwitcher current={actor.workspaceId} name={actor.workspaceName} /><div><span className={styles.eyebrow}>{actor.workspaceName}</span><p>{heading}</p></div><TeamGlobalSearch api={api}/><TeamAppLinks compact /><TeamPushControl />{allowed("support.reply") || allowed("crm.outreach.manage") ? <Link href={`/team?workspace=${actor.workspaceId}&module=work-station&bucket=tickets`} className={styles.primary}>Customer tickets</Link> : null}{allowed("tasks.create") ? <button className={styles.primary} onClick={() => setModal({ type: "task" })}><Plus size={16} /><span>Create task</span></button> : null}</header>
       <div data-dashboard-content className={styles.content}>{error ? <div role="alert" className={styles.error}>{error}<button onClick={refresh}>Retry</button></div> : null}{notice ? <div role="status" className={styles.notice}>{notice}<button aria-label="Dismiss confirmation" onClick={() => setNotice("")}><X size={14} /></button></div> : null}
       {inviteLink ? <section className={styles.panel} data-ui="panel"><h2>Invitation ready</h2><p>Share this single-use link privately. It expires after 72 hours. Check delivery status above if email was requested.</p><input aria-label="Invitation link" readOnly value={inviteLink} onFocus={e => e.target.select()} /><button onClick={() => setInviteLink("")}>Dismiss</button></section> : null}
       {module!=="work-station"&&<div className={styles.pageHeading}><div><p className={styles.eyebrow}>{actor.owner ? "Founder workspace" : actor.jobTitle}</p><h1>{module === "overview" ? `Good to see you, ${actor.name.split(" ")[0]}.` : heading}</h1><p>{module === "overview" ? "See what needs attention. Keep the next action clear." : "Connected to your authorised HYMN workspace records."}</p></div>{module === "directory" && allowed("team.members.invite") ? <button className={styles.primary} onClick={() => setModal({ type: "invite" })}><Plus size={16} />Invite member</button> : null}{module === "projects" && allowed("projects.create") ? <button onClick={() => setModal({ type: "project" })}>New project</button> : null}{module === "crm" && allowed("crm.prospects.create") ? <button onClick={() => openContacts()}>Add prospect</button> : null}{module === "reports" && allowed("reports.team.view") ? <button onClick={() => setModal({ type: "report" })}>Submit this week’s report</button> : null}</div>}
-      <ModuleTabs items={(activeSection?.items || []).map(item => ({ key: item.id, label: item.title, count: item.id === "inbox" ? notifications.filter(item => !item.readAt).length : 0 }))} active={module === "crm" ? "acquisition" : module} label={activeSection?.label || "Team"} onSelect={navigate}/>
+      <ModuleTabs items={(activeSection?.items || []).map(item => ({ key: item.id, label: item.title, count: item.id === "inbox" ? notifications.filter(item => !item.readAt).length : 0 }))} active={activeNavigationModule === "crm" ? "acquisition" : activeNavigationModule} label={activeSection?.label || "Team"} onSelect={navigate}/>
       {loading ? <div className={styles.skeleton} aria-busy="true">Loading workspace records…</div> : null}
       {["work", "acquisition", "crm"].includes(module) && allowed("crm.prospects.view") ? <DailyGuide api={api} revision={tasks} name={actor.name} navigate={navigate} onAdd={() => openContacts()} onTask={async id => { try { const current = await api<Task>(`task?id=${encodeURIComponent(id)}`); setTasks(rows => [...rows.filter(row => row.id !== id), current]); navigate("work"); history.replaceState(null, "", `/team?workspace=${encodeURIComponent(actor.workspaceId)}&module=work&task=${encodeURIComponent(id)}`); setSelected(id); } catch (cause) { setError(cause instanceof Error ? cause.message : "Task unavailable."); } }}/> : null}
       {module === "overview" && actor.owner ? <section className={styles.panel}><header><div><h2>Team updates</h2><p>Review call reports, new contacts and work updates from every teammate.</p></div><button onClick={() => navigate("leadership")}>Open leadership updates <ArrowUpRight size={15}/></button></header></section> : null}
@@ -176,16 +234,16 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
       {module === "referral" && !actor.owner ? <TeamReferralLink api={api}/> : null}
       {module === "availability" ? <div data-team-guide="availability"><TeamAvailability api={api} actor={actor}/></div> : null}
       {module === "creator-applications" && (allowed("operations.producers.approve") || allowed("operations.engineers.approve")) ? <TeamCreatorApplications api={api}/> : null}
-      {module === "work-station" ? <WorkStation api={api} actor={actor} initialQuery={search} initialTask={new URLSearchParams(routeQuery).get("task") || selected || ""} initialClient={new URLSearchParams(routeQuery).get("client") || ""} initialBucket={new URLSearchParams(routeQuery).get("bucket") || "today"}/> : null}
+      {module === "work-station" ? <WorkStation api={api} actor={actor} initialQuery={search} initialTask={routeParams.get("task") || selected || ""} initialClient={routeParams.get("client") || ""} initialBucket={initialBucket}/> : null}
       {module === "emails" ? <TeamEmailWorkspace api={api} initialClient={new URLSearchParams(routeQuery).get("client") || ""}/> : null}
-      {["acquisition", "crm"].includes(module) && allowed("crm.prospects.view") ? <div className={styles.panel} data-ui="panel">{!actor.owner&&<TeamReferralLink api={api}/>}<CrmPipeline leads={acquisitionRows} api={api} refresh={refresh} admin={actor.owner || actor.permissions.includes("acquisition.admin")} canEdit={allowed("crm.outreach.manage")} canCreate={allowed("crm.prospects.create")} employeeId={actor.id} onAdd={() => openContacts()}/><details><summary>Lead search, outreach & rewards</summary><ResearchAcquisitionDashboard employeeId={actor.id} canOutreach={allowed("crm.outreach.manage")} leads={acquisitionRows} ledger={commissionRows} dashboard={acquisitionDashboard} settings={acquisitionSettings} evidence={acquisitionEvidence} payouts={acquisitionPayouts} templates={acquisitionEmailTemplates} emailEvents={acquisitionEmailEvents} senderName={actor.name} employees={members.filter(member => member.status === "ACTIVE" && !member.role.owner)} admin={actor.owner || actor.permissions.includes("acquisition.admin")} api={api} refresh={refresh}/></details></div> : null}
-      {module === "consultations" && allowed("crm.prospects.view") ? <div className={styles.panel} data-ui="panel"><TeamConsultations actor={actor} initialId={new URLSearchParams(routeQuery).get("consultation") || ""}/></div> : null}
+      {["acquisition", "crm"].includes(module) && allowed("crm.prospects.view") ? <div className={styles.panel} data-ui="panel">{!actor.owner&&<TeamReferralLink api={api}/>}<CrmPipeline leads={acquisitionRows} api={api} refresh={refresh} admin={actor.owner || actor.permissions.includes("acquisition.admin")} canEdit={allowed("crm.outreach.manage")} canCreate={allowed("crm.prospects.create")} employeeId={actor.id} initialProspectId={new URLSearchParams(routeQuery).get("prospect") || ""} onAdd={() => openContacts()} onOpenContact={(clientId, prospectId, query) => openContactRecord(clientId, "acquisition", prospectId, query)}/><details onToggle={event => { const open = event.currentTarget.open; acquisitionAdminOpenRef.current = open; setAcquisitionAdminOpen(open); if (open) void refresh(); }}><summary>Growth administration · targets, outreach & rewards</summary>{acquisitionAdminOpen ? <ResearchAcquisitionDashboard employeeId={actor.id} canOutreach={allowed("crm.outreach.manage")} leads={acquisitionRows} ledger={commissionRows} dashboard={acquisitionDashboard} settings={acquisitionSettings} evidence={acquisitionEvidence} payouts={acquisitionPayouts} templates={acquisitionEmailTemplates} emailEvents={acquisitionEmailEvents} senderName={actor.name} employees={members.filter(member => member.status === "ACTIVE" && !member.role.owner)} admin={actor.owner || actor.permissions.includes("acquisition.admin")} api={api} refresh={refresh}/> : null}</details></div> : null}
+      {module === "consultations" && allowed("crm.prospects.view") ? <div className={styles.panel} data-ui="panel"><TeamConsultations actor={actor} initialId={new URLSearchParams(routeQuery).get("consultation") || ""} initialQuery={search}/></div> : null}
       {["search","files","knowledge","saved","preferences","tasktools","projecttools","chattools","decisions","imports","analytics","engineerqa","automations","invitations","roles"].includes(module) ? <TeamWorkbench module={module} api={api} actor={actor} members={members} tasks={tasks} projects={projects} refresh={refresh} initialQuery={search} /> : null}
       {["discover", "expenses", "people"].includes(module) ? <TeamManagement module={module} api={api} owner={actor.owner} refresh={refresh} /> : null}
       {module === "overview" && !allowed("tasks.create") ? <><div className={styles.metrics}>{[["Active work", overview?.active], ["Overdue", overview?.overdue], ["Blocked", overview?.blocked], ["Awaiting review", overview?.reviews]].map(([title, number]) => <article key={title} data-ui="metric"><span>{title}</span><strong>{number ?? "—"}</strong><div className={styles.meter}><i style={{ width: `${overview?.active ? Math.min(100, Number(number) / overview.active * 100) : 0}%` }} /></div></article>)}</div><div className={styles.twoColumns}><WorkspacePanel title="Next actions" actions={<button onClick={() => navigate("work")}>Open My Work <ArrowUpRight size={14} /></button>}>{tasks.filter(t => t.status !== "COMPLETED" && t.status !== "CANCELLED").slice(0, 6).map(taskCard)}{!tasks.length ? <p className={styles.empty}>No tasks yet. Create your first delegated task to get started.</p> : null}</WorkspacePanel><section className={styles.panel} data-ui="panel"><h2>Workload</h2><p>Active tasks by owner—not a measure of employee quality.</p>{overview?.workload.map(w => <div key={w.ownerId} className={styles.workload}><span>{members.find(m => m.id === w.ownerId)?.user.name || "Team member"}</span><strong>{w._count}</strong><div className={styles.meter}><i style={{ width: `${Math.min(100, w._count / Math.max(1, overview.active) * 100)}%` }} /></div></div>)}{!overview?.workload.length ? <p className={styles.empty}>No active assignments.</p> : null}<hr /><h2>Business boundaries</h2><p>Task completion never publishes a beat, submits a release, approves a refund, or triggers a payout.</p></section></div></> : null}
       {["tasks", "work", "approvals"].includes(module) ? <>{taskToolbar}{view === "board" ? <div className={styles.board}>{statuses.map(status => <section key={status} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const t = tasks.find(t => t.id === e.dataTransfer.getData("text/plain")); if (t && !busy) changeStatus(t, status); }}><h2>{label(status)} <span>{visibleTasks.filter(t => t.status === status).length}</span></h2>{visibleTasks.filter(t => t.status === status).map(taskCard)}</section>)}</div> : <section className={styles.panel} data-ui="panel">{visibleTasks.map(taskCard)}{!visibleTasks.length ? <p className={styles.empty}>No tasks match this view.</p> : null}</section>}</> : null}
-      {module === "contacts" ? <TeamContacts api={api} actor={actor} composerKey={contactComposerKey} requestedId={contactId} onNavigate={navigate}/> : null}
-      {module === "customer-calls" && allowed("crm.outreach.manage") ? <div data-team-guide="customer-calls"><CustomerCalls api={api} workspaceId={actor.workspaceId}/></div> : null}
+      {module === "contacts" ? <TeamContacts api={api} actor={actor} workspaceId={actor.workspaceId} composerKey={contactComposerKey} requestedId={contactId} onNavigate={navigate} onOpenRecord={id => openContactRecord(id)} returnHref={returnHref} returnLabel={returnLabel}/> : null}
+      {module === "customer-calls" && allowed("crm.outreach.manage") ? <div data-team-guide="customer-calls"><CustomerCalls api={api} workspaceId={actor.workspaceId} initialQuery={search}/></div> : null}
       {module === "calendar" ? allowed("calendar.view") ? <TeamCalendar api={api} actor={actor} members={members} onContacts={openContacts}/>:<p className={styles.empty}>Calendar permission is required. Ask the workspace owner.</p> : null}
       {module === "projects" ? <div className={styles.cards}>{projects.filter(p => p.title.toLowerCase().includes(search.toLowerCase())).map(p => <article className={styles.panel} data-ui="panel" key={p.id}><p className={styles.eyebrow}>{p.department}</p><h2>{p.title}</h2><p>{p.description}</p><p>{p._count.tasks} linked tasks · {dateLabel(p.dueAt)}</p><button onClick={() => { navigate("tasks"); setSearch(p.title); }}>Find project tasks</button></article>)}{!projects.length ? <p className={styles.empty}>No accessible projects yet.</p> : null}</div> : null}
       {module === "directory" ? <><div className={styles.cards}>{members.filter(m => m.user.name.toLowerCase().includes(search.toLowerCase())).map(m => <article className={styles.panel} data-ui="panel" key={m.id}><div className={styles.avatar}>{m.user.name[0]}</div><h2>{m.user.name}</h2><p>{m.jobTitle}</p><p>{m.department} · {m.role.name}</p><span className={styles.pill}>{m.status}</span>{actor.owner && m.role.name !== "Owner" ? <div className={styles.toolbar}><select aria-label={`Role for ${m.user.name}`} defaultValue={roles.find(r => r.name === m.role.name)?.id} onChange={e => { if (confirm(`Change ${m.user.name}’s role?`)) mutate("members", { id: m.id, roleId: e.target.value }); }}>{roles.filter(r => !r.owner).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select><button disabled={busy} onClick={() => { const status = m.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE"; if (confirm(`${label(status)} access for ${m.user.name}?`)) mutate("members", { id: m.id, status }); }}>{m.status === "ACTIVE" ? "Suspend" : "Restore"}</button></div> : null}</article>)}</div>{actor.owner ? <section className={styles.panel} data-ui="panel"><h2>Prepared onboarding profiles</h2><p>No access is granted by name. Invite the correct verified email explicitly.</p>{onboardingTemplates.map(t => <article key={t.name}><h3>{t.name} · {t.jobTitle}</h3><p>{t.target}</p></article>)}</section> : null}</> : null}

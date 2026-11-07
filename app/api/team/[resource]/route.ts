@@ -14,6 +14,14 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
+function readCounts(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return 0;
+  const record = value as Record<string, unknown>;
+  return ["items", "history", "consultations", "upcomingEvents"].reduce((count, key) => {
+    const rows = record[key];
+    return count + (Array.isArray(rows) ? rows.length : 0);
+  }, 0);
+}
 function failure(error: unknown) {
   if (error instanceof TeamError) return NextResponse.json({ error: error.message }, { status: error.status, headers });
   if (error instanceof ZodError) return NextResponse.json({ error: error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; ") }, { status: 400, headers });
@@ -24,13 +32,17 @@ function failure(error: unknown) {
 }
 type Context = { params: Promise<{ resource: string }> };
 export async function GET(request: Request, context: Context) {
+  const startedAt = performance.now();
   try {
     const url = new URL(request.url); const { resource } = await context.params;
     const result = await recoverTeamRead(async () => {
       const a = await teamActor(url.searchParams.get("workspace") || undefined);
       return teamRead(a, resource, url.searchParams);
     });
-    return NextResponse.json(result, { headers });
+    const responseHeaders = new Headers(headers);
+    responseHeaders.set("Server-Timing", `team;dur=${(performance.now() - startedAt).toFixed(1)}`);
+    responseHeaders.set("X-Team-OS-Read-Count", String(readCounts(result)));
+    return NextResponse.json(result, { headers: responseHeaders });
   } catch (error) { return failure(error); }
 }
 export async function POST(request: Request, context: Context) {

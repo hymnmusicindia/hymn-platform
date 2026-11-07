@@ -43,6 +43,7 @@
 .contactHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 15px; border-bottom: 1px solid var(--line); }
 .contactHeader h3 { margin: 6px 0 4px; font-size: 20px; font-weight: 640; letter-spacing: -.03em; }
 .contactHeader > div > span:last-child { color: #72736d; font-size: 10px; overflow-wrap: anywhere; }
+.contactLink { display: inline-flex; margin-top: 8px; color: #343531; font-size: 11px; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
 .contactActions { display: flex; flex-wrap: wrap; gap: 7px; padding: 13px 0; }
 .contactActions a, .contactActions button { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--line); border-radius: 3px; background: #fff; color: #393a35; font: inherit; font-size: 9px; text-decoration: none; cursor: pointer; }
 .contactActions a:hover, .contactActions button:hover { border-color: #aaa; background: #f8f8f5; }

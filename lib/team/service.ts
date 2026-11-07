@@ -373,6 +373,7 @@ export async function teamRead(a: Actor, resource: string, params: URLSearchPara
   if (resource.startsWith("workstation")) return (await import("./work-station")).stationRead(a,resource,params);
   if (resource === 'leadership-activity') return (await import('./leadership-activity')).readLeadershipActivity(a, params);
   if (resource === "call-reports") return (await import("./call-reports")).readCallReports(a, params);
+  if (resource === "contact-profile") return (await import("./contact-profile")).contactProfileRead(a, params);
   if(resource==='clients-identity')return (await import('./contact-identity')).contactIdentityMatches(a,{email:params.get('email')||'',phone:params.get('phone')||'',excludeId:params.get('excludeId')||undefined});
   if(resource==='clients-lookup')return (await import('./contact-lookup')).lookupContacts(a,params);
   if(resource==='availability') return (await import('./availability')).availabilityRead(a,params);
@@ -381,6 +382,113 @@ export async function teamRead(a: Actor, resource: string, params: URLSearchPara
   if (resource === "call-followups") return (await import("./customer-followups")).readCallFollowups(a, params);
   if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionRead(a, resource, params);
   if (["clients", "calendar", "client-account-match", "client-duplicates", "client-merge-history"].includes(resource)) return (await import("./calendar")).calendarRead(a, resource, params);
+  if (resource === "team-search") {
+    demand(a, "clients.view");
+    const query = (params.get("q") || "").trim().slice(0, 100);
+    if (query.length < 2) return { items: [] };
+    const digits = query.replace(/\D/g, "");
+    const matchingContact = [
+      { name: { contains: query, mode: "insensitive" as const } },
+      { email: { contains: query, mode: "insensitive" as const } },
+      ...(digits ? [{ phone: { contains: digits } }] : []),
+    ];
+    const [contacts, tasks, consultations, prospects] = await Promise.all([
+      prisma.teamClient.findMany({
+        where: {
+          workspaceId: a.workspaceId,
+          mergedIntoId: null,
+          OR: matchingContact,
+        },
+        take: 6,
+        orderBy: { updatedAt: "desc" },
+        select: { id: true, name: true, email: true, phone: true, status: true },
+      }),
+      prisma.teamTask.findMany({
+        where: {
+          ...taskScope(a),
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          AND: [{
+            OR: [
+              { title: { contains: query, mode: "insensitive" } },
+              { description: { contains: query, mode: "insensitive" } },
+              { client: { is: { OR: matchingContact } } },
+            ],
+          }],
+        },
+        take: 6,
+        orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
+        select: { id: true, title: true, status: true, clientId: true, client: { select: { name: true } } },
+      }),
+      can(a, "crm.prospects.view")
+        ? prisma.consultationRequest.findMany({
+            where: {
+              workspaceId: a.workspaceId,
+              ...(!can(a, "crm.all") ? { assignedMemberId: a.id } : {}),
+              OR: [
+                { fullName: { contains: query, mode: "insensitive" } },
+                { email: { contains: query, mode: "insensitive" } },
+                ...(digits ? [{ phoneE164: { contains: digits } }] : []),
+              ],
+            },
+            take: 6,
+            orderBy: { createdAt: "desc" },
+            select: { id: true, fullName: true, status: true, clientId: true },
+          })
+        : Promise.resolve([]),
+      can(a, "crm.prospects.view")
+        ? prisma.teamProspect.findMany({
+            where: {
+              ...prospectScope(a),
+                AND: [{
+                  OR: [
+                    { name: { contains: query, mode: "insensitive" } },
+                    { email: { contains: query, mode: "insensitive" } },
+                    ...(digits ? [{ phone: { contains: digits } }] : []),
+                  ],
+                }],
+            },
+            take: 6,
+            orderBy: { updatedAt: "desc" },
+            select: { id: true, name: true, stage: true, clientId: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const workspace = encodeURIComponent(a.workspaceId);
+    return {
+      items: [
+        ...contacts.map(row => ({
+          id: row.id,
+          kind: "contact",
+          title: row.name,
+          detail: [row.email, row.phone, row.status.replaceAll("_", " ")].filter(Boolean).join(" · "),
+          href: `/team?workspace=${workspace}&module=contacts&client=${encodeURIComponent(row.id)}&returnModule=search&returnQuery=${encodeURIComponent(query)}`,
+        })),
+        ...tasks.map(row => ({
+          id: row.id,
+          kind: "task",
+          title: row.title,
+          detail: [row.client?.name, row.status.replaceAll("_", " ")].filter(Boolean).join(" · "),
+          href: `/team?workspace=${workspace}&module=work&task=${encodeURIComponent(row.id)}&q=${encodeURIComponent(query)}`,
+        })),
+        ...consultations.map(row => ({
+          id: row.id,
+          kind: "consultation",
+          title: row.fullName,
+          detail: `Consultation · ${row.status.replaceAll("_", " ")}`,
+          href: `/team?workspace=${workspace}&module=consultations&consultation=${encodeURIComponent(row.id)}`,
+        })),
+        ...prospects.map(row => ({
+          id: row.id,
+          kind: "lead",
+          title: row.name,
+          detail: `Lead research · ${row.stage.replaceAll("_", " ")}`,
+          href: row.clientId
+            ? `/team?workspace=${workspace}&module=contacts&client=${encodeURIComponent(row.clientId)}&returnModule=search&returnQuery=${encodeURIComponent(query)}`
+            : `/team?workspace=${workspace}&module=acquisition&prospect=${encodeURIComponent(row.id)}&q=${encodeURIComponent(query)}`,
+        })),
+      ],
+    };
+  }
   const offset = Math.max(0, Math.min(100000, Number(params.get("offset")) || 0));
   const page = { take: 50, skip: offset };
   if (resource === "session") {

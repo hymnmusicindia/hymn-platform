@@ -7,3 +7,11 @@
 .root{color-scheme:light}:global(html[data-theme=dark]) .root{color-scheme:dark}.root input[type=datetime-local]{color-scheme:inherit}
 
 .reopen{display:grid;gap:14px;padding:20px;margin-bottom:20px;background:var(--card);border:1px solid var(--border);border-radius:16px}.reopen h3,.reopen p{margin:0}.reopen p{color:var(--text-muted);line-height:1.6}.reopen textarea{width:100%;box-sizing:border-box}.filters{flex-wrap:wrap}.toolbar nav{flex-wrap:wrap}@media(max-width:600px){.reopen{padding:16px}.reopen button{width:100%}}
+.savedFilters{margin:-4px 0 16px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--card)}
+.savedFilters>summary{cursor:pointer;font-size:12px;font-weight:650}
+.savedFilters>div{display:grid;gap:10px;padding-top:12px}
+.savedFilters form,.savedFilter{display:flex;align-items:end;gap:8px;flex-wrap:wrap}
+.savedFilters form label{flex:1;min-width:180px}
+.savedFilter{justify-content:space-between;border-top:1px solid var(--border);padding-top:8px}
+.savedFilter>button:first-child{display:grid;justify-items:start;text-align:left;flex:1}
+.savedFilter small{display:block}

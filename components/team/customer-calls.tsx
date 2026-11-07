@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useId, type FormEvent } from 'react';
+import { useEffect, useState, useId, type FormEvent } from 'react';
 import Link from 'next/link';
 import { CallReport } from './call-report';
 import { whatsappLink, whatsappNumber } from '@/lib/team/phone';
@@ -29,12 +29,13 @@ function ProfileImage({ src, className, alt }: { src: string; className: string;
   // eslint-disable-next-line @next/next/no-img-element
   return failed ? null : <img src={src} alt={alt} className={className} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)}/>;
 }
-function CallbackCard({ task, api, workspaceId, saved, refresh }: { task: Row; api: Api; workspaceId: string; saved: (message: string) => void; refresh: () => void }) {
+function CallbackCard({ task, api, workspaceId, returnQuery, saved, refresh }: { task: Row; api: Api; workspaceId: string; returnQuery: string; saved: (message: string) => void; refresh: () => void }) {
   const [collapsed, setCollapsed] = useState(false), bodyId = useId();
   const client = task.client, context = task.followUpContext;
   const active = task.status !== 'BLOCKED' && client?.status === 'ACTIVE';
   const phone = whatsappNumber(client?.phone), whatsapp = whatsappLink(client?.phone, true);
   const href = `/team?workspace=${encodeURIComponent(workspaceId)}`;
+  const contactHref = client ? `/team?${new URLSearchParams({workspace:workspaceId,module:'contacts',client:client.id,returnModule:'customer-calls',returnId:task.id,returnParam:'task',returnQuery})}` : '';
   const initials = (client?.name || '?').split(/\s+/).slice(0,2).map(word => word[0]).join('').toUpperCase();
   const cover = client?.coverUrl || client?.avatarUrl;
   const kind = context?.kind;
@@ -53,21 +54,22 @@ function CallbackCard({ task, api, workspaceId, saved, refresh }: { task: Row; a
         <details className={cards.drawer}><summary><StickyNote size={16}/>Customer context & footnotes<ChevronDown size={16}/></summary><ul className={cards.footnotes}>{context?.footnotes?.length ? context.footnotes.map((note,index) => <li key={index}>{note}</li>) : <li>No footnotes yet. Add useful context below.</li>}</ul></details>
         <CallbackEditor task={task} api={api} saved={refresh}/>
 
-        <nav className={cards.secondaryActions} aria-label="Contact tools">{client && <Link href={`${href}&module=contacts&client=${encodeURIComponent(client.id)}`}><UserRound size={14}/>Edit contact</Link>}{client?.email && <Link href={`${href}&module=emails&client=${encodeURIComponent(client.id)}`}><Mail size={14}/>Email</Link>}<Link href={`${href}&module=calendar`}><CalendarClock size={14}/>Calendar</Link><Link href={`${href}&module=work&task=${encodeURIComponent(task.id)}`}><ExternalLink size={14}/>History</Link></nav>
+        <nav className={cards.secondaryActions} aria-label="Contact tools">{client && <Link href={contactHref}><UserRound size={14}/>Open contact</Link>}{client?.email && <Link href={`${href}&module=emails&client=${encodeURIComponent(client.id)}`}><Mail size={14}/>Email</Link>}<Link href={`${href}&module=calendar&client=${encodeURIComponent(client?.id || '')}`}><CalendarClock size={14}/>Calendar</Link><Link href={`${href}&module=work&task=${encodeURIComponent(task.id)}`}><ExternalLink size={14}/>History</Link></nav>
       </div></details>
     </div>
   </article>;
 }
-export function CustomerCalls({ api, workspaceId }: { api: Api; workspaceId: string }) {
-  const [query, setQuery] = useState(''), [notice, setNotice] = useState('');
+export function CustomerCalls({ api, workspaceId, initialQuery = '' }: { api: Api; workspaceId: string; initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery), [notice, setNotice] = useState('');
   const [items, setItems] = useState<Row[]>([]), [total, setTotal] = useState(0), [error, setError] = useState(''), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0);
+  useEffect(() => { setQuery(initialQuery); }, [initialQuery]);
   useEffect(() => { let live = true; const load = () => void api<{ items: Row[]; total: number }>('call-followups').then(data => { if (live) { setItems(data.items); setTotal(data.total); setError(''); } }).catch(error => { if (live) setError(error.message || 'Call queue unavailable.'); }).finally(() => { if (live) setLoading(false); }); load(); const timer = setInterval(() => { if (!document.hidden) load(); }, 30000); return () => { live = false; clearInterval(timer); }; }, [api, revision]);
   const visible = items.filter(task => `${task.client?.name || ''} ${task.client?.phone || ''} ${task.client?.email || ''} ${task.title}`.toLowerCase().includes(query.toLowerCase()));
   return <section className={`${styles.root} ${cards.root}`}>
     <header className={styles.header}><div><h2>Customer callbacks</h2><p>Your contacts, call briefs and next steps in one place.</p></div><button onClick={() => setRevision(value => value + 1)}><RefreshCw size={15}/>Refresh queue</button></header>
     {notice && <p role="status" className={cards.notice}>{notice}</p>}{loading && <p role="status">Loading callbacks...</p>}{error && <p role="alert" className={styles.error}>{error}</p>}
     <div className={cards.toolbar}><label>Find a callback<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Name, phone or email"/></label><span>{query ? `${visible.length} matching` : `${items.length} of ${total}`} callbacks<small>All times in IST / Internal call slots</small></span></div>
-    <div className={cards.grid}>{visible.map(task => <CallbackCard key={task.id} task={task} api={api} workspaceId={workspaceId} refresh={() => setRevision(value => value + 1)} saved={message => { setNotice(message); setRevision(value => value + 1); }}/>)}</div>
+    <div className={cards.grid}>{visible.map(task => <CallbackCard key={task.id} task={task} api={api} workspaceId={workspaceId} returnQuery={query} refresh={() => setRevision(value => value + 1)} saved={message => { setNotice(message); setRevision(value => value + 1); }}/>)}</div>
     {!loading && !visible.length && <p className={cards.empty}>{query ? 'No matching callbacks. Try another name, phone or email.' : 'No open callbacks assigned to you.'}</p>}
     {items.length < total && <button onClick={async () => { try { const more = await api<{ items: Row[] }>(`call-followups?offset=${items.length}`); setItems(previous => [...previous, ...more.items]); } catch { setError('Could not load more callbacks.'); } }}>Load more callbacks</button>}
   </section>;

@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ArrowDownUp, CalendarClock, ChevronLeft, ChevronRight, Clipboard, LoaderCircle, Mail, MessageCircle, Phone, RefreshCw, Search, ShieldCheck, UserRound, X } from "lucide-react";
 import { CONSULTATION_INTERESTS, CONSULTATION_STATUSES } from "@/lib/consultation-domain";
 import styles from "./consultations.module.css";
 
 type Activity = { id: string; kind: string; message: string; createdAt: string; actorMember?: { user: { name: string } } | null };
 type Consultation = {
-  id: string; fullName: string; email: string; phoneE164: string; dialCode: string; interests: string[];
+  id: string; clientId: string; client: { id: string; name: string; email: string; phone: string }; fullName: string; email: string; phoneE164: string; dialCode: string; interests: string[];
   otherRequirement: string; source: string; campaign: string | null; preferredCallback: string | null;
   status: string; createdAt: string; assignedMemberId: string | null;
   assignedMember?: { id: string; user: { name: string } } | null;
@@ -21,11 +22,11 @@ const statusLabel = (value: string) => value.replaceAll("_", " ").toLowerCase().
 const dateLabel = (value?: string | null) => value ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }).format(new Date(value)) + " IST" : "Not scheduled";
 const interestLabel = (value: string) => CONSULTATION_INTERESTS.find(item => item.id === value)?.title || value;
 
-export function TeamConsultations({ actor, initialId = "" }: { actor: Actor; initialId?: string }) {
+export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: { actor: Actor; initialId?: string; initialQuery?: string }) {
   const canAssign = actor.owner || actor.permissions.includes("crm.prospects.assign");
   const canManage = actor.owner || actor.permissions.includes("crm.outreach.manage");
   const [data, setData] = useState<Payload>({ items: [], total: 0, offset: 0, statuses: {}, members: [] });
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [statusFilter, setStatusFilter] = useState("");
   const [interestFilter, setInterestFilter] = useState("");
   const [memberFilter, setMemberFilter] = useState("");
@@ -79,6 +80,7 @@ export function TeamConsultations({ actor, initialId = "" }: { actor: Actor; ini
     const timer = window.setTimeout(() => { void refresh(); }, query ? 250 : 0);
     return () => window.clearTimeout(timer);
   }, [refresh, query]);
+  useEffect(() => { setQuery(initialQuery); setOffset(0); }, [initialQuery]);
 
   const selected = useMemo(() => data.items.find(item => item.id === selectedId), [data.items, selectedId]);
   useEffect(() => {
@@ -188,7 +190,7 @@ export function TeamConsultations({ actor, initialId = "" }: { actor: Actor; ini
 
       <div className={styles.detailPane}>
         {!selected ? <div className={styles.emptyDetail}><ArrowDownUp size={22}/><strong>Select a consultation</strong><span>Contact details, callback scheduling and activity history will appear here.</span></div> : <>
-          <div className={styles.contactHeader}><div><span className={styles.eyebrow}>CONTACT CARD</span><h3>{selected.fullName}</h3><span>{selected.email}</span></div><span className={`${styles.status} ${styles[`status_${selected.status}`] || ""}`}>{statusLabel(selected.status)}</span></div>
+          <div className={styles.contactHeader}><div><span className={styles.eyebrow}>CONSULTATION · CONTACT RECORD</span><h3>{selected.fullName}</h3><span>{selected.email}</span><Link className={styles.contactLink} href={`/team?${new URLSearchParams({workspace:actor.workspaceId,module:"contacts",client:selected.clientId,returnModule:"consultations",returnId:selected.id,returnParam:"consultation",returnQuery:query})}`}>Open shared contact record</Link></div><span className={`${styles.status} ${styles[`status_${selected.status}`] || ""}`}>{statusLabel(selected.status)}</span></div>
           <div className={styles.contactActions}>
             <a href={`tel:${selected.phoneE164}`}><Phone size={15}/> Call</a>
             <a href={`https://wa.me/${phoneDigits}`} target="_blank" rel="noreferrer"><MessageCircle size={15}/> WhatsApp</a>

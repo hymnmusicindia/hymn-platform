@@ -66,6 +66,7 @@ export async function consultationRead(actor: Actor, params: URLSearchParams) {
       skip: offset,
       orderBy: [{ createdAt: sort }, { id: sort }],
       include: {
+        client: { select: { id: true, name: true, email: true, phone: true } },
         assignedMember: { select: { id: true, user: { select: { name: true } } } },
         calendarEvent: { select: { id: true, startsAt: true, status: true } },
         activities: { take: 20, orderBy: { createdAt: "desc" }, include: { actorMember: { select: { id: true, user: { select: { name: true } } } } } }

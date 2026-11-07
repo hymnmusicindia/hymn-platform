@@ -51,9 +51,15 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
         // block every open, save preflight and timeout readback on web history.
         if (p.get('view') === 'mobile')
             return { task: { ...task, owner: null }, activity: workActivity(task.followUpContext), client: task.client, ticket: null, history: [] };
-        const client = task.clientId ? await contact(prisma, a, task.clientId) : null;
+        let client = task.clientId ? await contact(prisma, a, task.clientId) : null;
         const ticketId = ticketIdOf(task);
         const ticket = ticketId && ticketAccess(a) ? (await primary(prisma, a), await prisma.supportTicket.findUnique({ where: { id: ticketId }, include: { replies: { orderBy: { createdAt: 'asc' } } } })) : null;
+        if (!client && ticket) {
+            const accountContact = await prisma.teamClient.findFirst({
+                where: { workspaceId: a.workspaceId, userId: ticket.userId, mergedIntoId: null },
+            });
+            client = accountContact;
+        }
         const [owner,profile] = await Promise.all([prisma.teamMember.findUnique({ where: { id: task.ownerId }, select: { jobTitle: true, user: { select: { name: true } } } }),client?.userId?prisma.user.findUnique({where:{id:client.userId},select:{onboardingUserType:true,onboardingPurpose:true,preferredLanguage:true}}):null]);
         const reports = client ? await prisma.teamAudit.findMany({ where: { workspaceId: a.workspaceId, entityId: { in: [client.id, ...(await prisma.teamClient.findMany({ where: { workspaceId: a.workspaceId, mergedIntoId: client.id }, select: { id: true } })).map(c => c.id)] }, action: { in: ['contact.call_report', 'contact.activity_report'] } }, orderBy: { createdAt: 'desc' }, take: 15 }) : [];
         return { task: { ...task, owner }, activity: workActivity(task.followUpContext), client: client ? { id: client.id, name: client.name, email: client.email, phone: client.phone, interests: client.interests, status: client.status,registered:Boolean(client.userId),customerType:profile?.onboardingUserType||'',purpose:profile?.onboardingPurpose||'',preferredLanguage:profile?.preferredLanguage||'' } : null, ticket, history: reports.map(r => ({ id: r.id, createdAt: r.createdAt, ...obj(r.detail) })) };
@@ -105,6 +111,10 @@ async function startActivity(tx: Prisma.TransactionClient, a: Actor, input: unkn
             const details = supportDetails(ticket.details);
             const callback = !!details.callbackRequestedAt && !['CONTACTED', 'CANCELLED'].includes(details.callbackStatus || '');
             task = await tx.teamTask.create({ data: { workspaceId: a.workspaceId, ownerId: a.id, creatorId: a.id, clientId: client.id, eventKey: `workstation-ticket:${a.workspaceId}:${ticket.id}:${data.requestKey}`, recordType: 'support', recordId: ticket.id, title: `Ticket #${ticket.id}: ${ticket.subject}`.slice(0, 180), description: ticket.message, priority: 'HIGH', dueAt: now, followUpContext: json({ kind: callback ? 'SUPPORT_CALLBACK' : 'SUPPORT', referenceId: String(ticket.id), source: `ticket:${ticket.id}:${details.callbackRequestedAt}`, callbackPhone: details.callbackPhone || ticket.user.mobile || client.phone }) } });
+        } else if (task.clientId && task.clientId !== client.id) {
+            throw new TeamError('This support activity is linked to a different contact. Ask a manager to review the ticket handoff.', 409);
+        } else if (!task.clientId) {
+            task = await tx.teamTask.update({ where: { id: task.id }, data: { clientId: client.id, version: { increment: 1 } } });
         }
     }
     if (!task) {
@@ -119,7 +129,7 @@ async function startActivity(tx: Prisma.TransactionClient, a: Actor, input: unkn
         throw new TeamError('This task is already closed.', 409);
     if (task.status === 'BLOCKED')
         throw new TeamError('This task needs supervisor review before restarting. Resolve its blocker first.', 409);
-    let context = obj(task.followUpContext), existing = workActivity(context);
+    const context = obj(task.followUpContext), existing = workActivity(context);
     if (existing && existing.status !== 'FINISHED')
         return { id: task.id };
     if (!client && task.clientId)
