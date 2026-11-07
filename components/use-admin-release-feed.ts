@@ -24,12 +24,14 @@ export function useAdminReleaseFeed(initial: Release[], enabled: boolean) {
     const startedAt = revision.current; setRefreshing(true);
     try {
       let incoming=[...latest.current],nextCursor=fullSnapshot?null:cursor.current;
+      let qcReviewIds: Set<number>|null=null;
       for(let batch=0;batch<5;batch++) {
         const query=nextCursor?`?${new URLSearchParams({since:nextCursor.since,afterId:String(nextCursor.afterId),...(nextCursor.until?{until:nextCursor.until}:{})})}`:'';
         const response=await fetch(`/api/admin/releases${query}`,{cache:'no-store',signal:request.signal});
         if(!response.ok)throw Error('Release updates could not load. Retry to refresh this queue.');
         const data=await response.json();
         if(!Array.isArray(data.releases))throw Error('Release updates could not load. Retry to refresh this queue.');
+        if(Array.isArray(data.qcReviewReleaseIds))qcReviewIds=new Set(data.qcReviewReleaseIds.map(Number).filter(Number.isSafeInteger));
         if(data.mode==='delta') {
           const removed=new Set<number>(Array.isArray(data.removedIds)?data.removedIds:[]),merged=new Map(incoming.filter(release=>!removed.has(release.id)).map(release=>[release.id,release]));
           for(const release of data.releases as Release[])merged.set(release.id,release);
@@ -39,6 +41,8 @@ export function useAdminReleaseFeed(initial: Release[], enabled: boolean) {
         if(!data.next)break;
       }
       if (active.current && controller.current === request && !request.signal.aborted && startedAt === revision.current) {
+        const activeQcReviewIds=qcReviewIds;
+        if(activeQcReviewIds)incoming=incoming.map(release=>({...release,adminQcReviewRequired:activeQcReviewIds.has(release.id)}));
         const fresh = incoming.filter(release => releaseBucket(release) !== 'drafts' && (!known.current.has(release.id) || known.current.get(release.id) === 'drafts'));
         setArrivals(count => count + fresh.length);
         known.current = new Map(incoming.map(release => [release.id,releaseBucket(release)]));

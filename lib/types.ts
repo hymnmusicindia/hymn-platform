@@ -195,6 +195,7 @@ export interface ReleaseTrack {
 
 export interface Release {
   amendment?: import('./release-amendment-presentation').AmendmentSummary;
+  adminQcReviewRequired?: boolean;
   id: number;
   userId: number;
   artistName: string;

@@ -6,6 +6,7 @@ export function requiresManualDistributionReview(release: Release) {
   const status = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
   if (!['approved', 'queued_for_distribution'].includes(status)) return false;
   if (['sent', 'sent_to_distributor', 'processing', 'distributor_processing', 'delivered', 'scheduled', 'awaiting_live_confirmation', 'partially_live', 'live', 'distributed'].includes(String(release.direNoteStatus ?? '').toLowerCase())) return false;
+  if (release.adminQcReviewRequired) return true;
   const qc = release.metadata?.autoQc as { status?: string; policyVersion?: number; rightsReview?: string } | undefined;
   const correction = release.metadata?.correctionReview as { status?: string } | undefined;
   const correctionReadyForPartner = qc?.policyVersion === 4 && qc.status === 'passed' && qc.rightsReview === 'distribution_partner';

@@ -6,7 +6,7 @@ import { getDetailedReleaseById } from '../lib/distribution-db';
 import { runIntelligentDistributionQc } from '../lib/distribution-intelligent-qc';
 import { assertAutomaticQcSources, assertCurrentAutomaticQc, signQcEvidence, validQcEvidence } from '../lib/distribution-qc-evidence';
 import { submitRelease } from '../lib/distribution-service';
-import { adminReleaseDelta } from '../lib/admin-release-delta';
+import { adminReleaseDelta, withAdminQcReviewTasks } from '../lib/admin-release-delta';
 import { automaticQcRevision, automationSensitiveSnapshot, earliestPartnerReleaseDate } from '../lib/distribution-automation-policy';
 import { distributionAutomationCandidates, processDistributionAutomation } from '../lib/distribution-automation';
 
@@ -112,7 +112,11 @@ async function main(){
     await prisma.release.update({where:{id:capacityRetry.row.id},data:{metadata:{...retryRelease.metadata,autoQc:{...retryHold,proof:signQcEvidence(retryHold)}} as never}});
     assert((await distributionAutomationCandidates(100)).some(candidate=>candidate.id===capacityRetry.row.id),'A queue-only QC hold must not suppress a confirmed safe retry.');
     assert(await runIntelligentDistributionQc(capacityRetry.row.id,'https://hymn.fixture'),'A retryable attempt must recover from the stale queue-only QC hold.');
-    assert.equal(((await getDetailedReleaseById(capacityRetry.row.id))!.metadata!.autoQc as {status:string}).status,'passed');
+    const retryPassed=(await getDetailedReleaseById(capacityRetry.row.id))!;
+    assert.equal((retryPassed.metadata!.autoQc as {status:string}).status,'passed');
+    await prisma.adminTask.create({data:{eventKey:`fixture:qc-review:${capacityRetry.row.id}`,type:'Distribution QC review',priority:'high',title:'QC review required',body:'Pending reviewer action',href:`/admin?tab=distribution-queue&releaseId=${capacityRetry.row.id}`,entityType:'release',entityId:String(capacityRetry.row.id)}});
+    const taskAnnotated=await withAdminQcReviewTasks([retryPassed]);
+    assert.equal(taskAnnotated[0].adminQcReviewRequired,true,'Active reviewer tasks must survive the admin release-feed projection.');
     const tie=new Date(Date.now()+1000);
     await prisma.release.createMany({data:Array.from({length:205},(_,index)=>({userId:user.id,title:`Feed cursor ${index}`,artistName:'QC artist',genre:'Pop',releaseDate:tie,updatedAt:tie,status:'DRAFT' as const}))});
     const page=await adminReleaseDelta({since:new Date(tie.getTime()-1),until:new Date(tie.getTime()+1),afterId:0});

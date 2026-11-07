@@ -42,6 +42,8 @@ assert.equal(releaseBucket(queuedManualReview),'review','A queued release blocke
 assert.equal(isReleaseInHymnQcQueue(queuedManualReview),true);
 assert.equal(releaseBucket({...queuedManualReview,metadata:{autoQc:{status:'passed'}}}),'delivery','A passed queue remains in delivery.');
 assert.equal(isReleaseInHymnQcQueue({...queuedManualReview,metadata:{autoQc:{status:'passed'}}}),false);
+assert.equal(releaseBucket({...queuedManualReview,metadata:{autoQc:{status:'passed'}},adminQcReviewRequired:true}),'review','An active admin QC review task must override a passed automatic check.');
+assert.equal(isReleaseInHymnQcQueue({...queuedManualReview,metadata:{autoQc:{status:'passed'}},adminQcReviewRequired:true}),true);
 assert.equal(releaseBucket({...queuedManualReview,status:'sent_to_distributor'}),'delivery','Historical QC holds must not move provider-accepted releases back into review.');
 assert.equal(isReleaseInHymnQcQueue({...queuedManualReview,status:'sent_to_distributor'}),false);
 assert.equal(releaseBucket({...queuedManualReview,direNoteStatus:'processing'}),'delivery','A confirmed provider processing state must override stale manual-QC metadata.');

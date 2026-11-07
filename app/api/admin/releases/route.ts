@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminAccessForPage } from "@/lib/access";
 import { listAllDetailedReleases } from "@/lib/distribution-db";
-import { adminReleaseDelta } from "@/lib/admin-release-delta";
+import { adminQcReviewReleaseIds, adminReleaseDelta, withAdminQcReviewTasks } from "@/lib/admin-release-delta";
 
 export async function GET(request: Request) {
   const result = await getAdminAccessForPage();
@@ -14,8 +14,9 @@ export async function GET(request: Request) {
     if(!Number.isFinite(from.getTime())||!Number.isFinite(to.getTime())||to>watermark||from>to||!Number.isSafeInteger(afterId)||afterId<0)return NextResponse.json({error:'Invalid update cursor.'},{status:400});
     return NextResponse.json(await adminReleaseDelta({since:from,until:to,afterId}),{headers:{'Cache-Control':'private, no-store'}});
   }
-  const releases = await listAllDetailedReleases();
-  return NextResponse.json({ releases, watermark:watermark.toISOString() }, {headers:{"Cache-Control":"private, no-store"}});
+  const qcReviewReleaseIds = await adminQcReviewReleaseIds();
+  const releases = await withAdminQcReviewTasks(await listAllDetailedReleases(), qcReviewReleaseIds);
+  return NextResponse.json({ releases, qcReviewReleaseIds, watermark:watermark.toISOString() }, {headers:{"Cache-Control":"private, no-store"}});
 }
 
 // vercel trigger 9
