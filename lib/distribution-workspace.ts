@@ -2,12 +2,29 @@ import type { Release } from './types';
 import { effectiveReleaseStatus } from './release-status-presentation';
 
 export type ReleaseBucket = 'drafts' | 'review' | 'corrections' | 'delivery' | 'live' | 'exceptions';
+export function requiresManualDistributionReview(release: Release) {
+  const status = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
+  if (!['approved', 'queued_for_distribution'].includes(status)) return false;
+  if (['sent', 'sent_to_distributor', 'processing', 'distributor_processing', 'delivered', 'scheduled', 'awaiting_live_confirmation', 'partially_live', 'live', 'distributed'].includes(String(release.direNoteStatus ?? '').toLowerCase())) return false;
+  const qc = release.metadata?.autoQc as { status?: string; policyVersion?: number; rightsReview?: string } | undefined;
+  const correction = release.metadata?.correctionReview as { status?: string } | undefined;
+  const correctionReadyForPartner = qc?.policyVersion === 4 && qc.status === 'passed' && qc.rightsReview === 'distribution_partner';
+  return ['manual_review_required', 'issues_found'].includes(String(qc?.status)) || correction?.status === 'pending' && !correctionReadyForPartner;
+}
+
+export function isReleaseInHymnQcQueue(release: Release) {
+  const status = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
+  return status !== 'changes_requested'
+    && (requiresManualDistributionReview(release) || ['submitted', 'resubmitted', 'in_queue', 'in_qc_queue', 'under_review', 'approved', 'failed'].includes(status));
+}
+
 export function releaseBucket(release: Release): ReleaseBucket {
   const status = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
   if (['draft', 'awaiting_payment'].includes(status)) return 'drafts';
   if (['changes_requested', 'distributor_changes_required'].includes(status)) return 'corrections';
   if (['live', 'partially_live'].includes(status)) return 'live';
   if (['failed', 'delivery_failed', 'rejected', 'taken_down', 'takedown_requested', 'takedown_processing', 'archived'].includes(status)) return 'exceptions';
+  if (requiresManualDistributionReview(release)) return 'review';
   if (['delivered', 'approved', 'queued_for_distribution', 'submitting_to_distributor', 'sent', 'sent_to_distributor', 'processing', 'distributor_processing', 'scheduled', 'awaiting_live_confirmation'].includes(status)) return 'delivery';
   return 'review';
 }

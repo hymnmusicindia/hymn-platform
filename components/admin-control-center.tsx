@@ -5,7 +5,7 @@ import { DistributionReleaseCatalogue as AdminReleaseCatalogue } from "./distrib
 import { DistributionReviewQueue } from "./distribution-review-queue";
 import { DistributionOperationsHeader } from "./distribution-operations-header";
 import { DistributionAutomationInsight } from "./distribution-automation-insight";
-import { newestReleaseFirst } from "@/lib/distribution-workspace";
+import { isReleaseInHymnQcQueue, newestReleaseFirst } from "@/lib/distribution-workspace";
 
 import dynamic from "next/dynamic";
 import Link from 'next/link';
@@ -48,7 +48,6 @@ import { SupportTicketTools } from "@/components/support-ticket-tools";
 import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notification, Order, PartnershipLead, ProducerApplication, Release, SiteSettings, StoreStatus, StoreStatusHistoryEntry, SupportTicket, User } from "@/lib/types";
 
 type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string; entityType?: string; entityId?: string | number };
-const REVIEW_QUEUE_STATUSES = ["submitted", "resubmitted", "in_queue", "in_qc_queue", "under_review", "changes_requested", "approved", "failed"] as const;
 const DELIVERY_FAILED_STATUSES = ["delivery_failed"] as const;
 const CATALOG_STATUSES = ["approved", "distributor_processing", "queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"] as const;
 
@@ -612,7 +611,7 @@ export function AdminControlCenter({
   const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(initialReleases[0]?.id ?? null);
   const requestedSelectedRelease = releases.find((release) => release.id === selectedReleaseId) ?? null;
   const selectedRelease = activeTab === "distribution-queue"
-    ? (requestedSelectedRelease && effectiveReleaseStatus(requestedSelectedRelease.status, requestedSelectedRelease.direNoteStatus, requestedSelectedRelease.metadata) !== "changes_requested" && REVIEW_QUEUE_STATUSES.includes(effectiveReleaseStatus(requestedSelectedRelease.status, requestedSelectedRelease.direNoteStatus, requestedSelectedRelease.metadata) as typeof REVIEW_QUEUE_STATUSES[number]) ? requestedSelectedRelease : releases.find(release => effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata) !== "changes_requested" && REVIEW_QUEUE_STATUSES.includes(effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata) as typeof REVIEW_QUEUE_STATUSES[number])) ?? null)
+    ? (requestedSelectedRelease && isReleaseInHymnQcQueue(requestedSelectedRelease) ? requestedSelectedRelease : releases.find(isReleaseInHymnQcQueue) ?? null)
     : activeTab === "delivery-failed"
       ? (requestedSelectedRelease && DELIVERY_FAILED_STATUSES.includes(effectiveReleaseStatus(requestedSelectedRelease.status, requestedSelectedRelease.direNoteStatus, requestedSelectedRelease.metadata) as typeof DELIVERY_FAILED_STATUSES[number]) ? requestedSelectedRelease : releases.find((release) => DELIVERY_FAILED_STATUSES.includes(effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata) as typeof DELIVERY_FAILED_STATUSES[number])) ?? null)
       : requestedSelectedRelease ?? releases[0] ?? null;
@@ -780,7 +779,7 @@ export function AdminControlCenter({
 
   const revenueSummary = summarizeRevenue(initialRevenueEntries);
   const statusOf = (release: Release) => effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
-  const pendingReviews = releases.filter((release) => ["submitted", "in_queue", "under_review", "in_qc_queue", "resubmitted"].includes(statusOf(release))).length;
+  const pendingReviews = releases.filter(isReleaseInHymnQcQueue).length;
   const changesRequested = releases.filter((release) => statusOf(release) === "changes_requested").length;
   const failedDistributionJobs = releases.filter((release) => ["failed", "rejected", "delivery_failed"].includes(statusOf(release))).length;
   const openSupportTickets = supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).length;
@@ -803,7 +802,7 @@ export function AdminControlCenter({
     return hours < 24 ? `Oldest ${hours}h` : `Oldest ${Math.floor(hours / 24)}d`;
   };
   const operationalQueues = [
-    { label: "Releases awaiting QC", count: pendingReviews, urgency: pendingReviews ? "High" : "Clear", oldest: oldestWaiting(releases.filter((release) => ["submitted", "in_queue", "under_review", "in_qc_queue", "resubmitted"].includes(statusOf(release))).map((release) => release.submittedAt || release.createdAt)), tab: "distribution-queue" as AdminTab },
+    { label: "Releases awaiting QC", count: pendingReviews, urgency: pendingReviews ? "High" : "Clear", oldest: oldestWaiting(releases.filter(isReleaseInHymnQcQueue).map((release) => release.submittedAt || release.createdAt)), tab: "distribution-queue" as AdminTab },
     { label: "Corrections awaiting artist", count: changesRequested, urgency: changesRequested ? "Attention" : "Clear", oldest: oldestWaiting(releases.filter((release) => statusOf(release) === "changes_requested").map((release) => release.reviewedAt || release.createdAt)), tab: "releases" as AdminTab },
     { label: "Failed distributor submissions", count: failedDistributionJobs, urgency: failedDistributionJobs ? "Critical" : "Clear", oldest: oldestWaiting(releases.filter((release) => ["failed", "rejected", "delivery_failed"].includes(statusOf(release))).map((release) => release.createdAt)), tab: "distribution-queue" as AdminTab },
     { label: "Awaiting live confirmation", count: releases.filter((release) => ["awaiting_live_confirmation", "partially_live"].includes(statusOf(release))).length, urgency: "Normal", oldest: oldestWaiting(releases.filter((release) => ["awaiting_live_confirmation", "partially_live"].includes(statusOf(release))).map((release) => release.distributedAt || release.createdAt)), tab: "releases" as AdminTab },
@@ -820,7 +819,7 @@ export function AdminControlCenter({
     const searchable = [release.releaseTitle, release.trackName, release.artistName, release.upcCode, release.ownerEmail, ...(release.tracks ?? []).map((track) => track.isrc)].filter(Boolean).join(" ").toLowerCase();
     const operationalStatus = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
     const belongsToModule = activeTab === "distribution-queue"
-      ? operationalStatus !== "changes_requested" && REVIEW_QUEUE_STATUSES.includes(operationalStatus as typeof REVIEW_QUEUE_STATUSES[number])
+      ? isReleaseInHymnQcQueue(release)
       : activeTab === "delivery-failed"
         ? DELIVERY_FAILED_STATUSES.includes(operationalStatus as typeof DELIVERY_FAILED_STATUSES[number])
         : true;

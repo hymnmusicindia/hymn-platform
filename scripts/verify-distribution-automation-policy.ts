@@ -3,7 +3,7 @@ import { automaticQcRevision, automationSensitiveSnapshot, distributionAutomatio
 import { signQcEvidence, validQcEvidence, assertCurrentAutomaticQc } from '../lib/distribution-qc-evidence';
 import { canNotifyDireNoteHandoff, hasDireNoteAcceptanceEvidence } from '../lib/direnote-submission-evidence';
 import { releaseStatusEmail } from '../lib/email/templates/release-status-email';
-import { correctionReviewSummary, releaseBucket, automationSummary } from '../lib/distribution-workspace';
+import { correctionReviewSummary, releaseBucket, automationSummary, isReleaseInHymnQcQueue, requiresManualDistributionReview } from '../lib/distribution-workspace';
 import { adminReleaseStatusLabel, getReleaseStatusPresentation } from '../lib/release-status-presentation';
 import type { Release } from '../lib/types';
 
@@ -36,6 +36,17 @@ assert.match(approvedEmail.text,/not yet been confirmed as received by our distr
 assert.doesNotMatch(approvedEmail.text,/has been sent for distribution/i);
 assert.equal(getReleaseStatusPresentation('queued_for_distribution').label,'Queued for Partner Submission');
 assert.match(getReleaseStatusPresentation('queued_for_distribution').description,/has not sent your release/i);
+const queuedManualReview={...release,status:'queued_for_distribution',metadata:{autoQc:{status:'manual_review_required',reason:'A queued package has no confirmed safe retry.'}}} as Release;
+assert.equal(requiresManualDistributionReview(queuedManualReview),true);
+assert.equal(releaseBucket(queuedManualReview),'review','A queued release blocked for manual QC belongs in the HYMN review collection.');
+assert.equal(isReleaseInHymnQcQueue(queuedManualReview),true);
+assert.equal(releaseBucket({...queuedManualReview,metadata:{autoQc:{status:'passed'}}}),'delivery','A passed queue remains in delivery.');
+assert.equal(isReleaseInHymnQcQueue({...queuedManualReview,metadata:{autoQc:{status:'passed'}}}),false);
+assert.equal(releaseBucket({...queuedManualReview,status:'sent_to_distributor'}),'delivery','Historical QC holds must not move provider-accepted releases back into review.');
+assert.equal(isReleaseInHymnQcQueue({...queuedManualReview,status:'sent_to_distributor'}),false);
+assert.equal(releaseBucket({...queuedManualReview,direNoteStatus:'processing'}),'delivery','A confirmed provider processing state must override stale manual-QC metadata.');
+assert.equal(isReleaseInHymnQcQueue({...queuedManualReview,direNoteStatus:'processing'}),false);
+assert.equal(isReleaseInHymnQcQueue({...queuedManualReview,status:'approved'}),true,'An approved release with an unresolved manual QC hold remains in review.');
 for(const flag of ['copyrightClaim','copyrightClaimed','fraudFlag','manualQcHold','explicitContentMismatch'])assert.equal(distributionAutomationDecision({...release,metadata:{[flag]:true}},context).eligible,false);
 const whitespace={...release,releaseTitle:'  Original  ',tracks:[{...release.tracks![0],trackTitle:' Original '}]};
 assert.deepEqual(technicalReleaseFixes(whitespace).map(fix=>fix.after),['Original','Original']);
