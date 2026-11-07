@@ -14,12 +14,21 @@ import type { Release } from './types';
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const json = (value: unknown) => JSON.parse(JSON.stringify(value));
 export async function automaticDeliveryContext(releaseId: number,userId: number) {
-  const [attempt, amendment, fraudHold] = await Promise.all([
+  const [attempt, latestAttempt, unresolvedAttempt, amendment, fraudHold] = await Promise.all([
     prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: 'direnote', isCurrent: true }, select: { state: true, corrections: true } }),
+    prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: 'direnote' }, orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], select: { state: true, corrections: true } }),
+    prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: 'direnote', state: { in: ['processing', 'reconciliation_required'] } }, select: { id: true } }),
     prisma.releaseChangeRequest.findFirst({ where: { releaseId, status: { notIn: ['cancelled','completed','rejected','failed'] } }, select: { id: true } }),
     automaticReleaseRiskHold(releaseId,userId),
   ]);
-  return { fraudHold, retryable: attempt?.state === 'retryable', accepted: attempt?.state === 'submitted', uncertainAttempt: Boolean(attempt && ['processing','reconciliation_required','failed'].includes(attempt.state)), correctionResolved: object(attempt?.corrections).status === 'customer_resolved', openAmendment: Boolean(amendment) };
+  return {
+    fraudHold,
+    retryable: latestAttempt?.state === 'retryable' && attempt?.state !== 'submitted' && !unresolvedAttempt,
+    accepted: attempt?.state === 'submitted',
+    uncertainAttempt: Boolean(unresolvedAttempt || attempt?.state === 'failed'),
+    correctionResolved: object(latestAttempt?.corrections ?? attempt?.corrections).status === 'customer_resolved',
+    openAmendment: Boolean(amendment)
+  };
 }
 
 export async function runIntelligentDistributionQc(releaseId: number, siteUrl: string) {
@@ -82,8 +91,9 @@ async function checkRelease(releaseId: number, siteUrl: string) {
   const previous=object(release.metadata?.autoQc), prior=validQcEvidence(previous)?previous:object(previous.previousResult);
   const revision=automaticQcRevision(release), snapshot=automationSensitiveSnapshot(release);
   const needsDateRecovery=technicalReleaseFixes(release).some(fix=>fix.field==='releaseDate');
-  if(!needsDateRecovery&&validQcEvidence(previous)&&previous.policyVersion===DISTRIBUTION_QC_POLICY_VERSION&&previous.revision===revision&&['issues_found','manual_review_required'].includes(String(previous.status)))return false;
   const context=await automaticDeliveryContext(releaseId,release.userId);
+  const recoverableRetryHold=release.status==='queued_for_distribution'&&context.retryable&&!context.uncertainAttempt&&previous.reason==='A queued package has no confirmed safe retry.';
+  if(!needsDateRecovery&&!recoverableRetryHold&&validQcEvidence(previous)&&previous.policyVersion===DISTRIBUTION_QC_POLICY_VERSION&&previous.revision===revision&&['issues_found','manual_review_required'].includes(String(previous.status)))return false;
   const decision=distributionAutomationDecision(release,context);
   const base={revision,snapshot,changeKind:decision.route,reason:decision.reason,issueCount:0,warningCount:0,checks:[] as {label:string;ready:boolean}[],issues:[] as {field:string;message:string}[],fixes:[] as {field:string;before:string;after:string}[]};
   const sensitiveChanged=validQcEvidence(prior)&&typeof prior.snapshot==='string'&&prior.snapshot!==snapshot;

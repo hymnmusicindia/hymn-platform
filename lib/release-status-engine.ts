@@ -51,9 +51,12 @@ export function automaticStatusCopy(release: Release) {
   if (marker?.status === "pending" && ["under_review", "resubmitted", "approved"].includes(release.status.toLowerCase()) && isDireNoteCorrectionStatus(release.direNoteStatus)) return "The correction request is still open. HYMN received your response and is reviewing it before sending the updated package. You do not need to submit the same response again.";
   if (isDireNoteCorrectionStatus(release.direNoteStatus) && effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata) === "changes_requested") return "HYMN requires corrections before this release can continue. Open the correction details to review the requested changes.";
   if (release.status === "under_review" || release.status === "submitted" || release.status === "in_queue") return "HYMN is reviewing your metadata, artwork, audio, and rights.";
-  if (["approved", "queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "distributor_processing", "processing"].includes(release.status)) return release.releaseTiming === "quick_release"
-    ? "HYMN is processing your quick release. After partner approval, store availability usually takes 2–7 days."
-    : "HYMN is processing your scheduled release. We’ll confirm the selected date after HYMN approves the schedule.";
+  if (release.status === "approved") return "HYMN approved your release. It is being prepared for delivery; partner receipt is not yet confirmed.";
+  if (release.status === "queued_for_distribution") return "HYMN has not sent your release to the distribution partner yet. It is waiting for a safe submission attempt.";
+  if (release.status === "submitting_to_distributor") return "HYMN is submitting your release and waiting for the distribution partner to acknowledge receipt.";
+  if (["sent_to_distributor", "distributor_processing", "processing"].includes(release.status)) return release.releaseTiming === "quick_release"
+    ? "The distribution partner has acknowledged your release. After partner approval, store availability usually takes 2–7 days."
+    : "The distribution partner has acknowledged your release. HYMN will confirm the selected date after partner approval.";
   if (release.status === "distributor_changes_required") return "HYMN requires corrections before this release can continue. Open Fix Required for the exact requested changes.";
   if (release.status === "scheduled") return release.releaseTiming === "quick_release"
     ? "HYMN has approved your quick release for distribution. HYMN is monitoring store availability, which usually takes 2–7 days."

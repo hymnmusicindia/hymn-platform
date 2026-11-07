@@ -7,13 +7,8 @@ import { getPublicAppUrl } from './public-app-url';
 import { processPendingAutomaticAmendments } from './release-amendment-automation';
 import { DISTRIBUTION_QC_POLICY_VERSION, earliestPartnerReleaseDate } from './distribution-automation-policy';
 
-export async function processDistributionAutomation(siteUrl = getPublicAppUrl()) {
-  if (process.env.DISTRIBUTION_AUTOMATION_ENABLED === 'false') {
-    return { skipped: 'disabled', checked: 0, submitted: 0 };
-  }
-  // Checked versions skip unchanged exceptions. Confirmed retries respect the
-  // largest jittered cooldown, leaving the existing claim guard authoritative.
-  const candidates = await prisma.$queryRaw<Array<{ id: number }>>`
+export async function distributionAutomationCandidates(limit = 2) {
+  return prisma.$queryRaw<Array<{ id: number }>>`
     SELECT r.id FROM releases r JOIN users u ON u.id=r.user_id
     WHERE r.archived_at IS NULL AND u.status='ACTIVE' AND r.payment_status='paid'
       AND r.status IN ('SUBMITTED','UNDER_REVIEW','IN_QC_QUEUE','IN_QUEUE','RESUBMITTED','APPROVED','QUEUED_FOR_DISTRIBUTION','CHANGES_REQUESTED')
@@ -21,18 +16,30 @@ export async function processDistributionAutomation(siteUrl = getPublicAppUrl())
         OR (r.metadata->'correctionReview'->>'status'='pending' AND r.status IN ('UNDER_REVIEW','RESUBMITTED','APPROVED') AND r.metadata->>'liveAt' IS NULL AND r.release_date<${new Date(earliestPartnerReleaseDate())})
         OR (r.metadata->'autoQc'->>'status'='manual_review_required' AND r.metadata->'autoQc'->>'changeKind' IN ('missing_baseline','rights_review')
           AND COALESCE(r.metadata->'autoQc'->>'policyVersion','')<>${String(DISTRIBUTION_QC_POLICY_VERSION)})
+        OR (r.metadata->'autoQc'->>'status'='manual_review_required'
+          AND r.metadata->'autoQc'->>'reason'='A queued package has no confirmed safe retry.')
         OR (r.metadata->'autoQc'->>'status'='retryable' AND COALESCE(r.metadata->'autoQc'->>'nextCheckAt','')<=${new Date().toISOString()})
         OR CASE WHEN COALESCE(r.metadata->'autoQc'->>'checkedVersion','') ~ '^[0-9]{1,9}$' THEN (r.metadata->'autoQc'->>'checkedVersion')::integer ELSE -1 END <> r.version)
       AND (r.status<>'QUEUED_FOR_DISTRIBUTION' OR EXISTS (
         SELECT 1 FROM distribution_submission_attempts a WHERE a.release_id=r.id
-          AND a.provider='direnote' AND a.is_current=true AND a.state='retryable'
+          AND a.provider='direnote' AND a.state='retryable'
+          AND a.id=(SELECT MAX(latest.id) FROM distribution_submission_attempts latest WHERE latest.release_id=r.id AND latest.provider='direnote')
           AND a.attempt_count<5
           AND a.started_at<NOW()-INTERVAL '6 minutes'*POWER(2,LEAST(5,GREATEST(0,a.attempt_count-1)))))
       AND NOT EXISTS (SELECT 1 FROM distribution_submission_attempts a
         WHERE a.release_id=r.id AND a.is_current=true AND a.provider='direnote'
           AND (a.state IN ('processing','reconciliation_required','failed')
             OR a.state='submitted' AND COALESCE(a.corrections->>'status','')<>'customer_resolved'))
-    ORDER BY r.updated_at ASC,r.id ASC LIMIT 2`;
+    ORDER BY r.updated_at ASC,r.id ASC LIMIT ${Math.max(1, Math.min(100, Math.trunc(limit)))}`;
+}
+
+export async function processDistributionAutomation(siteUrl = getPublicAppUrl()) {
+  if (process.env.DISTRIBUTION_AUTOMATION_ENABLED === 'false') {
+    return { skipped: 'disabled', checked: 0, submitted: 0 };
+  }
+  // Checked versions skip unchanged exceptions. Confirmed retries respect the
+  // largest jittered cooldown, leaving the existing claim guard authoritative.
+  const candidates = await distributionAutomationCandidates();
   let checked = 0, submitted = 0;
   const outcomes: { releaseId: number; status: string }[] = [];
   const deadline = Date.now() + 25000;

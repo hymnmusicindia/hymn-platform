@@ -8,7 +8,7 @@ import { assertAutomaticQcSources, assertCurrentAutomaticQc, signQcEvidence, val
 import { submitRelease } from '../lib/distribution-service';
 import { adminReleaseDelta } from '../lib/admin-release-delta';
 import { automaticQcRevision, automationSensitiveSnapshot, earliestPartnerReleaseDate } from '../lib/distribution-automation-policy';
-import { processDistributionAutomation } from '../lib/distribution-automation';
+import { distributionAutomationCandidates, processDistributionAutomation } from '../lib/distribution-automation';
 
 const fixture=globalThis as typeof globalThis & {qcReadiness?:()=>Promise<unknown>;qcSubmissions?:number};
 async function main(){
@@ -101,6 +101,18 @@ async function main(){
     const delta=await adminReleaseDelta({since:watermark,until:new Date(),afterId:0});assert.ok(delta.removedIds.includes(rights.row.id));
     const cycle=await processDistributionAutomation('https://hymn.fixture');
     assert.equal(cycle.checked,2);assert.equal(cycle.submitted,2);assert.equal(fixture.qcSubmissions,2,'The bounded scheduler must hand signed revisions to delivery.');
+    const capacityRetry=await make('DireNote capacity retry');
+    assert.equal(await runIntelligentDistributionQc(capacityRetry.row.id,'https://hymn.fixture'),true);
+    await prisma.release.update({where:{id:capacityRetry.row.id},data:{status:'QUEUED_FOR_DISTRIBUTION'}});
+    await prisma.distributionSubmissionAttempt.create({data:{releaseId:capacityRetry.row.id,state:'retryable',attemptCount:1,isCurrent:false,idempotencyKey:'capacity-retry',payloadHash:'capacity-retry',startedAt:new Date(Date.now()-30*60*1000)}});
+    const retryCandidates=await distributionAutomationCandidates(100);
+    assert(retryCandidates.some(candidate=>candidate.id===capacityRetry.row.id),'A safe retryable attempt remains eligible even when no provider acknowledgement made it current.');
+    const retryRelease=(await getDetailedReleaseById(capacityRetry.row.id))!;
+    const retryHold={status:'manual_review_required',policyVersion:4,checkedVersion:retryRelease.recordVersion,revision:automaticQcRevision(retryRelease),snapshot:automationSensitiveSnapshot(retryRelease),changeKind:'reconciliation',reason:'A queued package has no confirmed safe retry.',issueCount:1};
+    await prisma.release.update({where:{id:capacityRetry.row.id},data:{metadata:{...retryRelease.metadata,autoQc:{...retryHold,proof:signQcEvidence(retryHold)}} as never}});
+    assert((await distributionAutomationCandidates(100)).some(candidate=>candidate.id===capacityRetry.row.id),'A queue-only QC hold must not suppress a confirmed safe retry.');
+    assert(await runIntelligentDistributionQc(capacityRetry.row.id,'https://hymn.fixture'),'A retryable attempt must recover from the stale queue-only QC hold.');
+    assert.equal(((await getDetailedReleaseById(capacityRetry.row.id))!.metadata!.autoQc as {status:string}).status,'passed');
     const tie=new Date(Date.now()+1000);
     await prisma.release.createMany({data:Array.from({length:205},(_,index)=>({userId:user.id,title:`Feed cursor ${index}`,artistName:'QC artist',genre:'Pop',releaseDate:tie,updatedAt:tie,status:'DRAFT' as const}))});
     const page=await adminReleaseDelta({since:new Date(tie.getTime()-1),until:new Date(tie.getTime()+1),afterId:0});

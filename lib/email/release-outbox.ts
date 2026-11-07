@@ -5,6 +5,7 @@ import { releaseStatusEmail, type ReleaseEmailData } from "./templates/release-s
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { qcReportSummary } from '@/lib/direnote-qc-details';
 import { readReleaseQcReport } from '@/lib/direnote-qc-store';
+import { canNotifyDireNoteHandoff } from '@/lib/direnote-submission-evidence';
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 
 export async function enqueueRenderedEmail(db: any, input: { eventKey: string; template: string; to: string; userId: number; releaseId: number; subject: string; html: string; text: string; expectedStatus: string; draftEditedAt?: string; providerApproved?: boolean; correctionBinding?:string; correctionAttemptId?:number }) {
@@ -17,9 +18,11 @@ export async function enqueueRenderedEmail(db: any, input: { eventKey: string; t
 
 export async function enqueueReleaseEmail(db: any, event: string, input: { to: string; userId: number; correctionEventKey?: string; statusEventKey?: string; correctionBinding?:string; correctionAttemptId?:number } & ReleaseEmailData) {
   if (event === "release_sent_to_distributor") {
-    const attempt = await db.distributionSubmissionAttempt.findFirst({ where: { releaseId: Number(input.releaseId), provider: "direnote", isCurrent: true }, orderBy: { id: "desc" } });
-    // A local approval/queue transition alone is never delivery evidence.
-    if (!attempt || !["submitted", "processing"].includes(attempt.state) || !(attempt.providerReference || object(attempt.responseRedacted).ingestJobId)) return undefined;
+    const [release, attempt] = await Promise.all([
+      db.release.findUnique({ where: { id: Number(input.releaseId) }, select: { status: true } }),
+      db.distributionSubmissionAttempt.findFirst({ where: { releaseId: Number(input.releaseId), provider: "direnote", isCurrent: true }, orderBy: { id: "desc" }, select: { id: true, state: true, isCurrent: true, idempotencyKey: true, providerReference: true, upc: true, responseRedacted: true } })
+    ]);
+    if (!release || !canNotifyDireNoteHandoff(release.status, attempt)) return undefined;
     input = { ...input, upc: attempt.upc ?? undefined, statusEventKey: `attempt:${attempt.id}`, correctionAttemptId: attempt.id };
   }
   if (event === "release_submitted") {
@@ -87,8 +90,9 @@ export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, del
     // Drafts/withdrawn releases still cannot receive a submission receipt.
     const validSubmission = job.template === "release_submitted" && ["SUBMITTED", "UNDER_REVIEW", "IN_QC_QUEUE", "APPROVED", "QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "SCHEDULED", "LIVE", "CHANGES_REQUESTED", "REJECTED", "RESUBMITTED", "DELIVERY_FAILED"].includes(release?.status ?? "");
     const forwardStatus = ["APPROVED", "QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "SCHEDULED", "LIVE"].includes(release?.status ?? "");
-    const acceptedAttempt = job.template === "release_sent_to_distributor" && payload.correctionAttemptId ? await prisma.distributionSubmissionAttempt.findFirst({ where: { id: Number(payload.correctionAttemptId), releaseId: Number(job.entityId), isCurrent: true, state: "submitted" }, select: { id: true } }) : null;
-    const validMilestone = forwardStatus && (job.template === "release_approved_by_hymn" || job.template === "release_sent_to_distributor" && Boolean(acceptedAttempt));
+    const acceptedAttempt = job.template === "release_sent_to_distributor" && payload.correctionAttemptId ? await prisma.distributionSubmissionAttempt.findFirst({ where: { id: Number(payload.correctionAttemptId), releaseId: Number(job.entityId), isCurrent: true }, select: { id: true, state: true, isCurrent: true, idempotencyKey: true, providerReference: true, upc: true, responseRedacted: true } }) : null;
+    const validHandoff = job.template === "release_sent_to_distributor" && canNotifyDireNoteHandoff(release?.status ?? "", acceptedAttempt);
+    const validMilestone = job.template === "release_approved_by_hymn" ? forwardStatus : validHandoff;
     const amendment = job.template === 'release_amendment_update' ? await prisma.releaseChangeRequest.findFirst({ where: { id: Number(payload.amendmentRequestId), releaseId: Number(job.entityId), requestedByUserId: job.userId ?? 0 } }) : null;
     const validAmendment = Boolean(amendment && String(object(amendment.requestedChanges).fingerprint ?? '') === String(payload.amendmentFingerprint ?? '') && (payload.amendmentStatus === 'submitted' || amendment.status === payload.amendmentStatus));
     if (!release || release.archivedAt || (job.template === 'release_amendment_update' ? !validAmendment : job.template === 'release_sent_to_distributor' ? !validMilestone : !validSubmission && !validMilestone && release.status !== payload.expectedStatus) || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {

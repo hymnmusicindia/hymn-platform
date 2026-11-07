@@ -23,7 +23,7 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
   changes_requested: { label: "Changes Required", description: "Update the requested details before distribution.", tone: "warning", step: 1, nextAction: "Fix release" },
   rejected: { label: "Action Required", description: "Review the decision and available corrections.", tone: "danger", step: 1, nextAction: "Review release" },
   approved: { label: "Approved by HYMN", description: "HYMN review is complete. Partner delivery has not yet been confirmed.", tone: "progress", step: 2, nextAction: "Track delivery" },
-  queued_for_distribution: { label: "Queued for Distribution", description: "Your release is waiting to be sent to the distribution partner.", tone: "progress", step: 2, nextAction: "Track delivery" },
+  queued_for_distribution: { label: "Queued for Partner Submission", description: "HYMN has not sent your release to the distribution partner yet. It is waiting for a safe submission attempt.", tone: "progress", step: 2, nextAction: "Track delivery" },
   submitting_to_distributor: { label: "Sending to Partner", description: "HYMN is awaiting the partner acknowledgement.", tone: "progress", step: 2, nextAction: "Track delivery" },
   sent: { label: "Received by Partner", description: "The distribution partner has acknowledged your release.", tone: "progress", step: 2, nextAction: "Track delivery" },
   sent_to_distributor: { label: "Received by Partner", description: "HYMN acknowledged your release. Store availability is not yet confirmed.", tone: "progress", step: 2, nextAction: "Track delivery" },

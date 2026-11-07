@@ -111,7 +111,9 @@ function releaseStatusMessage(release: Release) {
   if (release.status === "changes_requested") return "Corrections are required for this release. Review each marked field and resubmit.";
   if (release.status === "distributor_changes_required") return "HYMN requires corrections before distribution can continue. Review the exact requested fixes and resubmit.";
   if (release.status === "rejected") return "This release was rejected. Check the reason and correction notes.";
-  if (["approved", "queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "distributor_processing", "processing"].includes(release.status)) return "Your release is under review. No action is needed unless a correction request appears.";
+  if (release.status === "queued_for_distribution") return "HYMN has not sent this release to the distribution partner yet. It is waiting for a safe submission attempt; no action is needed unless a correction request appears.";
+  if (release.status === "approved") return "HYMN has approved your release. It is being prepared for delivery, but partner receipt is not yet confirmed.";
+  if (["submitting_to_distributor", "sent", "sent_to_distributor", "distributor_processing", "processing"].includes(release.status)) return "Your release is with the distribution partner for processing. No action is needed unless a correction request appears.";
   if (release.status === "scheduled") return release.releaseTiming === "quick_release"
     ? "HYMN approved your quick release. HYMN is monitoring store availability, which usually takes 2–7 days."
     : `HYMN approved your release schedule for ${getReleasePortalDateLabel(release)}.`;

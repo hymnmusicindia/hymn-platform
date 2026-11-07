@@ -14,6 +14,7 @@ import { findDistributionPlan } from "@/lib/distribution-plans";
 import { saveReleaseTracks } from "@/lib/release-track-save";
 import { syncReleaseContributions, releaseSaveTransactionOptions } from "@/lib/release-contributor-sync";
 import { amendmentChanges } from './release-amendment-presentation';
+import { canNotifyDireNoteHandoff } from './direnote-submission-evidence';
 
 export async function withAmendmentStatus(releases: Release[]): Promise<Release[]> {
   if (!releases.length || !isPostgresPrisma()) return releases;
@@ -455,6 +456,12 @@ export async function notifyReleaseStatusChange(release: Release, status: Releas
   }
 
   if (status === "sent_to_distributor" || status === "sent") {
+    const attempt = await prisma.distributionSubmissionAttempt.findFirst({
+      where: { releaseId: release.id, provider: "direnote", isCurrent: true },
+      orderBy: { id: "desc" },
+      select: { state: true, isCurrent: true, idempotencyKey: true, providerReference: true, upc: true, responseRedacted: true }
+    });
+    if (!canNotifyDireNoteHandoff(release.status, attempt)) return;
     await createNotification({
       userId: release.userId,
       title: `Release sent for distribution: ${releaseName}`,
