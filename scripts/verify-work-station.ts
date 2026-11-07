@@ -177,18 +177,25 @@ async function main() {
     assert.equal(await teamWrite(boss,(tx,a)=>employeeCallSlot(tx,a.workspaceId,a.id,new Date())),null,'Owners remain excluded until explicit opt-in');
     await assert.rejects(teamWrite(rep,(tx,a)=>savePersonalCallPlan(tx,a,{enabled:true,dailyLimit:4})),/owner access/);
     for(let i=0;i<6;i++){const c=await prisma.teamClient.create({data:{workspaceId:ws.id,ownerId:other.id,name:`Personal plan customer ${i}`,phone:`+91987777000${i}`}});await prisma.teamTask.create({data:{workspaceId:ws.id,ownerId:other.id,creatorId:boss.id,clientId:c.id,title:`Friendly introduction ${i}`,eventKey:`support-call:personal-fixture:${i}`,dueAt:new Date(Date.now()-86400000),followUpContext:{kind:'FRIENDLY_INTRO',callPhone:c.phone,pinnedAssignee:true}}});}
+    const planNow=new Date('2026-11-09T04:30:00.000Z');
     await teamWrite(boss,(tx,a)=>savePersonalCallPlan(tx,a,{enabled:true,dailyLimit:4}));
-    assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a))).assigned,4);
-    assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a))).assigned,0);
+    assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a,planNow))).assigned,4);
+    assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a,planNow))).assigned,0);
     const personal=await prisma.teamTask.findMany({where:{workspaceId:ws.id,ownerId:boss.id,followUpContext:{path:['personalCallPlan'],equals:true}},orderBy:{dueAt:'asc'}});assert.equal(personal.length,4);
     const scheduledDay=indiaWorkday(personal[0].dueAt!).day;assert.ok(personal.every(t=>indiaWorkday(t.dueAt!).day===scheduledDay));
     const extraSlot=await teamWrite(boss,(tx,a)=>employeeCallSlot(tx,a.workspaceId,a.id,personal[0].dueAt!));assert.ok(extraSlot&&indiaWorkday(extraSlot).day!==scheduledDay,'Daily call cap applies to future retries too');
+    const privateProject=await prisma.teamProject.create({data:{workspaceId:ws.id,title:'Private project',department:'Internal',memberIds:[other.id]}});
+    const ownedPrivate=await prisma.teamTask.create({data:{workspaceId:ws.id,projectId:privateProject.id,ownerId:rep.id,creatorId:boss.id,title:'Owned task in another private project'}});
+    await teamMutation(rep,'workstation-start',{taskId:ownedPrivate.id,requestKey:randomUUID()});
+    const ownedPrivateActivity=await teamRead(rep,'workstation-activity',new URLSearchParams({id:ownedPrivate.id,team:'1'}));
+    assert.equal(ownedPrivateActivity.task.id,ownedPrivate.id,'Shared-detail mode must preserve the owner’s private-project task access');
+    assert.equal(ownedPrivateActivity.activity?.status,'RUNNING','A started private-project activity must open after its start succeeds');
+    await write('workstation-finish',ownedPrivate.id,{outcome:'COMPLETED'});
     await teamMutation(boss,'workstation-start',{taskId:personal[0].id,requestKey:randomUUID()});await write('workstation-finish',personal[0].id,{outcome:'COMPLETED'},boss);
     assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a,personal[0].dueAt!))).assigned,0,'Completing a call must not refill beyond four for the scheduled day');
     const shared=await prisma.teamTask.create({data:{workspaceId:ws.id,ownerId:other.id,creatorId:boss.id,clientId:client.id,title:'Shared customer follow-through',followUpContext:{kind:'TASK'}}});
     const teamQueue=await teamRead(rep,'workstation',new URLSearchParams({team:'1',bucket:'assigned',q:'Shared customer'}));
     assert(teamQueue.items.some(t=>t.id===shared.id));
-    const privateProject=await prisma.teamProject.create({data:{workspaceId:ws.id,title:'Private project',department:'Internal',memberIds:[other.id]}});
     const hidden=await prisma.teamTask.create({data:{workspaceId:ws.id,projectId:privateProject.id,ownerId:other.id,creatorId:boss.id,title:'Shared customer private'}});
     assert(!(await teamRead(rep,'workstation',new URLSearchParams({team:'1',bucket:'assigned',q:'Shared customer'}))).items.some(t=>t.id===hidden.id),'Search must not replace private-project scope');
     await assert.rejects(teamRead(rep,'workstation-activity',new URLSearchParams({id:hidden.id,team:'1'})),/not found/);

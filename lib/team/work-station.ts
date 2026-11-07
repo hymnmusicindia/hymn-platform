@@ -42,7 +42,10 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
     }
     if (resource === 'workstation-activity') {
         const shared=p.get('team')==='1'&&mayHelp(a);
-        const row=await prisma.teamTask.findFirst({where:{...(shared?sharedWorkScope(a):taskScope(a)),id:p.get('id')||''},include:{client:{select:{id:true,name:true,phone:true,email:true,interests:true,status:true}}}});
+        const id=p.get('id')||'';
+        const include={client:{select:{id:true,name:true,phone:true,email:true,interests:true,status:true}}} satisfies Prisma.TeamTaskInclude;
+        const row=await prisma.teamTask.findFirst({where:{...taskScope(a),id},include})
+            ||(shared?await prisma.teamTask.findFirst({where:{...sharedWorkScope(a),id},include}):null);
         if(!row)throw new TeamError('Activity not found.',404);
         const task = currentConversationBrief(row);
         if (task.ownerId !== a.id && !can(a, 'tasks.all')&&!shared)
