@@ -1,3 +1,6 @@
+import { businessStructuredData } from "@/lib/public-business";
+import { PublicNoScriptInformation } from "@/components/public-noscript-information";
+import { jsonLd } from "@/lib/seo";
 import { CustomerServiceInterestTracker } from "@/components/customer-service-interest";
 import "./styles/royalty-splits.css";
 import "./styles/gateway-finance.css";
@@ -73,18 +76,12 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const origin = getPublicAppUrl();
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@graph": [
-      { "@type": "Organization", "@id": `${origin}/#organization`, name: "HYMN Music", url: origin, logo: `${origin}/icon-512.png`, description: "Music distribution, beat licensing, mixing, mastering, royalty and artist services for independent musicians." },
-      { "@type": "WebSite", "@id": `${origin}/#website`, url: origin, name: "HYMN Music", publisher: { "@id": `${origin}/#organization` }, inLanguage: "en-IN" }
-    ]
-  };
+  const structuredData = businessStructuredData(origin);
   return (
     <html lang="en" data-scroll-behavior="smooth" data-theme="light" suppressHydrationWarning>
       <head>
         <meta name="color-scheme" content="only light" />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(structuredData) }} />
         <script
           id="hymn-theme-initializer"
           dangerouslySetInnerHTML={{
@@ -105,7 +102,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning>{children}<CustomerServiceInterestTracker /><WorkspacePageTransition /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
+      <body suppressHydrationWarning><PublicNoScriptInformation/>{children}<CustomerServiceInterestTracker /><WorkspacePageTransition /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
     </html>
   );
 }

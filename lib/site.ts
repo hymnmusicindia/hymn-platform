@@ -9,6 +9,7 @@ export const mainNav = [
 
 export const footerColumns = {
   artists: [
+    { href: "/pricing", label: "Distribution Pricing" },
     { href: "/beat-store", label: "Browse Beats" },
     { href: "/music-distribution", label: "Music Distribution" },
     { href: "/studio", label: "Mixing & Mastering" },

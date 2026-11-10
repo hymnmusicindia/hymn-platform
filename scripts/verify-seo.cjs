@@ -14,11 +14,12 @@ const mocks={
     engineerProfile:{findMany:async input=>{assert.equal(input.where.sellerState,'ACTIVE');assert.equal(input.where.listings.some.paused,false);return [{slug:'real-engineer',updatedAt:new Date('2026-10-21')}]},findUnique:async()=>missing?null:{slug:'real-engineer',professionalName:'Real Engineer',sellerState:'ACTIVE',bio:'A professional mixing engineer.',profilePhotoUrl:null,listings:[{id:1}]}}
   }},
   '@/lib/policy-content':{policyDocuments:[{slug:'privacy'}]},
+  '@/lib/blog-content':{BLOG_ARTICLES:[],BLOG_CATEGORIES:[],slugifyCategory:value=>value.toLowerCase()},
   '@/lib/engineer-applications':{ENGINEER_GENRES:['Hip-Hop','R&B']},
   '@/lib/db':{listBeats:async()=>[],listProducerProfiles:async()=>[]},
   '@/lib/beat-store':{findProducerBySlug:()=>missing?null:{producer:{name:'Real Producer',story:'Music for your next release.',imageUrl:'data:image/svg+xml,poster'}}}
 };
-function load(file){const box={exports:{},require:name=>name in mocks?mocks[name]:name==='react/jsx-runtime'?require(name):stub,URL,Date,process};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,box);return box.exports;}
+function load(file){const box={exports:{},require:name=>name in mocks?mocks[name]:name==='react/jsx-runtime'?require(name):stub,URL,Date,Response,process};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,box);return box.exports;}
 (async()=>{
   const seo=load('lib/seo.ts');mocks['@/lib/seo']=seo;
   const metadata=seo.publicPageMetadata('Beat licensing','Learn about licences.','/beat-store');
@@ -34,6 +35,6 @@ function load(file){const box={exports:{},require:name=>name in mocks?mocks[name
   const map=await load('app/sitemap.ts').default();const urls=map.map(item=>item.url);assert.equal(new Set(urls).size,urls.length);assert.ok(urls.includes(origin+'/music-distribution'));assert.ok(urls.includes(origin+'/studio/engineers/real-engineer'));assert.ok(urls.includes(origin+'/beat-store/producers/real-producer'));assert.ok(!urls.some(url=>/dashboard|api\/|\/distribution$/.test(url)));assert.ok(!map.find(item=>item.url===origin).lastModified,'Static pages do not invent modification dates.');
   const producer=load('app/(public)/beat-store/producers/[slug]/page.tsx');let result=await producer.generateMetadata({params:Promise.resolve({slug:'real-producer'})});assert.equal(result.alternates.canonical,origin+'/beat-store/producers/real-producer');
   const engineer=load('app/(public)/studio/engineers/[slug]/page.tsx');result=await engineer.generateMetadata({params:Promise.resolve({slug:'real-engineer'})});assert.equal(result.alternates.canonical,origin+'/studio/engineers/real-engineer');missing=true;assert.equal((await producer.generateMetadata({params:Promise.resolve({slug:'missing'})})).robots.index,false);assert.equal((await engineer.generateMetadata({params:Promise.resolve({slug:'missing'})})).robots.index,false);
-  const robots=load('app/robots.ts').default();assert.equal(robots.sitemap,origin+'/sitemap.xml');assert.ok(robots.rules[0].allow.includes('/api/image-preview'));assert.ok(robots.rules[0].disallow.includes('/api/'));assert.ok(!robots.rules[0].disallow.includes('/dashboard/'),'Bots can see the noindex or sign-in response.');
+  const robots=await load('app/robots.txt/route.ts').GET().text();assert.ok(robots.includes('Sitemap: '+origin+'/sitemap.xml'));assert.ok(robots.includes('Allow: /api/image-preview'));assert.ok(robots.includes('Disallow: /api/'));assert.ok(robots.includes('Content-Signal: search=yes, ai-train=no'));assert.ok(!robots.includes('Disallow: /dashboard/'),'Bots can see the noindex or sign-in response.');
   console.log('PASS SEO: canonical/social metadata, public profile eligibility, sitemap membership, real modification dates, private noindex, public offer override, crawl rules and safe structured data.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

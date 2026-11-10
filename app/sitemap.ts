@@ -13,6 +13,8 @@ const routes = [
   ["/studio", 0.9, "weekly"],
   ["/services", 0.85, "monthly"],
   ["/music-distribution", 0.9, "monthly"],
+  ["/pricing", 0.85, "monthly"],
+  ["/agents", 0.4, "monthly"],
   ["/first-release", 0.8, "monthly"],
   ["/about", 0.75, "monthly"],
   ["/mission", 0.75, "monthly"],

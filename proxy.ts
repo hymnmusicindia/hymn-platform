@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prefersMarkdown } from "@/lib/markdown-negotiation";
 
 type Role = "customer" | "producer" | "admin";
 const canonicalHostname = process.env.CANONICAL_HOST?.trim().toLowerCase() || "hymnmusic.fun";
@@ -40,6 +41,14 @@ export async function proxy(request: NextRequest) {
     }
   }
   const pathname = request.nextUrl.pathname;
+  if ((pathname === "/" || pathname === "/home") && ["GET", "HEAD"].includes(request.method) && request.headers.get("rsc") !== "1") {
+    const response = prefersMarkdown(request.headers.get("accept"))
+      ? NextResponse.rewrite(new URL("/index.md", request.url))
+      : NextResponse.next();
+    response.headers.set("Vary", "Accept");
+    response.headers.set("Link", '</index.md>; rel="alternate"; type="text/markdown", </llms.txt>; rel="describedby"; type="text/plain"');
+    return response;
+  }
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/api/admin" || pathname.startsWith("/api/admin/");
   if (pathname.startsWith("/api/") && !pathname.startsWith("/api/webhooks/") && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     const origin = request.headers.get("origin"); const fetchSite = request.headers.get("sec-fetch-site");

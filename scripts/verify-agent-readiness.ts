@@ -1,0 +1,58 @@
+import assert from "node:assert/strict";
+import { NextRequest } from "next/server";
+import { proxy } from "../proxy";
+import { prefersMarkdown } from "../lib/markdown-negotiation";
+import { businessStructuredData, publicBusiness } from "../lib/public-business";
+import { distributionPricing, homeMarkdown, homeStructuredData } from "../lib/public-agent-content";
+import { publicAgentTools, publicMcpServerCard, mcpProtocolVersion } from "../lib/public-agent-tools";
+import { GET as robots } from "../app/robots.txt/route";
+import { GET as markdown } from "../app/index.md/route";
+import { GET as llms } from "../app/llms.txt/route";
+import { GET as card } from "../app/.well-known/mcp/server-card.json/route";
+import { POST, GET, OPTIONS } from "../app/mcp/route";
+import { distributionPlanCards } from "../lib/distribution-plans";
+
+async function main() {
+  process.env.APP_URL = "https://hymn.fixture"; process.env.NEXT_PUBLIC_APP_URL = "https://hymn.fixture";
+  const origin = "https://hymn.fixture";
+  for (const accept of [null, "*/*", "text/html", "text/markdown;q=0", "text/markdown;q=0.4,text/html;q=1", "text/markdown;q=oops", "text/markdown;q=2"]) assert.equal(prefersMarkdown(accept), false, String(accept));
+  for (const accept of ["text/markdown", "text/markdown,text/html;q=0.5", "text/html;q=0,text/markdown;q=0.2"]) assert.equal(prefersMarkdown(accept), true, accept);
+  const rewritten = await proxy(new NextRequest(`${origin}/`, { headers: { Accept: "text/markdown" } }));
+  assert.equal(new URL(rewritten.headers.get("x-middleware-rewrite")!).pathname, "/index.md");
+  assert.equal(rewritten.headers.get("Vary"), "Accept");
+  const html = await proxy(new NextRequest(`${origin}/`, { headers: { Accept: "text/html" } }));
+  assert.equal(html.headers.get("Vary"), "Accept"); assert.equal(html.headers.get("x-middleware-rewrite"), null);
+  const rsc = await proxy(new NextRequest(`${origin}/`, { headers: { Accept: "text/markdown", RSC: "1" } })); assert.equal(rsc.headers.get("x-middleware-rewrite"), null);
+  const privateRoute = await proxy(new NextRequest(`${origin}/admin`, { headers: { Accept: "text/markdown" } })); assert.equal(new URL(privateRoute.headers.get("location")!).pathname, "/admin/login");
+  const rules = await robots().text(); assert.match(rules, /Content-Signal: search=yes, ai-train=no/); assert.match(rules, /Disallow: \/api\//); assert.match(rules, /Allow: \/api\/image-preview/);
+  const business = businessStructuredData(origin)["@graph"][0]; assert.equal(business.telephone, publicBusiness.telephone); assert.equal(business.email, publicBusiness.email); assert.equal(business.sameAs?.length, 2); assert.equal("address" in business, false);
+  const graph = homeStructuredData(origin)["@graph"]; assert(graph.some(node => node["@type"] === "Service")); assert(graph.some(node => node["@type"] === "FAQPage"));
+  assert.equal(distributionPricing(6).oneTime.finalPrice, 546);
+  for (const plan of distributionPlanCards) assert(homeMarkdown(origin).includes(`INR ${plan.price}`));
+  assert.match(await markdown().text(), /mailto:hymnmusicindia@gmail.com/); assert.match(markdown().headers.get("Content-Type")!, /text\/markdown/);
+  assert.match(await llms().text(), /\/pricing/);
+  const discovery = await card().json(); assert.deepEqual(discovery, publicMcpServerCard(origin)); assert.equal(discovery.transport.endpoint, `${origin}/mcp`); assert.equal(card().headers.get("Access-Control-Allow-Origin"), "*");
+  const request = (body: unknown, extra: Record<string, string> = {}) => new Request(`${origin}/mcp`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", ...extra }, body: JSON.stringify(body) });
+  const rpc = (method: string, params?: unknown) => request({ jsonrpc: "2.0", id: 1, method, params });
+  const initialized = await (await POST(rpc("initialize", { protocolVersion: mcpProtocolVersion, capabilities: {}, clientInfo: { name: "test", version: "1" } }))).json();
+  assert.equal(initialized.result.protocolVersion, mcpProtocolVersion); assert.deepEqual(initialized.result.capabilities, discovery.capabilities);
+  assert.equal((await (await POST(rpc("initialize", { protocolVersion: mcpProtocolVersion, clientInfo: {}, capabilities: [] }))).json()).error.code, -32602);
+  const listed = await (await POST(rpc("tools/list"))).json(); assert.deepEqual(listed.result.tools, publicAgentTools);
+  for (const tool of publicAgentTools) { const response = await (await POST(rpc("tools/call", { name: tool.name, arguments: {} }))).json(); assert.equal(response.result.isError, false); assert(response.result.content[0].text.length > 20); assert.equal(tool.annotations.readOnlyHint, true); }
+  for (const trackCount of [0, 101, 1.5, "2", null]) assert.equal((await (await POST(rpc("tools/call", { name: "hymn_get_distribution_pricing", arguments: { trackCount } }))).json()).error.code, -32602);
+  assert.equal((await (await POST(rpc("tools/call", { name: "hymn_get_business_info", arguments: { userId: 1 } }))).json()).error.code, -32602);
+  assert.equal((await (await POST(rpc("tools/call", { name: "hymn_get_business_info", arguments: null }))).json()).error.code, -32602);
+  assert.equal((await (await POST(rpc("tools/call", { name: "send_email", arguments: {} }))).json()).error.code, -32602);
+  assert.equal((await (await POST(rpc("unknown"))).json()).error.code, -32601);
+  assert.equal((await POST(request({ jsonrpc: "2.0", method: "notifications/initialized" }))).status, 202);
+  assert.equal((await POST(request([], { Origin: "https://evil.example" }))).status, 403);
+  assert.equal((await POST(request({}))).status, 400);
+  assert.equal((await POST(request({}, { "MCP-Protocol-Version": "invalid" }))).status, 400);
+  assert.equal((await POST(request({}, { Accept: "text/html" }))).status, 406);
+  assert.equal((await POST(request({}, { "Content-Type": "text/plain" }))).status, 415);
+  assert.equal((await POST(request({ pad: "a".repeat(20_000) }))).status, 413);
+  assert.equal((await POST(new Request(`${origin}/mcp`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json,text/event-stream" }, body: "{" }))).status, 400);
+  assert.equal(GET(new Request(`${origin}/mcp`)).status, 405); assert.equal(OPTIONS(new Request(`${origin}/mcp`)).status, 204); assert.equal(OPTIONS(new Request(`${origin}/mcp`, { headers: { Origin: "https://evil.example" } })).status, 403);
+  console.log("PASS agent readiness: content negotiation/cache variation, private-route protection, crawl policy, public facts, schema/pricing parity, discovery, MCP initialization/tools, strict arguments, origin checks, malformed and oversized requests.");
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

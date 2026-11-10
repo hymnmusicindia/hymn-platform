@@ -1,3 +1,4 @@
+import { PublicHomeInformation } from "@/components/public-home-information";
 import { publicPageMetadata } from '@/lib/seo';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -19,7 +20,7 @@ export default async function HomePage() {
  const [session, { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases }] = await Promise.all([getSession(), getPublicHomePreview()]);
  const { catalog } = buildBeatStorefront(beats, producerProfiles);
  const banners = buildHomePathBanners({ featuredReleases, catalog, signedIn: Boolean(session) });
- if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners}/><HomeReviewsCarousel reviews={featuredReviews}/></LandingWorkspace></main>;
+ if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners}/><HomeReviewsCarousel reviews={featuredReviews}/><PublicHomeInformation/></LandingWorkspace></main>;
  return <main id="home" className="hymn-landing landing-visitor"><LandingWorkspace workspaceHref="/login">
   <section className="landing-hero force-dark">
         <div className="absolute inset-0">
@@ -73,5 +74,6 @@ export default async function HomePage() {
   {banners.journey}{banners.beats}{banners.platforms}
   <HomeReviewsCarousel reviews={featuredReviews} compact/>
   <section className="landing-newsletter" aria-labelledby="visitor-newsletter-title"><div className="shell"><div className="visitor-newsletter-row"><div><p className="landing-eyebrow">Stay in the loop</p><h2 id="visitor-newsletter-title">A little inspiration. <br/>Your next beginning.</h2></div><HomeNewsletter/></div><div className="visitor-socials"><span>Follow the music</span><a href="https://www.instagram.com/hymnmusic.in/" target="_blank" rel="noreferrer" aria-label="HYMN on Instagram"><Instagram size={18}/></a><a href="https://www.youtube.com/@hymnmusic_in/" target="_blank" rel="noreferrer" aria-label="HYMN on YouTube"><Youtube size={19}/></a></div></div></section>
+ <PublicHomeInformation/>
  </LandingWorkspace></main>;
 }
