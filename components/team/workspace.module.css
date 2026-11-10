@@ -1,4 +1,4 @@
-.workspace { --team-bg:var(--hymn-bg); --team-card:var(--hymn-card); --team-border:var(--hymn-border); --team-muted:var(--hymn-text-muted); display:grid; grid-template-columns:240px minmax(0,1fr); min-height:calc(100dvh - 72px); background:var(--team-bg); color:var(--text); font-family:"HYMN Manrope",Arial,sans-serif; color-scheme:inherit; font-size:13px; }
+.workspace { --team-bg:var(--hymn-bg); --team-card:var(--hymn-card); --team-border:var(--hymn-border); --team-muted:var(--hymn-text-muted); display:grid; grid-template-columns:236px minmax(0,1fr); min-height:calc(100dvh - 72px); background:var(--team-bg); color:var(--text); font-family:"HYMN Manrope",Arial,sans-serif; color-scheme:inherit; font-size:13px; }
 .workspace * { box-sizing:border-box; }
 :where(.workspace,.dialog) button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:9px 14px; border:1px solid var(--team-border,var(--border)); border-radius:8px; background:var(--card); color:var(--text-muted); font:inherit; cursor:pointer; }
 :where(.workspace,.dialog) button:hover { background:var(--card); }
@@ -120,3 +120,30 @@
 /* Checkboxes are controls, not full-width text fields. */
 .workspace input:is([type=checkbox],[type=radio]),.dialog input:is([type=checkbox],[type=radio]) { width:16px; height:16px; min-width:16px; padding:0; flex:0 0 16px; accent-color:#b4c8ff; }
 .workspace summary:focus-visible,.dialog summary:focus-visible { outline:2px solid #c0d5ff; outline-offset:3px; border-radius:8px; }
+
+/* Internal workspaces share the homepage rail density at every destination. */
+.sidebar { padding:16px 12px; z-index:60; }
+.sidebar>nav { min-height:0; overflow-y:auto; scrollbar-width:thin; margin:4px 0 12px; }
+.sidebar .brand { font-size:18px; }
+.sidebar .return { min-height:44px; padding:12px; font-size:12px; }
+.navigationBackdrop { display:none!important; }
+@media(min-width:1001px) {
+  .collapsed .sidebar { width:76px; }
+  .collapsed .sidebar:is(:hover,:focus-within) { width:236px; box-shadow:var(--shadow-soft); }
+  .collapsed .sidebar:is(:hover,:focus-within) :is(nav button span,nav button b,nav a span,.brand>span,.return span) { display:block; }
+  .collapsed .sidebar:is(:hover,:focus-within) nav :is(button,a) { justify-content:flex-start; }
+  .collapsed .sidebar:not(:hover):not(:focus-within)>div[role=navigation] a span { display:none; }
+  .collapsed .sidebar:not(:hover):not(:focus-within)>div[role=navigation] { flex-direction:column; }
+  .collapsed .sidebar:not(:hover):not(:focus-within) nav section>div { display:none; }
+  .collapsed .sidebar:not(:hover):not(:focus-within) nav button>svg:last-child { display:none; }
+}
+@media(max-width:1000px) {
+  .workspace,.collapsed { display:block; }
+  .sidebar { display:none; }
+  .sidebar.mobileOpen { display:flex; position:fixed; z-index:1300; inset:72px auto 0 0; width:min(320px,88vw); height:calc(100dvh - 72px); box-shadow:var(--shadow-soft); }
+  .collapsed .sidebar :is(nav button span,nav a span,.brand>span,.return span) { display:block; }
+  .collapsed .sidebar nav button { justify-content:flex-start; }
+  .mobileMenu,.mobileClose { display:inline-flex!important; }
+  .brand>button:not(.mobileClose) { display:none; }
+  .navigationBackdrop { display:block!important; position:fixed; inset:72px 0 0; z-index:1299; border:0!important; border-radius:0!important; background:var(--overlay)!important; }
+}

@@ -6,6 +6,7 @@ import { ModuleTabs } from "@/components/module-tabs";
 import { DashboardFrame } from "@/components/dashboard-frame";
 import { TeamWorkspaceUI } from "@/components/team/workspace";
 import { adminNavigation } from "@/lib/admin-workspace-navigation";
+import { AdminPortalLayout } from "@/components/admin-portal-layout";
 
 function Fixture() {
   const query = useSearchParams();
@@ -15,6 +16,7 @@ function Fixture() {
   useEffect(() => setReady(true), []);
   const go = (key: string) => { const next = new URLSearchParams(location.search); next.set("tab", key); history.pushState(null, "", location.pathname + "?" + next); };
   if (mode === "team") return <TeamWorkspaceUI actor={{ id: "fixture-member", workspaceId: "fixture-workspace", workspaceName: "Fixture", name: "Member", owner: false, jobTitle: "Researcher", permissions: ["crm.prospects.view", "team.members.view", "chat.use", "calendar.view"] }}/>;
+  if (mode === "admin-frame") return <AdminPortalLayout permissions={["system.manage", "users.read", "releases.read", "royalties.import"]} name="Admin preview"><h1>Admin preview</h1></AdminPortalLayout>;
   if (mode === "admin") {
     const limited = query.get("limited") === "1";
     const items = adminNavigation(limited ? ["royalties.import"] : ["system.manage", "users.read", "users.manage", "audit.read", "releases.read", "releases.review", "distribution.retry", "updates.review", "takedowns.review", "fraud.read", "wallets.adjust", "payouts.review", "royalties.import", "royalties.reconcile", "kyc.review", "services.manage"]).map(item => ({ ...item, href: "/navigation-sections-preview?mode=admin" + (limited ? "&limited=1" : "") + "&tab=" + item.key }));
