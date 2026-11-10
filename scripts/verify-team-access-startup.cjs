@@ -5,9 +5,9 @@ const ts = require('typescript');
 (async () => {
   let session = { sub: 42 }, active = true, membership = true;
   class TeamError extends Error { constructor(message, status) { super(message); this.status = status; } }
-  const module = { exports: {} };
+  const fixtureModule = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/team/access.ts','utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
-    exports: module.exports, require(id) {
+    exports: fixtureModule.exports, require(id) {
       if(id==='server-only')return {};
       if(id==='@/lib/session')return {getSession:async()=>session};
       if(id==='./policy')return {TeamError};
@@ -21,9 +21,9 @@ const ts = require('typescript');
       throw Error('Unexpected import '+id);
     }
   });
-  assert.equal((await module.exports.teamActor('workspace')).workspace.name,'HYMN');
-  session=null;await assert.rejects(module.exports.teamActor('workspace'),error=>error.status===401);
-  session={sub:42};active=false;await assert.rejects(module.exports.teamActor('workspace'),error=>error.status===403);
-  active=true;membership=false;await assert.rejects(module.exports.teamActor('workspace'),error=>error.status===403);
+  assert.equal((await fixtureModule.exports.teamActor('workspace')).workspace.name,'HYMN');
+  session=null;await assert.rejects(fixtureModule.exports.teamActor('workspace'),error=>error.status===401);
+  session={sub:42};active=false;await assert.rejects(fixtureModule.exports.teamActor('workspace'),error=>error.status===403);
+  active=true;membership=false;await assert.rejects(fixtureModule.exports.teamActor('workspace'),error=>error.status===403);
   console.log('PASS Team OS startup: minimal workspace projection, schema compatibility, session, active account and membership boundaries.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

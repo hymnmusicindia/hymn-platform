@@ -11,7 +11,7 @@ async function main(){
  validateSubscriptionProviderPlan(source,{...policy,months:12});
  if(!annualCompatibilityRequired(source))return console.log(JSON.stringify({product,alreadyCompatible:true}));
  const prior=await prisma.auditLog.findFirst({where:{entity:'subscription_plan_compatibility',entityId:sourceId,action:'SUBSCRIPTION_PLAN_COMPATIBILITY_REGISTERED'},orderBy:[{createdAt:'desc'},{id:'desc'}],select:{metadata:true}});
- let id=(prior?.metadata as {compatiblePlanId?:string}|null)?.compatiblePlanId;
+ const id=(prior?.metadata as {compatiblePlanId?:string}|null)?.compatiblePlanId;
  let compatible=id?await razorpay.plans.fetch(id):null;
  if(compatible)validateCompatibleAnnualPlan(compatible,sourceId,{...policy,months:12});
  if(!process.argv.includes('--apply'))return console.log(JSON.stringify({product,sourceId,amount:policy.amount,period:'monthly',interval:12,registeredPlan:id||null}));

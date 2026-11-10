@@ -8,10 +8,10 @@ async function main() {
   const key = Date.now().toString(36);
   const workspace = await prisma.teamWorkspace.create({ data: { name: `CRM ${key}` } });
   const ownerRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Owner", owner: true, permissions: [] } });
-  const callerRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Caller", permissions: ["crm.prospects.view", "crm.outreach.manage", "tasks.update", "tasks.complete"] } });
+  const callerRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Caller", permissions: ["crm.prospects.view", "crm.outreach.manage", "calendar.manage", "tasks.update", "tasks.complete"] } });
   async function member(name: string, roleId: string) {
     const user = await prisma.user.create({ data: { googleId: `crm-${name}-${key}`, name, email: `crm-${name}-${key}@fixture.invalid` } });
-    return prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId }, include: { role: true } });
+    return prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId, preferences: { workAvailability: { recurring: { enabled: true, assignOnlyWhileActive: false, slots: [0,1,2,3,4,5,6].map(day => ({ day, start: 0, end: 1440 })) } } } }, include: { role: true } });
   }
   const owner = await member("Owner", ownerRole.id); const first = await member("First", callerRole.id); const second = await member("Second", callerRole.id);
   for (const employee of [first, second]) await teamMutation(owner, "acquisition-target-save", { employeeId: employee.id, researchTarget: 20, callTarget: 10, caller: true });
@@ -33,7 +33,7 @@ async function main() {
   await teamMutation(caller, "task-update", { id: task.id, version: task.version, dueAt: "2026-12-03T10:00:00.000Z" });
   const updated = await prisma.teamProspect.findUniqueOrThrow({ where: { id: prospect.id } });
   assert.equal(updated.followUpAt?.toISOString(), "2026-12-03T10:00:00.000Z");
-  await assert.rejects(teamMutation(caller, "prospect-call-save", { id: updated.id, version: updated.version, stage: "CONVERTED", contact: { body: "Spoke to customer", evidence: "Fixture call log" } }), /existing HYMN customer/);
+  await assert.rejects(teamMutation(caller, "prospect-call-save", { id: updated.id, version: updated.version, stage: "CONVERTED", contact: { body: "Spoke to customer", evidence: "Fixture call log" } }), /confirm their details/);
   assert.equal(await prisma.teamOutreach.count({ where: { prospectId: updated.id } }), 0, "Failed save rolls back the contact event.");
   await teamMutation(caller, "prospect-call-save", { id: updated.id, version: updated.version, stage: "CONTACTED", contact: { body: "Spoke to customer", evidence: "Fixture call log" } });
   const targets = await acquisitionRead(caller, "acquisition-targets", new URLSearchParams()) as { items: { id: string; called: number }[] };
@@ -55,7 +55,8 @@ async function main() {
   const suppressed = await teamMutation(owner, "prospects", { ...input(6), contactEligibility: "DO_NOT_CONTACT" }) as { id: string };
   assert.equal((await prisma.acquisitionLead.findUniqueOrThrow({ where: { prospectId: suppressed.id } })).acquisitionEmployeeId, null);
   assert.equal(await prisma.teamTask.count({ where: { eventKey: `${suppressed.id}:call` } }), 0);
-  await assert.rejects(teamMutation(owner, "prospect-update", { id: updated.id, version: updated.version + 1, stage: "CONVERTED" }), /existing HYMN customer/);
+  const currentProspect = await prisma.teamProspect.findUniqueOrThrow({ where: { id: updated.id } });
+  await assert.rejects(teamMutation(owner, "prospect-update", { id: updated.id, version: currentProspect.version, stage: "CONVERTED" }), /confirm their details/);
   assert.equal(await prisma.acquisitionCommission.count({ where: { lead: { workspaceId: workspace.id } } }), 0, "CRM activity alone cannot create employee earnings.");
   console.log("CRM rotation, permission boundaries, phone deduplication, daily targets, scheduling and reward separation passed.");
 }

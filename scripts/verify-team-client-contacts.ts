@@ -95,8 +95,9 @@ async function main() {
   assert.equal(mail.length, 1); assert.doesNotMatch(mail.find(m => m.to === registered.email)!.text, /sign up/i);
   await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 41 * 60000)); assert.equal(mail.length, 1);
   await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 40 * 60000)); assert.equal(mail.length, 1);
-  assert.equal(await prisma.teamNotification.count({ where: { memberId: actor.id, title: { startsWith: "Call " } } }), 1);
+  assert.equal(await prisma.teamNotification.count({ where: { memberId: actor.id, title: { startsWith: "Client call " } } }), 0, "The in-app reminder waits until 30 minutes before the call.");
   await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 30 * 60000)); assert.equal(mail.length, 2);
+  assert.equal(await prisma.teamNotification.count({ where: { memberId: actor.id, title: { startsWith: "Client call " } } }), 1);
   assert.equal(mail[1].to, registered.email);
   await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 25 * 60000)); assert.equal(mail.length, 2);
   const repUser = await prisma.user.create({ data: { name: "Available Rep", email: `rep-${tag}@example.test`, googleId: `rep-${tag}` } });

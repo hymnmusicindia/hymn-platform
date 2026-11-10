@@ -7,14 +7,15 @@ async function main() {
   if (!process.env.DATABASE_URL?.includes("127.0.0.1:55461/team_fixture")) throw Error("Isolated fixture required");
   const workspace = await prisma.teamWorkspace.create({ data: { name: "Advanced fixture" } });
   const ownerRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Owner", owner: true, permissions: roleTemplates.Owner } });
-  const role = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Growth", permissions: roleTemplates["Growth Executive"] } });
+  const role = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Growth and beat reviewer", permissions: [...roleTemplates["Growth Executive"], "operations.beats.manage"] } });
   const member = async (name: string, roleId: string) => { const u = await prisma.user.create({ data: { name, googleId: name, email: `${name}@example.test` } }); return prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: u.id, roleId }, include: { role: true } }); };
   const owner = await member("advanced-owner", ownerRole.id), second = await member("advanced-second-owner", ownerRole.id), staff = await member("advanced-staff", role.id);
   const call = (resource: string, body: unknown) => teamMutation(owner, resource, body) as Promise<Record<string, unknown>>;
   const deny = (fn: () => Promise<unknown>) => assert.rejects(fn, e => e instanceof TeamError);
   await deny(() => teamMutation(staff, "expenses", { amount: 10 }));
   await call("expenses", { category: "Research", description: "Recorded time cost", amount: 123.45, incurredAt: new Date().toISOString() });
-  const task = await call("tasks", { title: "Recurring task", ownerId: owner.id });
+  await deny(() => call("tasks", { title: "Owner operational assignment", ownerId: owner.id }));
+  const task = await call("tasks", { title: "Recurring task", ownerId: staff.id });
   await call("task-controls", { id: task.id, version: 1, action: "configure", parentId: null, collaboratorIds: [staff.id], recurrenceDays: 7 });
   await call("task-update", { id: task.id, version: 2, status: "COMPLETED" });
   assert.equal(await prisma.teamTask.count({ where: { eventKey: `${task.id}:recurrence` } }), 1);
@@ -49,13 +50,17 @@ async function main() {
   assert.throws(() => parseTeamCsv('name,name\na,b'));
   assert.ok(teamCsv(["name"], [{ name: "=SUM(A1)" }]).includes("'="));
   const prospect = await prisma.teamProspect.findFirstOrThrow({ where: { workspaceId: workspace.id } });
-  await call("prospect-update", { id: prospect.id, version: 1, stage: "CONVERTED", customerUserId: staff.userId });
+  await deny(() => call("prospect-update", { id: prospect.id, version: prospect.version, stage: "CONVERTED", customerUserId: staff.userId }));
+  // Seed a historical linked customer for the paid-only reporting checks below.
+  // Current conversion requires conversation verification and employee assignment.
+  await prisma.teamProspect.update({ where: { id: prospect.id }, data: { stage: "CONVERTED", customerUserId: staff.userId } });
+  if (prospect.leadId) await prisma.growthLead.update({ where: { id: prospect.leadId }, data: { status: "converted", userId: staff.userId } });
   await prisma.checkoutOrder.create({ data: { userId: staff.userId, originalPrice: 120, finalAmount: 120, razorpayOrderId: "advanced-paid-order", paymentStatus: "paid" } });
   await prisma.checkoutOrder.create({ data: { userId: staff.userId, originalPrice: 500, finalAmount: 500, razorpayOrderId: "advanced-unpaid-order", paymentStatus: "created" } });
   const analytics = await teamRead(owner, "analytics", new URLSearchParams()) as { paidCustomers: number; revenue: { INR: number }; acquisitionCostINR: number };
   assert.equal(analytics.paidCustomers, 1); assert.equal(analytics.revenue.INR, 120); assert.equal(analytics.acquisitionCostINR, 123.45);
   const staffAnalytics = await teamRead(staff, "analytics", new URLSearchParams()) as Record<string, unknown>; assert.equal("revenue" in staffAnalytics, false);
-  await call("workflow-rules", { name: "Beat QA", eventType: "BEAT_REVIEW", ownerId: owner.id, enabled: true });
+  await call("workflow-rules", { name: "Beat QA", eventType: "BEAT_REVIEW", ownerId: staff.id, enabled: true });
   await call("workflow-sync", {}); const count = await prisma.teamTask.count({ where: { workspaceId: workspace.id } }); await call("workflow-sync", {}); assert.equal(await prisma.teamTask.count({ where: { workspaceId: workspace.id } }), count);
   console.log("PASS: co-owners, recurrence/archive, projects, approved documents, private threaded chat actions, independent decisions, reporting-cycle rejection, evidence imports/deduplication, paid-only revenue and financial isolation, idempotent automation.");
 }

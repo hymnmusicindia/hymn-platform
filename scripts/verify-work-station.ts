@@ -176,8 +176,8 @@ async function main() {
     await write('workstation-finish',legacy.id,{outcome:'COMPLETED',closeTicket:true});
     assert.equal(await teamWrite(boss,(tx,a)=>employeeCallSlot(tx,a.workspaceId,a.id,new Date())),null,'Owners remain excluded until explicit opt-in');
     await assert.rejects(teamWrite(rep,(tx,a)=>savePersonalCallPlan(tx,a,{enabled:true,dailyLimit:4})),/owner access/);
-    for(let i=0;i<6;i++){const c=await prisma.teamClient.create({data:{workspaceId:ws.id,ownerId:other.id,name:`Personal plan customer ${i}`,phone:`+91987777000${i}`}});await prisma.teamTask.create({data:{workspaceId:ws.id,ownerId:other.id,creatorId:boss.id,clientId:c.id,title:`Friendly introduction ${i}`,eventKey:`support-call:personal-fixture:${i}`,dueAt:new Date(Date.now()-86400000),followUpContext:{kind:'FRIENDLY_INTRO',callPhone:c.phone,pinnedAssignee:true}}});}
     const planNow=new Date('2026-11-09T04:30:00.000Z');
+    for(let i=0;i<6;i++){const c=await prisma.teamClient.create({data:{workspaceId:ws.id,ownerId:other.id,name:`Personal plan customer ${i}`,phone:`+91987777000${i}`}});await prisma.teamTask.create({data:{workspaceId:ws.id,ownerId:other.id,creatorId:boss.id,clientId:c.id,title:`Friendly introduction ${i}`,eventKey:`support-call:personal-fixture:${i}`,dueAt:new Date(planNow.getTime()-86400000),followUpContext:{kind:'FRIENDLY_INTRO',callPhone:c.phone,pinnedAssignee:true}}});}
     await teamWrite(boss,(tx,a)=>savePersonalCallPlan(tx,a,{enabled:true,dailyLimit:4}));
     assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a,planNow))).assigned,4);
     assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a,planNow))).assigned,0);

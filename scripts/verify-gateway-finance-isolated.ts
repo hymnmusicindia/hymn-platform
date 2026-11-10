@@ -12,7 +12,7 @@ const environment = { ...process.env, DATABASE_URL: `postgresql://fixture:fixtur
 const run = (args: string[], executable = process.execPath) => new Promise<void>((resolve, reject) => { const child = spawn(executable, args, { env: environment, stdio: "inherit", windowsHide: true }); child.on("error", reject); child.on("exit", code => code === 0 ? resolve() : reject(new Error(`Fixture command exited ${code}`))); });
 async function main() {
   const previous = path.join(fixture, "before.prisma");
-  writeFileSync(previous, execFileSync("git", ["show", "HEAD:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
+  writeFileSync(previous, execFileSync("git", ["show", "c6145fa1ec07560d262bcc1073bd54b95d18a697^:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
   const pg = new EmbeddedPostgres({ databaseDir, port, user: "fixture", password: "fixture", persistent: true, initdbFlags: ["--encoding=UTF8", "--locale=C"], postgresFlags: ["-h", "127.0.0.1"] });
   if (!reuse) await pg.initialise();
   await pg.start();
@@ -21,8 +21,9 @@ async function main() {
       await pg.createDatabase("gateway_fixture");
       await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", previous, "--skip-generate"]);
       await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261012120000_gateway_settlements_route/migration.sql", "--schema", "prisma/schema.prisma"]);
+      await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate", "--accept-data-loss"]);
     }
-    await run(["--import", "tsx", "scripts/verify-gateway-finance-integration.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-gateway-finance-integration.ts"]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe")); else await pg.stop();
     console.log(`Isolated fixture retained at ${fixture}. No live transfers or production data were used.`);

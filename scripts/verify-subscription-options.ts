@@ -14,7 +14,7 @@ async function main() {
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 850 });
       await page.goto(`${process.env.WORKSPACE_PREVIEW_URL || "http://localhost:3015"}/faq`, { timeout: 120000 });
-      let trigger = page.locator(".studio-header-plans");
+      const trigger = page.locator(".studio-header-plans");
       await expect(trigger).toHaveText("Subscriptions");
       await page.waitForFunction(() => Object.keys(document.querySelector(".studio-header-plans") ?? {}).some(key => key.startsWith("__reactProps$")));
       if(width >= 1024) await trigger.click();

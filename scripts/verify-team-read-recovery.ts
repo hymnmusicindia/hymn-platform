@@ -18,8 +18,17 @@ async function main() {
   }
   assert.equal(teamDatabaseErrorCode(new Error("postgresql://private")), "UNKNOWN");
   let columns = ["referral_history", "requires_referral_consent", "referral_accepted_at", "referral_ended_at", "referral_only"];
-  const db = { $queryRaw: async () => columns.map(column_name => ({ column_name })) } as unknown as PrismaClient;
+  let schemaError: unknown;
+  const probe = async () => { if (schemaError) throw schemaError; return null; };
+  const db = { $queryRaw: async () => columns.map(column_name => ({ column_name })), teamTask: { findFirst: probe }, teamCalendarEvent: { findFirst: probe }, consultationRequest: { findFirst: probe }, teamGoogleCalendar: { count: probe }, teamWorkHandoff: { count: probe } } as unknown as PrismaClient;
   await assertTeamSchemaReady(db);
+  for (const code of ["P2021", "P2022"]) {
+    schemaError = { code };
+    await assert.rejects(assertTeamSchemaReady(db), /migration required:.*20261110190000_unified_customer_calls/);
+  }
+  schemaError = { code: "P1001" };
+  await assert.rejects(assertTeamSchemaReady(db), error => error === schemaError);
+  schemaError = undefined;
   columns = columns.filter(column => column !== "referral_history");
   await assert.rejects(assertTeamSchemaReady(db), /Team Workspace migration required:.*referral_history/);
   console.log("PASS Team read recovery: bounded transient retry, permanent failure passthrough, safe diagnostic codes and deployment schema guard.");

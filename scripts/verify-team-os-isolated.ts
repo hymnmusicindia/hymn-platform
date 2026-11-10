@@ -1,6 +1,6 @@
 import EmbeddedPostgres from "embedded-postgres";
-import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn, execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 const fixture = mkdtempSync(path.join(os.tmpdir(), "hymn-team-")); const databaseDir = path.join(fixture, "pg");
@@ -27,7 +27,7 @@ async function main() {
     }
     // Start with the unchanged application schema, then exercise the additive SQL.
     const baseline = path.join(fixture, "baseline.prisma");
-    writeFileSync(baseline, readFileSync("prisma/schema.prisma", "utf8").replace(/^model Team\w+ \{[\s\S]*?^\}\r?\n/gm, "").replace(/^  teamMemberships TeamMember\[\]\r?\n/gm, "").replace(/^  teamProspect TeamProspect\?\r?\n/gm, ""));
+    writeFileSync(baseline, execFileSync("git", ["show", "2936d2d31d0b99807dfd5a90c4d1379a2e15eec6^:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", baseline, "--skip-generate"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261015190000_team_os/migration.sql", "--schema", "prisma/schema.prisma"]);
     if (process.argv.includes("--generate-advanced")) await run(["node_modules/prisma/build/index.js", "migrate", "diff", "--from-url", env.DATABASE_URL, "--to-schema-datamodel", "prisma/schema.prisma", "--script", "--output", "prisma/migrations/20261015220000_team_os_complete/migration.sql"]);
@@ -36,6 +36,8 @@ async function main() {
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261017010000_team_client_contacts/migration.sql", "--schema", "prisma/schema.prisma"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261017120000_team_appointment_messages/migration.sql", "--schema", "prisma/schema.prisma"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261017130000_team_calendar_deleted_status/migration.sql", "--schema", "prisma/schema.prisma"]);
+    // Bring the empty historical fixture up to today's generated client schema.
+    await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate", "--accept-data-loss"]);
     await run(["--import", "tsx", "scripts/verify-team-owner-bootstrap.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os-advanced.ts"]);

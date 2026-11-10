@@ -15,6 +15,7 @@ async function main() {
   const suffix = Date.now().toString(36);
   await prisma.referralProgram.upsert({ where: { id: 1 }, create: { id: 1, effectiveAt: new Date(0), netRevenueEffectiveAt: new Date(0) }, update: { netRevenueEffectiveAt: new Date(0) } });
   const researcherUser = await prisma.user.create({ data: { googleId: `acq-r-${suffix}`, name: "Researcher", email: `r-${suffix}@fixture.invalid` } });
+  const referrerUser = await prisma.user.create({ data: { googleId: `acq-ref-${suffix}`, name: "Independent customer referrer", email: `ref-${suffix}@fixture.invalid` } });
   const converterUser = await prisma.user.create({ data: { googleId: `acq-c-${suffix}`, name: "Converter", email: `c-${suffix}@fixture.invalid` } });
   const customer = await prisma.user.create({ data: { googleId: `acq-u-${suffix}`, name: "Customer", email: `u-${suffix}@fixture.invalid` } });
   const workspace = await prisma.teamWorkspace.create({ data: { name: `Acquisition ${suffix}` } });
@@ -27,10 +28,10 @@ async function main() {
   const growth = await prisma.growthLead.create({ data: { kind: "acquisition", name: "Fixture Artist", email: prospectContact, interest: "Distribution", message: "Fixture source-backed lead" } });
   const prospect = await prisma.teamProspect.create({ data: { workspaceId: workspace.id, ownerId: researcher.id, name: "Fixture Artist", contactName: "Fixture Artist", email: prospectContact, sourceUrl: "https://example.org/artist", evidence: "Public professional contact source", categories: ["Distribution"], score: { intent: 10 }, stage: "INTERESTED", contactEligibility: "LEGITIMATE_INTEREST", verified: true, identityKey: `fixture-${suffix}`, leadId: growth.id } });
   const lead = await prisma.acquisitionLead.create({ data: { workspaceId: workspace.id, prospectId: prospect.id, requiresReferralConsent:false, researcherEmployeeId: researcher.id, acquisitionEmployeeId: converter.id, customerId: customer.id, convertedAt: new Date(), attributionLockedAt: new Date() } });
-  await prisma.referral.create({ data: { userId: researcherUser.id, referredUserId: customer.id, referralCode: `FIX-${suffix}`, signupEmail: customer.email, status: "PENDING" } });
+  await prisma.referral.create({ data: { userId: referrerUser.id, referredUserId: customer.id, referralCode: `FIX-${suffix}`, signupEmail: customer.email, status: "PENDING" } });
   const attributionView = await acquisitionRead(actor, "acquisition-customer-attribution", new URLSearchParams({ customerId: String(customer.id) })) as { employeeAttribution: { researcherEmployeeId: string }; customerReferral: { referrer: { id: number } } };
   assert.equal(attributionView.employeeAttribution.researcherEmployeeId, researcher.id);
-  assert.equal(attributionView.customerReferral.referrer.id, researcherUser.id, "Admin attribution inspection shows independent employee and customer referral records.");
+  assert.equal(attributionView.customerReferral.referrer.id, referrerUser.id, "Admin attribution inspection shows independent employee and customer referral records.");
   const leadFilter = await acquisitionRead(actor, "acquisition-leads", new URLSearchParams({ q: prospectContact, status: "INTERESTED" })) as { items: { id: string }[] };
   assert.equal(leadFilter.items.some(item => item.id === lead.id), true, "Lead search combines email and status filters.");
   const exportData = await acquisitionRead(actor, "acquisition-leads-export", new URLSearchParams()) as { csv: string; count: number };
@@ -51,7 +52,12 @@ async function main() {
   const acquisitionToken = decodeURIComponent(new URL(signedLink.url).pathname.split("/").pop()!);
   const joinedCustomer = await createPasswordUser({ name: "Signed link customer", email: `signed-${suffix}@fixture.invalid`, passwordHash: "fixture-only-hash", role: "customer", acquisitionToken });
   assert.ok(joinedCustomer);
-  await prisma.referral.create({ data: { userId: researcherUser.id, referredUserId: joinedCustomer.id, referralCode: `SIGNED-${suffix}`, signupEmail: joinedCustomer.email } });
+  assert.equal((await prisma.acquisitionLead.findUniqueOrThrow({ where: { id: submittedLead.id } })).customerId, null, "Signup does not silently create a referral connection.");
+  // Exercise the explicit legacy signed-link attachment helper separately from
+  // signup; current signup requires the customer's later consent flow.
+  await prisma.acquisitionLead.update({ where: { id: submittedLead.id }, data: { requiresReferralConsent: false } });
+  assert.equal(await prisma.$transaction(tx => attachNewCustomerToAcquisitionLead(tx, { token: acquisitionToken, customerId: joinedCustomer.id, email: joinedCustomer.email })), true);
+  await prisma.referral.create({ data: { userId: referrerUser.id, referredUserId: joinedCustomer.id, referralCode: `SIGNED-${suffix}`, signupEmail: joinedCustomer.email } });
   const matchedLead = await prisma.acquisitionLead.findUniqueOrThrow({ where: { id: submittedLead.id } });
   assert.equal(matchedLead.customerId, joinedCustomer.id);
   assert.equal(matchedLead.researcherEmployeeId, researcher.id);
@@ -105,7 +111,7 @@ async function main() {
   assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).originalMinor, 160, "Original calculation is preserved alongside the adjustment ledger.");
 
   const ordinaryCustomer = await prisma.user.create({ data: { name: "Customer without employee lead", email: `ordinary-${suffix}@fixture.invalid`, googleId: `ordinary-${suffix}` } });
-  await prisma.referral.create({ data: { userId: researcherUser.id, referredUserId: ordinaryCustomer.id, referralCode: `ORD-${suffix}`, signupEmail: ordinaryCustomer.email } });
+  await prisma.referral.create({ data: { userId: referrerUser.id, referredUserId: ordinaryCustomer.id, referralCode: `ORD-${suffix}`, signupEmail: ordinaryCustomer.email } });
   const ordinaryOrder = await prisma.distributionOrder.create({ data: { userId: ordinaryCustomer.id, plan: "one_time", amount: 100, razorpayOrderId: `order_ordinary_${suffix}`, razorpayPaymentId: `pay_ordinary_${suffix}`, paymentStatus: "paid" } });
   await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", ordinaryOrder.id));
   const ordinaryEvidence = await prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { paymentId: ordinaryOrder.razorpayPaymentId! } });
@@ -169,10 +175,10 @@ async function main() {
   await prisma.paymentWebhookEvent.update({ where: { id: pendingBeforePayment.id }, data: { processingState: "processed" } });
   await prisma.referralCommission.update({ where: { id: customerReward.id }, data: { eligibleAt: new Date(Date.now() - 1000) } });
   await prisma.$transaction(tx => refreshReferralCommission(tx, paymentId));
-  assert.equal(await prisma.$transaction(tx => clearedReferralMinor(tx, researcherUser.id)), 20);
+  assert.equal(await prisma.$transaction(tx => clearedReferralMinor(tx, referrerUser.id)), 20);
   await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-dispute", { id: evidence!.id, reason: "Ownership disputed pending documented review" }));
   assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).status, "HELD");
-  assert.equal(await prisma.$transaction(tx => clearedReferralMinor(tx, researcherUser.id)), 0, "Manual disputes remove otherwise available customer rewards from withdrawal.");
+  assert.equal(await prisma.$transaction(tx => clearedReferralMinor(tx, referrerUser.id)), 0, "Manual disputes remove otherwise available customer rewards from withdrawal.");
   assert.equal((await acquisitionRead(actor, "acquisition-ledger", new URLSearchParams()) as { items: { paymentId: string; status: string }[] }).items.filter(row => row.paymentId === paymentId).every(row => row.status === "DISPUTED"), true);
   await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-record", { payoutId: (approved as { id: string }).id, paymentReference: "must-not-pay", reason: "Disputed approved transfer must be blocked" })), /disputed|reconciliation/);
   await assert.rejects(review(7000), /Explicitly confirm/);

@@ -246,6 +246,9 @@ async function main() {
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);
     const migrations = readdirSync("prisma/migrations", { withFileTypes: true }).filter(entry => entry.isDirectory() && /^202610(?:19|22)\d+_/.test(entry.name)).map(entry => path.join("prisma/migrations", entry.name, "migration.sql")).sort();
     for (const migration of migrations) await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", migration, "--schema", "prisma/schema.prisma"]);
+    // Historical migration checks above use their original baseline. Domain
+    // checks import today's client and need today's schema in this empty fixture.
+    await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate", "--accept-data-loss"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-domain.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-crm-workflow.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-daily-work.ts"]);

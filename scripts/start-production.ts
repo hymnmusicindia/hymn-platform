@@ -3,11 +3,12 @@ import path from "node:path";
 import { assertProductionDatabaseReady } from "../lib/production-database-safety";
 import { PrismaClient } from "@prisma/client";
 import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
+import { assertTeamSchemaReady } from "../lib/team/schema-readiness";
 
 async function main() {
   const identity = await assertProductionDatabaseReady();
   const db = new PrismaClient();
-  try { await assertDireNoteSchemaReady(db); } finally { await db.$disconnect(); }
+  try { await assertDireNoteSchemaReady(db); await assertTeamSchemaReady(db); } finally { await db.$disconnect(); }
   console.log("Production database identity and schema preflight passed.");
   if (!identity.restrictedRole) console.warn("Database safety warning: runtime DATABASE_URL has schema-creation privileges. Use a restricted runtime role.");
   const port = Number(process.env.PORT || 3000);

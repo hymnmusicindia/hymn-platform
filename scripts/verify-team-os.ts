@@ -61,7 +61,7 @@ async function main() {
   await rejected(() => teamMutation(growth, "prospect-update", { id: prospectId, version: 1, stage: "CONTACTED" }));
   await teamMutation(growth, "prospect-update", { id: prospectId, version: 1, stage: "QUALIFIED" });
   await teamMutation(growth, "prospect-update", { id: prospectId, version: 2, stage: "QUALIFIED" });
-  assert.equal(await prisma.teamTask.count({ where: { eventKey: `${prospectId}:QUALIFIED` } }), 1);
+  assert.equal(await prisma.teamTask.count({ where: { eventKey: `${prospectId}:call` } }), 1);
   await teamMutation(growth, "reports", { summary: "Prepared artist research and a draft", nextWeek: "Contact approved prospects" });
   const report = await prisma.teamWeeklyReport.findFirstOrThrow({ where: { memberId: growth.id } });
   assert.equal((report.metrics as { artistsContacted: number }).artistsContacted, 0);

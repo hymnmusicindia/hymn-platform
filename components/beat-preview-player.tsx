@@ -415,7 +415,6 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
       audio.loop = previous.loop;
       audioRef.current = audio;
       let failed = false;
-      let timeout: ReturnType<typeof setTimeout>;
       const current = () => attempt === attemptRef.current && audioRef.current === audio;
       const fail = () => {
         if (!current() || failed) return;
@@ -434,8 +433,8 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
       audio.onplaying = () => { clearTimeout(timeout); if (current()) { setPlaying(true); setError(null); } };
       audio.onpause = () => { clearTimeout(timeout); if (current()) setPlaying(false); };
       audio.onerror = fail;
+      const timeout = setTimeout(fail, 12000);
       audio.src = url;
-      timeout = setTimeout(fail, 12000);
       // Start inside the original tap, without a fetch/await that loses iOS activation.
       void audio.play().catch(reason => {
         if (!current() || reason?.name === "AbortError") return;

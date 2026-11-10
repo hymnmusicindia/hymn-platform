@@ -28,6 +28,17 @@ The shared HYMN Google account hosts confirmed call events. The assigned teammat
 
 Refresh tokens are encrypted with AES-256-GCM and never returned to the browser. A connected calendar cannot be silently switched to a different account after it owns events. Reconnect its original hosting account to preserve those bookings.
 
+### Get Google Calendar OAuth credentials
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/), select or create the HYMN project, then enable **Google Calendar API** under **APIs & Services → Library**.
+2. Open **Google Auth Platform**. Configure **Branding** with HYMN's app name, support email and developer contact. Under **Audience**, use Internal only for an eligible Google Workspace organization; otherwise use External. While Testing, add the HYMN hosting Google account as a test user.
+3. Under **Data Access**, add `openid`, `https://www.googleapis.com/auth/userinfo.email`, and `https://www.googleapis.com/auth/calendar.events`. The application requests `openid email` and Calendar event access.
+4. Under **Clients → Create client**, choose **Web application**, name it HYMN Calendar, and add this exact **Authorized redirect URI**: `https://hymnmusic.fun/api/team/google-calendar/callback`. If the app runs on a different public origin, use that origin; it must match the server's public app URL. For local development, add `http://localhost:3000/api/team/google-calendar/callback` separately.
+5. Copy the Client ID and Client secret into the server's environment as `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET`. Set `TEAM_CALENDAR_ENCRYPTION_KEY` to a stable cryptographically random secret; generate one with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Keep these secrets in server configuration, outside source control and client bundles. Restart/redeploy after saving them.
+6. As workspace owner, use **Team queue → Google Calendar & Meet → Connect Google Calendar** and authorize the HYMN hosting Google account. Creating credentials does not connect the calendar by itself.
+
+For External apps in Testing, Calendar refresh tokens expire after seven days. Configure production publishing and any required Google verification for ongoing use, then reconnect as needed. See [Google's web-server OAuth guide](https://developers.google.com/identity/protocols/oauth2/web-server) and [refresh token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration).
+
 ## Durable external synchronization
 
 The database transaction queues synchronization without waiting for Google. After-response hooks and the existing Team OS cron process that queue. Local bookings remain saved during an outage. Deterministic event IDs and conference request IDs, atomic leases, revision checks and retry backoff prevent duplicate event creation and stale local acknowledgements. Rescheduling updates the external event; reassignment replaces the invited teammate; opt-out and cancellation remove the external booking. Completed calls retain calendar history.
