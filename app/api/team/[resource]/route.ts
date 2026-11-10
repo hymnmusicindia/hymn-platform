@@ -64,10 +64,10 @@ export async function POST(request: Request, context: Context) {
     }
     const actor=resource==='accept'?null:await teamActor(new URL(request.url).searchParams.get('workspace')||undefined);
     const result = resource === "accept" ? await acceptTeamInvitation(user, typeof (body as { token?: unknown })?.token === "string" ? (body as { token: string }).token : "") : await teamMutation(actor!, resource, body);
-    if (actor && ["consultations", "call-reschedule", "customer-call-create", "handoff-resolve", "calendar-google-retry", "calendar-save", "calendar-handoff", "calendar-delete", "clients-save", "clients-merge", "workstation-finish"].includes(resource)) {
+    if (actor && ["meeting-create", "meeting-cancel", "consultations", "call-reschedule", "customer-call-create", "handoff-resolve", "calendar-google-retry", "calendar-save", "calendar-handoff", "calendar-delete", "clients-save", "clients-merge", "workstation-finish"].includes(resource)) {
       after(async () => {
         const record = result && typeof result === "object" ? result as Record<string, unknown> : {};
-        const eventId = typeof record.calendarEventId === "string" ? record.calendarEventId : ["calendar-save", "calendar-handoff", "calendar-delete"].includes(resource) && typeof record.id === "string" ? record.id : undefined;
+        const eventId = typeof record.calendarEventId === "string" ? record.calendarEventId : ["meeting-create", "meeting-cancel", "calendar-save", "calendar-handoff", "calendar-delete"].includes(resource) && typeof record.id === "string" ? record.id : undefined;
         await (await import("@/lib/team/google-calendar")).syncGoogleCalendar(actor.workspaceId, eventId);
         if (["call-reschedule", "customer-call-create"].includes(resource) && result && typeof result === "object" && "calendarEventId" in result && typeof result.calendarEventId === "string") await (await import("@/lib/team/appointments")).processAppointments(result.calendarEventId, 4);
       });

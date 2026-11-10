@@ -27,11 +27,23 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--meetings-only')) {
+      const baseline = path.join(fixture, 'meeting-baseline.prisma');
+      writeFileSync(baseline, execFileSync('git', ['show', '15a520e1:prisma/schema.prisma'], { encoding: 'utf8', windowsHide: true }));
+      await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate']);
+      await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261111100000_scheduled_meetings/migration.sql','--schema','prisma/schema.prisma']);
+      const target = path.join(fixture, 'meeting-target.prisma');
+      writeFileSync(target, readFileSync('prisma/schema.prisma','utf8').replaceAll("AT TIME ZONE 'UTC'", "AT TIME ZONE 'UTC'::text"));
+      await run(['node_modules/prisma/build/index.js','migrate','diff','--from-url',env.DATABASE_URL,'--to-schema-datamodel',target,'--exit-code']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-scheduled-meetings.ts'], process.execPath, { ...env, JWT_SECRET: 'meeting-fixture-token-encryption-secret-at-least-thirty-two-characters' });
+      return;
+    }
     if (process.argv.includes('--unified-crm-only')) {
       const baseline = path.join(fixture, 'customer-work-baseline.prisma');
       writeFileSync(baseline, execFileSync('git', ['show', 'd3cceb5a:prisma/schema.prisma'], {encoding:'utf8',windowsHide:true}));
       await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate']);
       await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261110190000_unified_customer_calls/migration.sql','--schema','prisma/schema.prisma']);
+      await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261111100000_scheduled_meetings/migration.sql','--schema','prisma/schema.prisma']);
       const canonicalTarget = path.join(fixture, 'customer-work-target.prisma');
       // PostgreSQL 18 makes the implicit text cast explicit when deparsing defaults.
       writeFileSync(canonicalTarget, readFileSync('prisma/schema.prisma','utf8').replaceAll("AT TIME ZONE 'UTC'", "AT TIME ZONE 'UTC'::text"));

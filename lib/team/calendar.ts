@@ -174,7 +174,7 @@ async function saveEvent(tx: Prisma.TransactionClient, a: Actor, input: unknown,
     if (nearby.some(event => reservationsOverlap(slot, event))) throw new TeamError("This teammate has an overlapping reservation. Calls reserve 30 minutes from their start; choose a free slot or another representative.", 409);
   }
   const fields = { title: data.title, kind: data.kind, clientId: data.clientId, assigneeId: data.assigneeId, startsAt, endsAt, notes: data.notes, outcome: data.outcome, status: data.status, reminderMinutes: data.reminderMinutes, ...(old && (old.startsAt.getTime() !== startsAt.getTime() || old.assigneeId !== data.assigneeId || old.reminderMinutes !== data.reminderMinutes) ? { remindedAt: null } : {}) };
-  const scheduleChanged = !old || old.assigneeId !== data.assigneeId || old.clientId !== data.clientId || old.kind !== data.kind || old.status !== data.status || old.startsAt.getTime() !== startsAt.getTime();
+  const scheduleChanged = !old || old.assigneeId !== data.assigneeId || old.clientId !== data.clientId || old.kind !== data.kind || old.status !== data.status || old.startsAt.getTime() !== startsAt.getTime() || old.endsAt?.getTime() !== endsAt?.getTime() || old.title !== data.title;
   const row = old ? await tx.teamCalendarEvent.update({ where: { id: old.id }, data: { ...fields, version: { increment: 1 }, ...(scheduleChanged ? { scheduleRevision: { increment: 1 } } : {}) } }) : await tx.teamCalendarEvent.create({ data: { ...fields, workspaceId: a.workspaceId, creatorId: a.id } });
   if (scheduleChanged) await queueAppointment(tx, row);
   if (old?.followUpTaskId) {

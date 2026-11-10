@@ -41,6 +41,16 @@ For External apps in Testing, Calendar refresh tokens expire after seven days. C
 
 ## Durable external synchronization
 
+### Automated meetings by email
+
+Workspace owners can use **Team queue → Schedule a Google meeting** to enter guest email addresses, an IST date/time and a 15–240 minute duration. The form starts with tomorrow at 4 PM IST and a 30-minute duration. It accepts up to 20 guests, removes duplicate addresses and checks the host's HYMN reservations. It does not check guests' external calendar availability.
+
+Saving creates a durable meeting request, including while the hosting Google account is disconnected. Connect the account using the existing Google Calendar & Meet form once. The OAuth callback, after-response hook and Team OS worker then create the Google event, invite the supplied guests and request a Meet link. A saved request is not labelled as a Google booking until synchronization succeeds; guests still choose whether to accept. Owner-only request history shows waiting/retry/error states, Calendar/Meet links and cancellation controls, and refreshes pending requests periodically.
+
+Meeting descriptions contain only the explicitly supplied invitation message. Private contact/calendar notes are excluded. Request keys and deterministic Google event IDs protect browser and worker retries from duplicate events. Retries preserve the original form/request identity. Expired offline requests are flagged for a new time instead of sending a retroactive invitation. Cancellation is saved locally and queued for Google so guests receive the external cancellation after synchronization.
+
+Deploy migration `20261111100000_scheduled_meetings` before serving the meeting scheduler. It adds meeting guest/message/request-key fields to existing calendar events without changing historical records. Run `npm run test:meetings` for migration parity, owner permissions, validation, persistence, retry/concurrency/cancellation cases and responsive form tests. The integration continues to use `calendar.events`, `conferenceDataVersion=1` and `sendUpdates=all` as documented by [Google's event creation API](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert).
+
 The database transaction queues synchronization without waiting for Google. After-response hooks and the existing Team OS cron process that queue. Local bookings remain saved during an outage. Deterministic event IDs and conference request IDs, atomic leases, revision checks and retry backoff prevent duplicate event creation and stale local acknowledgements. Rescheduling updates the external event; reassignment replaces the invited teammate; opt-out and cancellation remove the external booking. Completed calls retain calendar history.
 
 The customer card shows the Meet link or synchronization state. Owners see Waiting for connection, Retry and Error exceptions in Team queue, with reconnect and retry controls. Transient failures back off; authentication/conferencing failures require review. Google API requests have timeouts and each processing pass has a bounded time budget. Pending conference creation is polled by subsequent passes.

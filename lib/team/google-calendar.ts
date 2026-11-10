@@ -4,7 +4,8 @@ import type { Prisma, TeamCalendarEvent } from "@prisma/client";
 import { OAuth2Client } from "google-auth-library";
 import { prisma } from "@/lib/prisma";
 import { getPublicAppUrl } from "@/lib/public-app-url";
-import { googleEventBody, googleEventId, safeMeetUrl } from "./google-calendar-policy";
+import { googleConferenceRequestId, googleEventBody, googleEventId, safeMeetUrl } from "./google-calendar-policy";
+import { googleMeetingBody } from "./meeting-policy";
 
 function secretKey() {
   const secret = process.env.TEAM_CALENDAR_ENCRYPTION_KEY || process.env.JWT_SECRET;
@@ -29,7 +30,7 @@ export function calendarOAuthClient() {
   return new OAuth2Client(id, secret, `${getPublicAppUrl()}/api/team/google-calendar/callback`);
 }
 export async function queueGoogleCalendar(tx: Prisma.TransactionClient, event: TeamCalendarEvent) {
-  if (event.kind !== "CALL" && !event.googleEventId) return;
+  if (event.kind !== "CALL" && !(event.kind === "MEETING" && event.meetingRequestKey) && !event.googleEventId) return;
   await tx.teamCalendarEvent.update({ where: { id: event.id }, data: { googleSyncStatus: "PENDING", googleSyncError: null, googleSyncAfter: null, googleSyncAttempts: 0 } });
 }
 class GoogleCalendarError extends Error { constructor(readonly status: number) { super(`Google Calendar returned ${status}.`); } }
@@ -50,6 +51,13 @@ export async function syncGoogleCalendar(workspaceId?: string, onlyEventId?: str
     const lease = new Date();
     if (!(await prisma.teamCalendarEvent.updateMany({ where: { id: event.id, scheduleRevision: event.scheduleRevision, googleSyncStatus: event.googleSyncStatus, googleSyncedRevision: event.googleSyncedRevision, OR: [{ googleSyncLease: null }, { googleSyncLease: { lt: leaseExpiry } }] }, data: { googleSyncLease: lease } })).count) continue;
     try {
+      const standalone = event.kind === "MEETING" && Boolean(event.meetingRequestKey);
+      if (standalone && event.status === "SCHEDULED" && event.startsAt <= now && !event.googleEventId) {
+        const expired = await prisma.teamCalendarEvent.updateMany({ where: { id: event.id, scheduleRevision: event.scheduleRevision, googleSyncLease: lease }, data: { googleSyncStatus: "ERROR", googleSyncError: "The meeting start time has passed. Cancel this request and schedule a new time.", googleSyncLease: null } });
+        if (!expired.count) await prisma.teamCalendarEvent.updateMany({ where: { id: event.id, googleSyncLease: lease }, data: { googleSyncLease: null, googleSyncStatus: "PENDING" } });
+        results.push({ id: event.id, status: "ERROR" });
+        continue;
+      }
       const connection = await prisma.teamGoogleCalendar.findUnique({ where: { workspaceId: event.workspaceId } });
       if (!connection) { await prisma.teamCalendarEvent.updateMany({ where: { id: event.id, googleSyncLease: lease }, data: { googleSyncStatus: "WAITING_CONNECTION", googleSyncError: "An owner must connect Google Calendar.", googleSyncLease: null } }); results.push({ id: event.id, status: "WAITING_CONNECTION" }); continue; }
       const current = await prisma.teamCalendarEvent.findUniqueOrThrow({ where: { id: event.id }, include: { client: true, assignee: { include: { user: true } }, consultation: true } });
@@ -72,11 +80,15 @@ export async function syncGoogleCalendar(workspaceId?: string, onlyEventId?: str
         if (![404, 409, 410].includes(response.status) && !response.ok) throw new GoogleCalendarError(response.status);
         return response;
       };
-      const cancel = current.status !== "SCHEDULED" || current.kind !== "CALL" || current.client?.status !== "ACTIVE" || current.assignee.status !== "ACTIVE" || current.assignee.user.status !== "ACTIVE";
+      const meeting = current.kind === "MEETING" && Boolean(current.meetingRequestKey);
+      const cancel = current.status !== "SCHEDULED" || (meeting ? !current.meetingAttendees.length : current.kind !== "CALL" || current.client?.status !== "ACTIVE") || current.assignee.status !== "ACTIVE" || current.assignee.user.status !== "ACTIVE";
       let meet: string | null = null, calendarUrl: string | null = null, pendingConference = false;
       if (cancel) { const response = await call(`${endpoint}?sendUpdates=all`, "DELETE"); if (response.status === 409) throw new GoogleCalendarError(409); }
-      else if (current.client) {
-        const body = googleEventBody({ ...current, client: current.client }, !current.googleMeetUrl);
+      else if (meeting || current.client) {
+        const body = meeting ? {
+          ...googleMeetingBody(current),
+          ...(!current.googleMeetUrl ? { conferenceData: { createRequest: { requestId: googleConferenceRequestId(current), conferenceSolutionKey: { type: "hangoutsMeet" } } } } : {})
+        } : googleEventBody({ ...current, client: current.client! }, !current.googleMeetUrl);
         const query = "?conferenceDataVersion=1&sendUpdates=all";
         let response = current.googleEventId ? await call(endpoint + query, "PATCH", body) : await call(base + query, "POST", { id: externalId, ...body });
         if (response.status === 404) response = await call(base + query, "POST", { id: externalId, ...body });

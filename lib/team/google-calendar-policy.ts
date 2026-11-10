@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 
-export const googleEventId = (id: string) => `hymn${createHash("sha256").update(id).digest("hex")}`;
+// Google accepts base32hex characters (0-9, a-v); the brand spelling contains y.
+export const googleEventId = (id: string) => `hmn${createHash("sha256").update(id).digest("hex")}`;
+export const googleConferenceRequestId = (event: { id: string; googleEventId?: string | null }) => googleEventId(`${event.googleEventId || googleEventId(event.id)}:meet`);
 export function googleEventBody(event: {
   id: string; title: string; startsAt: Date; endsAt: Date | null; version?: number; googleEventId?: string | null;
   client: { name: string; email: string; phone: string };
@@ -18,7 +20,7 @@ export function googleEventBody(event: {
     attendees: attendees.map(email => ({ email })),
     guestsCanInviteOthers: false, guestsCanModify: false,
     extendedProperties: { private: { hymnEventId: event.id } },
-    ...(createConference ? { conferenceData: { createRequest: { requestId: googleEventId(`${event.googleEventId || event.id}:meet:${event.version || 1}`), conferenceSolutionKey: { type: "hangoutsMeet" } } } } : {})
+    ...(createConference ? { conferenceData: { createRequest: { requestId: googleConferenceRequestId(event), conferenceSolutionKey: { type: "hangoutsMeet" } } } } : {})
   };
 }
 

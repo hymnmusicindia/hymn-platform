@@ -79,7 +79,7 @@ export async function customerWorkMutation(tx: Prisma.TransactionClient, actor: 
     if (!actor.role.owner) throw new TeamError("Only the calendar owner can retry synchronization.", 403);
     const { id } = z.object({ id: z.string() }).parse(input);
     const event = await tx.teamCalendarEvent.findFirst({ where: { id, workspaceId: actor.workspaceId } });
-    if (!event || event.kind !== "CALL" && !event.googleEventId) throw new TeamError("Call not found.", 404);
+    if (!event || event.kind !== "CALL" && !(event.kind === "MEETING" && event.meetingRequestKey) && !event.googleEventId) throw new TeamError("Calendar event not found.", 404);
     await tx.teamCalendarEvent.update({ where: { id }, data: { googleSyncStatus: "PENDING", googleSyncAfter: null, googleSyncAttempts: 0, version: { increment: 1 } } });
     return { id, calendarEventId: id };
   }

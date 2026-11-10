@@ -4243,6 +4243,9 @@ model TeamClient {
 }
 
 model TeamCalendarEvent {
+  meetingRequestKey String? @unique
+  meetingAttendees String[] @default([])
+  meetingDescription String @default("")
   googleEventId String?
   googleMeetUrl String?
   googleCalendarUrl String?

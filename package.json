@@ -6,6 +6,7 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "test:meetings": "tsx scripts/verify-acquisition-isolated.ts --meetings-only && node scripts/verify-meeting-scheduler-browser.cjs",
     "test:unified-crm": "tsx scripts/verify-acquisition-isolated.ts --unified-crm-only && node scripts/verify-team-calendar-oauth.cjs && node scripts/verify-unified-customer-work-browser.cjs",
     "test:site-load": "tsx scripts/verify-acquisition-isolated.ts --site-load-only && tsx scripts/verify-artwork-preview.ts && node scripts/verify-homepage-artwork.cjs",
     "test:user-library": "node scripts/verify-user-library-browser.cjs",

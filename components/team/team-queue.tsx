@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CustomerWorkActions } from "./customer-work-actions";
+import { MeetingScheduler } from "./meeting-scheduler";
 import styles from "./customer-work.module.css";
 type Api = <T>(resource: string, body?: unknown) => Promise<T>;
 type Actor = { id: string; workspaceId: string; owner: boolean; permissions: string[] };
@@ -28,5 +29,6 @@ export function TeamQueue({ api, actor }: { api: Api; actor: Actor }) {
     {data?.waiting.length ? <section><h3>Consultations awaiting allocation</h3>{data.waiting.map(request => <article key={request.id} className={styles.row}><div><strong>{request.fullName}</strong><p>{request.reason}</p></div><Link href={`/team?workspace=${actor.workspaceId}&module=consultations&consultation=${request.id}`}>Review allocation</Link><Link href={customerHref(request.clientId)}>Open customer</Link></article>)}</section> : null}
     <section><header><h3>{data?.manager ? "Team work" : "My work"}</h3><label><input type="checkbox" checked={blocked} onChange={event => setBlocked(event.target.checked)}/>Exceptions only</label></header>{data && !data.tasks.length ? <p>No matching work.</p> : null}{data?.tasks.map(task => <article key={task.id} className={styles.row}><div><strong>{task.title}</strong><p>{task.owner.user.name} · {task.status.replaceAll("_", " ")}{task.dueAt ? ` · ${new Date(task.dueAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST` : " · Unscheduled"}</p>{task.blocker ? <p>{task.blocker}</p> : null}{task.clientId ? <Link href={customerHref(task.clientId)}>Open customer</Link> : null} <Link href={`/team?workspace=${actor.workspaceId}&module=work-station&task=${task.id}`}>Open work</Link></div><CustomerWorkActions api={api} task={task} onSaved={() => void load()} canSchedule={task.isCall && !!task.clientId && (task.ownerId === actor.id || data.manager)} canHandoff={task.ownerId === actor.id || data.manager}/></article>)}</section>
     <CalendarConnection api={api} actor={actor}/>
+    {actor.owner ? <MeetingScheduler api={api}/> : null}
   </div>;
 }

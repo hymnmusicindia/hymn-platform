@@ -22,4 +22,10 @@ export async function assertTeamSchemaReady(db: PrismaClient) {
     }
     throw error;
   }
+  try {
+    await db.teamCalendarEvent.findFirst({ select: { meetingRequestKey: true, meetingAttendees: true, meetingDescription: true } });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && ["P2021", "P2022"].includes(String(error.code))) throw new Error("Team Workspace migration required: apply 20261111100000_scheduled_meetings before serving this application.");
+    throw error;
+  }
 }

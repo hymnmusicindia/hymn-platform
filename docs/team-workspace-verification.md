@@ -28,3 +28,13 @@ The broader browser checks also found that editing an existing contact record ne
 Legacy fixtures were updated to use the real historical pre-migration schema, then brought forward to the current generated client in disposable databases. Customer referral fixtures now use a separate non-staff referrer. Signup is explicitly checked to avoid silently assigning a connection; the old signed-link helper is exercised separately with a legacy lead. Advanced Team tests reject owner work assignments and unverified conversion, and use an employee with the matching review permission.
 
 All external Calendar requests and finance transfers in these tests were simulated. No live Google authorization, invitation delivery, SMTP delivery or real payment transfer was tested. Local OAuth credentials remain in ignored environment files and are not part of the commit.
+
+## Meeting automation follow-up
+
+The owner-facing meeting scheduler now creates durable requests for explicit guest emails and IST times, waits for the hosting account connection, and uses the existing Google synchronization worker for invitations, Meet links and cancellation. The additive migration `20261111100000_scheduled_meetings` was verified for schema parity and applied through the canonical production migration process.
+
+`npm run test:meetings` passes migration parity, owner/revocation checks, recipient/time validation, offline persistence, request idempotency, overlap rejection, private-note exclusion, description escaping, transient failure/retry, concurrent sync, pending conference polling, stable Meet request identity, fully synced no-resend, cancellation and expired-request suppression. Google IDs are checked against the actual API's `0-9` / `a-v` alphabet. The earlier brand-spelled prefix contained an invalid `y`; new deterministic IDs use a valid prefix while stored external IDs remain unchanged.
+
+The browser suite passes at 1440, 390 and 320 pixels, covering tomorrow at 4 PM IST defaults, retained form/request keys after failure, normalized guests, connection waiting state, Google/Meet links, cancellation and overflow. `npm run test:unified-crm`, OAuth boundary checks, schema-readiness checks, focused lint and the 121-migration safety check also pass. No real Google invitations were sent during verification.
+
+The final production build, TypeScript checks and all 369 generated pages passed against the updated disposable fixture database, including the corrected event and conference request identities.
