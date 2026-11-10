@@ -10,6 +10,7 @@ import { notify } from "./service";
 // Written in the same transaction as the appointment. Claims are atomic across
 // hosts; uncertain SMTP outcomes require review, never an automatic duplicate.
 export async function queueAppointment(tx: Prisma.TransactionClient, event: TeamCalendarEvent, now = new Date()) {
+  await (await import("./google-calendar")).queueGoogleCalendar(tx, event);
   await tx.teamAppointmentMessage.updateMany({ where: { eventId: event.id, status: "PENDING" }, data: { status: "CANCELLED" } });
   if (!['CALL','FOLLOW_UP'].includes(event.kind) || event.status !== "SCHEDULED" || !event.clientId || event.startsAt <= now) return;
   const jobs = event.kind === "CALL" ? [{kind: "CLIENT_CONFIRM", dueAt: now}] : [];
@@ -58,7 +59,7 @@ export async function processAppointments(eventId?: string, limit = 20, deliver 
       const body = rep
         ? `You are assigned to call ${client.name} at ${when}.\n${client.phone ? `Phone: ${client.phone}\n` : "No phone is saved. Please coordinate contact details before the call.\n"}${client.email ? `Email: ${client.email}\n` : ""}${e.kind==='FOLLOW_UP'?'This is an internal callback plan; the customer has not been told this is a confirmed appointment.\n':''}If you cannot make it, open the appointment and choose Pass to next available rep. The customer time stays unchanged. If nobody is free, the call stays assigned until coverage is arranged.`
         : `We've ${reminder ? "got a quick reminder about" : "scheduled"} your call with HYMN. A HYMN team member will call you at ${when}.${!client.phone ? " Please reply with the number we should call." : ""}\nIf you need to change the time, just reply to this email.${!registered ? "\nFor better assistance, sign up on HYMN so we can help you with your next steps in one place." : ""}`;
-      const input = { title, greeting: `Hi ${rep ? e.assignee.user.name : client.name},`, body, ctaLabel: rep ? "View call or pass to another rep" : !registered ? "Sign up on HYMN" : "Open HYMN", ctaUrl: `${getPublicAppUrl()}${rep ? href : !registered ? "/login?mode=signup" : "/"}` };
+      const input = { title, greeting: `Hi ${rep ? e.assignee.user.name : client.name},`, body: `${body}${e.kind === "CALL" && e.googleMeetUrl ? `\nJoin Google Meet: ${e.googleMeetUrl}` : ""}`, ctaLabel: rep ? "View call or pass to another rep" : !registered ? "Sign up on HYMN" : "Open HYMN", ctaUrl: `${getPublicAppUrl()}${rep ? href : !registered ? "/login?mode=signup" : "/"}` };
       const eventKey = `team-appointment:${job.id}`;
       const result = await deliver({ to, subject: `${title} · ${when}`, template: "team_appointment", html: emailLayout(input), text: emailText(input), eventKey, entityType: "team_appointment", entityId: job.id, timeoutMs: 10000, ...(rep ? { userId: e.assignee.userId } : {}) });
       const sent = result.status === "sent" || result.status === "duplicate_skipped" && (await prisma.emailLog.findUnique({ where: { eventKey }, select: { status: true } }))?.status === "sent";

@@ -73,6 +73,8 @@ async function runJob() {
     await run('artist-work-review', (tx, a) => reconcileArtistWork(tx, a));
     await run('artist-promises', (tx, a) => syncArtistPromises(tx, a));
     await run('daily-call-schedule',(tx,a)=>syncDailyCallSchedule(tx,a));
+    await run('consultation-allocation', (tx, a) => import('@/lib/team/consultation-work').then(module => module.routeWaitingConsultations(tx, a)));
+    await phase('google-calendar', owner.workspaceId, () => import('@/lib/team/google-calendar').then(module => module.syncGoogleCalendar(owner.workspaceId)));
     await run('coordinator', (tx, a) => syncCoordinator(tx, a));
     await run('availability', (tx, a) => remindAvailability(tx, a));
   }

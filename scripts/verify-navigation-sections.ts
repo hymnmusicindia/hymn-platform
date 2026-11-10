@@ -19,13 +19,13 @@ assert.equal(adminModuleKey("distribution-queue"), "releases");
 assert.equal(adminModuleKey("producers"), "operations");
 assert.equal(adminModuleAllowed("content-id-requests", ["releases.review"]), true);
 assert.equal(adminModuleAllowed("content-id-requests", ["releases.read"]), false);
-const teamKeys = "work-station contacts consultations work overview availability tasks inbox projects chat emails customer-calls calendar creator-applications release-qc directory approvals reports audit settings referral acquisition".split(" ");
+const teamKeys = "work-station contacts team-queue consultations work overview availability tasks inbox projects chat emails customer-calls calendar creator-applications release-qc directory approvals reports audit settings referral acquisition".split(" ");
 const team = sectionItems(teamKeys, teamSectionFor);
-assert.equal(team.length, 10);
+assert.equal(team.length, 6);
 assert.deepEqual(team.flatMap(section => section.items).sort(), teamKeys.sort());
-assert.deepEqual(["work-station", "contacts", "consultations", "work"].map(teamSectionFor), ["Today", "Contacts", "Consultations", "My Work"]);
+assert.deepEqual(["work-station", "contacts", "consultations", "work"].map(teamSectionFor), ["My day", "Customers", "Manage", "My day"]);
 assert.equal(teamSectionFor("crm"), teamSectionFor("acquisition"));
-assert.equal(teamSectionFor('leadership'), 'Leadership');
+assert.equal(teamSectionFor('leadership'), 'Manage');
 for (const profile of ["customer", "producer"]) {
   const original = [
     { key: "overview", label: "Overview", group: "Home" },

@@ -2,6 +2,9 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { can, demand, TeamError, type Actor } from "./policy";
 import { taskScope } from "./service";
+import { callJourney } from "./call-journey";
+import { isCallWork } from "./daily-call-policy";
+import { appointmentSelect } from "./customer-work";
 import { publicContact } from "./contact-directory";
 
 const activeTaskStatuses = { notIn: ["COMPLETED", "CANCELLED"] };
@@ -42,11 +45,17 @@ export async function contactProfileRead(actor: Actor, params: URLSearchParams) 
         id: true,
         title: true,
         status: true,
+        version: true,
+        callPhase: true,
+        callAttempts: true,
+        conversationCount: true,
+        eventKey: true,
+        followUpContext: true,
         dueAt: true,
         ownerId: true,
       },
     }),
-    can(actor, "calendar.view") || can(actor, "tasks.all") || can(actor, "tasks.assign")
+    can(actor, "tasks.all") || can(actor, "tasks.assign")
       ? prisma.teamCalendarEvent.findMany({
           where: {
             workspaceId: actor.workspaceId,
@@ -57,7 +66,8 @@ export async function contactProfileRead(actor: Actor, params: URLSearchParams) 
           take: 20,
           orderBy: { startsAt: "asc" },
           select: {
-            id: true,
+            ...appointmentSelect,
+            followUpTaskId: true,
             title: true,
             kind: true,
             startsAt: true,
@@ -76,7 +86,8 @@ export async function contactProfileRead(actor: Actor, params: URLSearchParams) 
           take: 20,
           orderBy: { startsAt: "asc" },
           select: {
-            id: true,
+            ...appointmentSelect,
+            followUpTaskId: true,
             title: true,
             kind: true,
             startsAt: true,
@@ -88,17 +99,17 @@ export async function contactProfileRead(actor: Actor, params: URLSearchParams) 
       where: {
         workspaceId: actor.workspaceId,
         entityId: { in: familyIds },
-        action: { in: ["contact.call_report", "contact.activity_report"] },
+        action: { in: ["contact.call_report", "contact.activity_report", "contact.schedule_changed", "contact.handoff_requested", "contact.handoff_resolved"] },
       },
       take: 30,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      select: { id: true, createdAt: true, detail: true },
+      select: { id: true, actorId: true, createdAt: true, detail: true },
     }),
     can(actor, "crm.prospects.view")
       ? prisma.consultationRequest.findMany({
           where: {
             workspaceId: actor.workspaceId,
-            clientId: contact.id,
+            clientId: { in: familyIds },
             ...(!can(actor, "crm.all") ? { assignedMemberId: actor.id } : {}),
           },
           take: 10,
@@ -111,6 +122,7 @@ export async function contactProfileRead(actor: Actor, params: URLSearchParams) 
             assignedMemberId: true,
             assignedMember: { select: { user: { select: { name: true } } } },
             activities: {
+              where: { kind: { notIn: ["FUNNEL_EVENT"] } },
               take: 10,
               orderBy: { createdAt: "desc" },
               select: {
@@ -125,11 +137,11 @@ export async function contactProfileRead(actor: Actor, params: URLSearchParams) 
         })
       : Promise.resolve([]),
   ]);
-  const memberIds = [...new Set([...tasks.map(task => task.ownerId), ...events.map(event => event.assigneeId)])];
+  const memberIds = [...new Set([...tasks.map(task => task.ownerId), ...events.map(event => event.assigneeId), ...reports.map(report => report.actorId)])];
   const owners = memberIds.length
     ? await prisma.teamMember.findMany({
         where: { workspaceId: actor.workspaceId, id: { in: memberIds } },
-        select: { id: true, user: { select: { name: true } } },
+        select: { id: true, jobTitle: true, user: { select: { name: true } } },
       })
     : [];
   const ownerNames = new Map(owners.map(owner => [owner.id, owner.user.name]));
@@ -150,17 +162,24 @@ export async function contactProfileRead(actor: Actor, params: URLSearchParams) 
     ownerId: event.assigneeId,
     ownerName: ownerNames.get(event.assigneeId) || "",
     type: "calendar" as const,
+    ...Object.fromEntries(Object.entries(event).filter(([key]) => key.startsWith("google"))),
+    followUpTaskId: event.followUpTaskId,
   }));
   const taskActions = openTasks.map(task => ({
         id: task.id,
         title: task.title,
+        version: task.version,
+        isCall: isCallWork(task),
+        journey: callJourney(task.followUpContext,task),
+        canManage: task.ownerId === actor.id || can(actor, "tasks.assign"),
+        booking: events.find(event => event.followUpTaskId === task.id) || null,
         status: task.status,
         dueAt: task.dueAt,
         ownerId: task.ownerId,
         ownerName: ownerNames.get(task.ownerId) || "",
         type: "task" as const,
       }));
-  const nextAction = [...taskActions, ...eventActions]
+  const nextAction = [...taskActions, ...eventActions.filter(event => !event.followUpTaskId || !taskActions.some(task => task.id === event.followUpTaskId))]
     .sort((left, right) => {
       if (left.dueAt && right.dueAt) return left.dueAt.localeCompare(right.dueAt);
       if (left.dueAt) return -1;
@@ -184,8 +203,8 @@ export async function contactProfileRead(actor: Actor, params: URLSearchParams) 
       type: "interaction" as const,
       createdAt: row.createdAt.toISOString(),
       occurredAt: detail.occurredAt || row.createdAt.toISOString(),
-      authorName: detail.authorName || "Team member",
-      authorRole: detail.authorRole || "",
+      authorName: detail.authorName || ownerNames.get(row.actorId) || "Team member",
+      authorRole: detail.authorRole || owners.find(member => member.id === row.actorId)?.jobTitle || "",
       outcome: detail.outcome || "",
       discussion: detail.discussion || "",
       nextAction: detail.nextAction || "",
@@ -216,6 +235,7 @@ export async function contactProfileRead(actor: Actor, params: URLSearchParams) 
       owner: { id: contact.owner.id, name: contact.owner.user.name },
     },
     nextAction,
+    actions: taskActions,
     upcomingEvents: eventActions,
     consultations: consultations.map(request => ({
       id: request.id,

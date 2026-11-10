@@ -73,7 +73,7 @@ const statusMessage: Record<Confirmation["status"], string> = {
   NEW_LEAD: "Your consultation request has been received.",
   UNASSIGNED: "Your request is received. Our team will arrange the right contact.",
   ASSIGNED: "Your request is with the HYMN team. We will contact you shortly.",
-  CALLBACK_SCHEDULED: "Your consultation request has been received.",
+  CALLBACK_SCHEDULED: "Your consultation call is scheduled. Your calendar invitation will follow.",
   CONTACTED: "The HYMN team is in touch with you.",
   CONSULTATION_COMPLETED: "Your consultation is complete.",
   FOLLOW_UP_REQUIRED: "The HYMN team will follow up with you.",
@@ -90,8 +90,20 @@ export function ConsultationPortal() {
   const [countrySearch, setCountrySearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [availableDates, setAvailableDates] = useState<{date:string;slots:string[]}[]>([]);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotRevision, setSlotRevision] = useState(0);
+  const [slotError, setSlotError] = useState("");
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const selectedCountry = contactPhoneCountries.find(country => country.code === draft.countryCode) || contactPhoneCountries[0];
+  const accountId = account?.id;
+  useEffect(() => {
+    if (step !== 5 || !accountId) return;
+    const controller = new AbortController(); setSlotsLoading(true); setSlotError("");
+    void fetch("/api/consultation?mode=slots", {cache:"no-store",signal:controller.signal}).then(async response=>{const result=await response.json();if(!response.ok)throw Error(result.error||"Availability could not load.");return result as {dates:{date:string;slots:string[]}[]};}).then(result=>{setAvailableDates(result.dates);setSelectedDate(result.dates[0]?.date||"");setDraft(current=>({...current,callbackAt:result.dates.some(day=>day.slots.includes(current.callbackAt))?current.callbackAt:""}));}).catch(cause=>{if(!controller.signal.aborted)setSlotError(cause instanceof Error?cause.message:"Availability could not load.");}).finally(()=>{if(!controller.signal.aborted)setSlotsLoading(false);});
+    return()=>controller.abort();
+  }, [step, accountId, slotRevision]);
   const progress = Math.max(0, Math.min(5, step - 1));
   const progressLabel = step > 0 && step < 6 ? `Step ${step} of 5` : "";
   const serviceTitles = useMemo(() => new Map(CONSULTATION_INTERESTS.map(item => [item.id, item.title])), []);
@@ -230,7 +242,7 @@ export function ConsultationPortal() {
     if (!account || busy) return;
     if (!draft.interests.length) { setError("Choose at least one service so we can connect you with the right team."); return; }
     if (draft.interests.includes("OTHER") && !draft.otherRequirement.trim()) { setError("Tell us a little more about the other service you need."); return; }
-    if (!draft.callbackAt || new Date(draft.callbackAt).getTime() <= Date.now()) { setError("Choose a preferred callback date and time in the future."); return; }
+    if (draft.callbackAt && new Date(draft.callbackAt).getTime() <= Date.now()) { setError("Choose an available future time or ask the team to arrange one."); return; }
     if (!draft.consent) { setError("Please agree to the consultation privacy notice to submit your request."); return; }
     setBusy(true);
     setError("");
@@ -340,12 +352,14 @@ export function ConsultationPortal() {
       </section> : null}
 
       {step === 5 ? <section className={styles.formStep}>
-        <span className={styles.eyebrow}>05 / CALLBACK</span><h1>When should we call?</h1><p>Choose a preferred date and time. This is a preference, not a confirmed booking. We may call earlier, later, or at another time.</p>
+        <span className={styles.eyebrow}>05 / CALLBACK</span><h1>When should we call?</h1><p>Choose an available time for your consultation, or ask the team to arrange a time with you. Times are shown in IST.</p>
         <div className={styles.selectedServices}><span>CONSULTATION FOCUS</span><p>{draft.interests.map(id => serviceTitles.get(id)).filter(Boolean).join(" · ")}</p></div>
         <form className={styles.consentForm} onSubmit={submitConsultation}>
-          <label className={styles.callbackPreference} htmlFor="consultation-preferred-callback">Preferred date and time</label>
-          <input className={styles.callbackInput} id="consultation-preferred-callback" type="datetime-local" required value={draft.callbackAt} min={new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16)} onChange={event => setDraft(current => ({ ...current, callbackAt: event.target.value, consent: false }))}/>
-          <p className={styles.callbackDisclaimer}>We’ll try to use this as guidance. It does not guarantee a call at this exact time, and HYMN may contact you earlier.</p>
+          {slotsLoading ? <p role="status">Checking consultation availability?</p> : null}
+          {slotError ? <p role="alert">{slotError} <button type="button" onClick={()=>setSlotRevision(value=>value+1)}>Retry availability</button></p> : null}
+          <label className={styles.callbackPreference}>Consultation date (IST)<select className={styles.callbackInput} value={selectedDate} onChange={event=>{setSelectedDate(event.target.value);setDraft(current=>({...current,callbackAt:"",consent:false}));}}><option value="">Have the team arrange a time</option>{availableDates.map(day=><option key={day.date} value={day.date}>{day.date}</option>)}</select></label>
+          {selectedDate ? <label className={styles.callbackPreference}>Available time (IST)<select className={styles.callbackInput} required value={draft.callbackAt} onChange={event=>setDraft(current=>({...current,callbackAt:event.target.value,consent:false}))}><option value="">Choose an available time</option>{availableDates.find(day=>day.date===selectedDate)?.slots.map(slot=><option key={slot} value={slot}>{new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",hour:"numeric",minute:"2-digit"}).format(new Date(slot))}</option>)}</select></label> : null}
+          <p className={styles.callbackDisclaimer}>We recheck availability when you submit. If the slot is taken, your request stays saved and the HYMN team will arrange another time.</p>
           <p className={styles.privacyNotice}>We use your name, email, phone, selections and referral details to arrange and manage this consultation. Request access, correction or deletion via <Link href="/contact" target="_blank">Support</Link>. <Link href="/privacy-policy" target="_blank">Privacy policy</Link>.</p>
           <label className={styles.checkboxLabel}><input type="checkbox" checked={draft.consent} onChange={event => setDraft(current => ({ ...current, consent: event.target.checked }))}/><span>I agree that HYMN may use the details I provided to respond to and manage this consultation request. See the <Link href="/privacy-policy" target="_blank">Privacy Policy</Link>.</span></label>
           <label className={styles.checkboxLabel}><input type="checkbox" checked={draft.marketingConsent} onChange={event => setDraft(current => ({ ...current, marketingConsent: event.target.checked }))}/><span>Optional: email me HYMN news and music-industry updates. This is not required for a consultation.</span></label>
@@ -362,7 +376,7 @@ export function ConsultationPortal() {
           <div><span>HYMN ACCOUNT</span><strong>{confirmation.email}</strong></div>
           <div><span>PHONE</span><strong>{confirmation.phone}</strong></div>
           <div><span>CONSULTATION FOCUS</span><strong>{confirmation.interests.map(id => serviceTitles.get(id) || id).join(", ")}</strong></div>
-          <div><span>PREFERRED CALLBACK</span><strong>{confirmation.preferredCallback ? new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeStyle: "short", hour12: true }).format(new Date(confirmation.preferredCallback)) : "No preference provided"}. This is not a confirmed time; HYMN may call earlier or at another time.</strong></div>
+          <div><span>PREFERRED CALLBACK</span><strong>{confirmation.preferredCallback ? new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeStyle: "short", hour12: true, timeZone: "Asia/Kolkata" }).format(new Date(confirmation.preferredCallback)) : "No preference provided"}{confirmation.status === "CALLBACK_SCHEDULED" ? " IST ? Appointment scheduled" : " ? Awaiting scheduling confirmation"}</strong></div>
           <div><span>STATUS</span><strong>{statusMessage[confirmation.status]}</strong></div>
         </div>
         <Link href="/" className={styles.primaryButton}>Return to HYMN <ArrowRight size={17}/></Link>

@@ -62,6 +62,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
 
 /** Reuse canonical mutations inside the already locked workspace transaction. */
 export async function teamMutationTx(tx:Tx,a:Actor,resource:string,input:unknown) {
+  if (["call-reschedule", "customer-call-create", "handoff-request", "handoff-resolve", "calendar-google-retry"].includes(resource)) return (await import("./customer-work")).customerWorkMutation(tx, a, resource, input);
   if (resource.startsWith('artist-')) return (await import('./artist-journey')).artistMutation(tx,a,resource,input);
   if (resource === "workstation-email") return (await import("./work-station")).stationEmail(tx,a,input);
   if (resource.startsWith("workstation-")) return (await import("./work-station")).stationMutation(tx,a,resource,input);
@@ -367,6 +368,7 @@ export async function teamMutationTx(tx:Tx,a:Actor,resource:string,input:unknown
 export { acceptTeamInvitation } from './invitations';
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if (["call-slots", "team-queue", "handoff-members", "calendar-connection"].includes(resource)) return (await import("./customer-work")).customerWorkRead(a, resource, params);
   if (resource === "consultations") return (await import("./consultations")).consultationRead(a, params);
   if (resource.startsWith('artist-')) return (await import('./artist-journey')).artistRead(a,resource,params);
   if (resource.startsWith('chat-')) return (await import('./chat')).chatRead(a, resource, params);

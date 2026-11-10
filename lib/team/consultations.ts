@@ -7,15 +7,18 @@ import { acceptsAssignmentsNow } from "./availability-rules";
 import { TeamError, can, demand, type Actor } from "./policy";
 import { audit, notify } from "./service";
 import { queueAppointment } from "./appointments";
+import { syncConsultationTask } from "./consultation-work";
+import { allocateCustomerCall } from "./call-assignment";
+import { activityOpen } from "./work-station-policy";
 
 const statuses = Object.values(ConsultationStatus);
 const mutationSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("status"), id: z.string().min(1), status: z.nativeEnum(ConsultationStatus) }).strict(),
-  z.object({ action: z.literal("assign"), id: z.string().min(1), memberId: z.string().min(1) }).strict(),
-  z.object({ action: z.literal("note"), id: z.string().min(1), message: z.string().trim().min(1).max(2000) }).strict(),
-  z.object({ action: z.literal("contact_attempt"), id: z.string().min(1), message: z.string().trim().min(1).max(2000) }).strict(),
-  z.object({ action: z.literal("request_reassignment"), id: z.string().min(1), message: z.string().trim().min(5).max(1000) }).strict(),
-  z.object({ action: z.literal("callback"), id: z.string().min(1), callbackAt: z.string().datetime({ offset: true }).nullable() }).strict()
+  z.object({ action: z.literal("status"), id: z.string().min(1), version: z.number().int().positive(), status: z.nativeEnum(ConsultationStatus) }).strict(),
+  z.object({ action: z.literal("assign"), id: z.string().min(1), version: z.number().int().positive(), memberId: z.string().min(1) }).strict(),
+  z.object({ action: z.literal("note"), id: z.string().min(1), version: z.number().int().positive(), message: z.string().trim().min(1).max(2000) }).strict(),
+  z.object({ action: z.literal("contact_attempt"), id: z.string().min(1), version: z.number().int().positive(), message: z.string().trim().min(1).max(2000) }).strict(),
+  z.object({ action: z.literal("request_reassignment"), id: z.string().min(1), version: z.number().int().positive(), message: z.string().trim().min(5).max(1000) }).strict(),
+  z.object({ action: z.literal("callback"), id: z.string().min(1), version: z.number().int().positive(), callbackAt: z.string().datetime({ offset: true }).nullable() }).strict()
 ]);
 
 const assignedScope = (actor: Actor) => can(actor, "crm.all") ? {} : { assignedMemberId: actor.id };
@@ -68,7 +71,7 @@ export async function consultationRead(actor: Actor, params: URLSearchParams) {
       include: {
         client: { select: { id: true, name: true, email: true, phone: true } },
         assignedMember: { select: { id: true, user: { select: { name: true } } } },
-        calendarEvent: { select: { id: true, startsAt: true, status: true } },
+        calendarEvent: { select: { id: true, startsAt: true, status: true, kind: true } },
         activities: { take: 20, orderBy: { createdAt: "desc" }, include: { actorMember: { select: { id: true, user: { select: { name: true } } } } } }
       }
     }),
@@ -81,9 +84,18 @@ export async function consultationRead(actor: Actor, params: URLSearchParams) {
   return { items, total, offset, statuses: Object.fromEntries(statusCounts), members: eligibleMembers };
 }
 
-export async function consultationMutation(tx: Prisma.TransactionClient, actor: Actor, raw: unknown) {
+async function consultationMutationInner(tx: Prisma.TransactionClient, actor: Actor, raw: unknown) {
   const data = mutationSchema.parse(raw);
   const request = await accessibleRequest(tx, actor, data.id);
+  if (data.action === "assign") demand(actor, "crm.prospects.assign");
+  else if (data.action !== "request_reassignment") demand(actor, "crm.outreach.manage");
+  if (request.version !== data.version) throw new TeamError("Consultation changed. Refresh before saving.", 409);
+  if (request.taskId && ["assign", "callback", "status"].includes(data.action)) {
+    const task = await tx.teamTask.findUniqueOrThrow({ where: { id: request.taskId } });
+    if (activityOpen(task.followUpContext)) throw new TeamError("Pause and finish the active call before changing its booking or assignment.", 409);
+    if (data.action === "status" && ["CONTACTED", "CONSULTATION_COMPLETED"].includes(data.status) && task.conversationCount === 0) throw new TeamError("Record the real conversation in the shared call activity first.", 409);
+  }
+  if (data.action === "contact_attempt") throw new TeamError("Record the call outcome in the shared call activity so attempts and follow-ups stay consistent.", 409);
 
   if (data.action === "request_reassignment") {
     if (request.assignedMemberId !== actor.id) throw new TeamError("Only the assigned team member can request reassignment.", 403);
@@ -104,7 +116,7 @@ export async function consultationMutation(tx: Prisma.TransactionClient, actor: 
 
   if (data.action === "status") {
     const status = data.status as ConsultationStatus;
-    if (status === ConsultationStatus.CALLBACK_SCHEDULED && (!request.preferredCallback || request.calendarEvent?.status !== "SCHEDULED")) {
+    if (status === ConsultationStatus.CALLBACK_SCHEDULED && (!request.preferredCallback || request.calendarEvent?.status !== "SCHEDULED" || request.calendarEvent.kind !== "CALL")) {
       throw new TeamError("Schedule an available callback before setting this status.");
     }
     if (status === ConsultationStatus.UNASSIGNED && request.assignedMemberId) {
@@ -128,17 +140,11 @@ export async function consultationMutation(tx: Prisma.TransactionClient, actor: 
     return { id: request.id, status };
   }
 
-  if (data.action === "note" || data.action === "contact_attempt") {
-    const kind = data.action === "note" ? "INTERNAL_NOTE" : "CONTACT_ATTEMPT";
-    const markContacted = data.action === "contact_attempt" && (request.status === ConsultationStatus.ASSIGNED || request.status === ConsultationStatus.CALLBACK_SCHEDULED);
+  if (data.action === "note") {
+    const kind = "INTERNAL_NOTE";
     await tx.consultationActivity.create({ data: { consultationId: request.id, actorMemberId: actor.id, kind, message: data.message } });
     await audit(tx, actor, kind, request.id);
-    if (markContacted) {
-      await tx.consultationRequest.update({ where: { id: request.id }, data: { status: ConsultationStatus.CONTACTED } });
-      await tx.consultationActivity.create({ data: { consultationId: request.id, actorMemberId: actor.id, kind: "STATUS_CHANGED", message: `${request.status} → CONTACTED`, metadata: { from: request.status, to: ConsultationStatus.CONTACTED } } });
-      await audit(tx, actor, "CONSULTATION_STATUS_CHANGED", request.id, { from: request.status, to: ConsultationStatus.CONTACTED });
-    }
-    return { id: request.id, status: markContacted ? ConsultationStatus.CONTACTED : request.status };
+    return { id: request.id, status: request.status };
   }
 
   if (data.action === "assign") {
@@ -148,6 +154,9 @@ export async function consultationMutation(tx: Prisma.TransactionClient, actor: 
       select: { id: true, preferences: true, user: { select: { name: true } } }
     });
     if (!member || !acceptsAssignmentsNow(member.preferences)) throw new TeamError("Choose an eligible, available HYMN team member.");
+    const bookingAt = request.calendarEvent?.status === "SCHEDULED" ? request.calendarEvent.startsAt : new Date(Date.now() + 1800000);
+    const capacity = await allocateCustomerCall(tx, { workspaceId: actor.workspaceId, after: bookingAt, onlyMemberId: member.id, exact: request.calendarEvent?.status === "SCHEDULED", eventId: request.calendarEvent?.id, taskId: request.taskId || undefined, consultation: true });
+    if (!capacity) throw new TeamError("That teammate has no shared call capacity at this time.", 409);
     if (request.calendarEvent?.status === "SCHEDULED" && request.preferredCallback) {
       const reservations = await tx.teamCalendarEvent.findMany({
         where: { workspaceId: actor.workspaceId, assigneeId: member.id, status: "SCHEDULED", id: { not: request.calendarEvent.id }, startsAt: { gte: new Date(request.calendarEvent.startsAt.getTime() - 7 * 86400000), lt: new Date(request.calendarEvent.startsAt.getTime() + 30 * 60000) } },
@@ -161,7 +170,7 @@ export async function consultationMutation(tx: Prisma.TransactionClient, actor: 
       const updatedEvent = await tx.teamCalendarEvent.findUniqueOrThrow({ where: { id: request.calendarEvent.id } });
       await queueAppointment(tx, updatedEvent);
     }
-    const nextStatus = request.preferredCallback ? ConsultationStatus.CALLBACK_SCHEDULED : ConsultationStatus.ASSIGNED;
+    const nextStatus = request.calendarEvent?.status === "SCHEDULED" && request.calendarEvent.kind === "CALL" ? ConsultationStatus.CALLBACK_SCHEDULED : ConsultationStatus.ASSIGNED;
     await tx.consultationRequest.update({ where: { id: request.id }, data: { assignedMemberId: member.id, status: nextStatus } });
     await tx.consultationActivity.create({ data: { consultationId: request.id, actorMemberId: actor.id, kind: "ASSIGNED", message: `Assigned to ${member.user.name}`, metadata: { memberId: member.id } } });
     await tx.teamNotification.create({ data: { memberId: member.id, title: `New consultation lead: ${request.fullName}`, href: `/team?workspace=${encodeURIComponent(actor.workspaceId)}&module=consultations&consultation=${encodeURIComponent(request.id)}` } });
@@ -186,7 +195,8 @@ export async function consultationMutation(tx: Prisma.TransactionClient, actor: 
       where: { workspaceId: actor.workspaceId, assigneeId: request.assignedMemberId, status: "SCHEDULED", ...(eventId ? { id: { not: eventId } } : {}), startsAt: { gte: new Date(callbackAt.getTime() - 7 * 86400000), lt: new Date(callbackAt.getTime() + 30 * 60000) } },
       select: { kind: true, startsAt: true, endsAt: true }
     });
-    if (!isConsultationSlotAvailable(member.preferences, callbackAt, reservations)) throw new TeamError("That callback slot is no longer available for the assigned team member.", 409);
+    const capacity = await allocateCustomerCall(tx, { workspaceId: actor.workspaceId, onlyMemberId: request.assignedMemberId, after: callbackAt, exact: true, eventId: eventId || undefined, taskId: request.taskId || undefined, consultation: true });
+    if (!capacity || !isConsultationSlotAvailable(member.preferences, callbackAt, reservations)) throw new TeamError("That callback slot is no longer available for the assigned team member.", 409);
     if (eventId) {
       await tx.teamCalendarEvent.update({ where: { id: eventId }, data: { startsAt: callbackAt, endsAt: new Date(callbackAt.getTime() + 30 * 60000), status: "SCHEDULED", scheduleRevision: { increment: 1 }, version: { increment: 1 } } });
     } else {
@@ -208,4 +218,17 @@ export async function consultationMutation(tx: Prisma.TransactionClient, actor: 
   await tx.teamNotification.create({ data: { memberId: request.assignedMemberId, title: callbackAt ? `Consultation callback rescheduled: ${request.fullName}` : `Consultation callback cancelled: ${request.fullName}`, href: `/team?workspace=${encodeURIComponent(actor.workspaceId)}&module=consultations&consultation=${encodeURIComponent(request.id)}` } });
   await audit(tx, actor, callbackAt ? "CONSULTATION_CALLBACK_RESCHEDULED" : "CONSULTATION_CALLBACK_CANCELLED", request.id, { callbackAt: callbackAt?.toISOString() ?? null });
   return { id: request.id, status: nextStatus, preferredCallback: callbackAt?.toISOString() ?? null, calendarEventId: eventId, callbackCancelled: !callbackAt };
+}
+
+export async function consultationMutation(tx: Prisma.TransactionClient, actor: Actor, raw: unknown) {
+  const result = await consultationMutationInner(tx, actor, raw);
+  const request = await tx.consultationRequest.update({ where: { id: result.id }, data: { version: { increment: 1 } }, include: { calendarEvent: true } });
+  if (["CONVERTED", "NOT_INTERESTED", "LOST", "CONSULTATION_COMPLETED"].includes(request.status) && request.calendarEvent?.status === "SCHEDULED") {
+    const event = await tx.teamCalendarEvent.update({ where: { id: request.calendarEvent.id }, data: { status: request.status === "CONSULTATION_COMPLETED" ? "COMPLETED" : "CANCELLED", version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
+    await queueAppointment(tx, event);
+  }
+  const action = mutationSchema.parse(raw).action;
+  if (request.taskId && ["assign", "callback"].includes(action)) await tx.teamTask.updateMany({ where: { id: request.taskId, status: "BLOCKED", blocker: "Consultation is awaiting allocation." }, data: { status: "TODO", blocker: "", version: { increment: 1 } } });
+  if (!request.taskId || ["assign", "callback", "status"].includes(action)) await syncConsultationTask(tx, request.id, actor.id);
+  return { ...result, version: request.version, calendarEventId: request.calendarEventId };
 }

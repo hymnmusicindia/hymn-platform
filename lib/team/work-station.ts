@@ -29,7 +29,7 @@ async function ownTask(db: Pick<Prisma.TransactionClient, 'teamTask'>, a: Actor,
     throw new TeamError('Activity not found.', 404); return task; }
 async function contact(db: Pick<Prisma.TransactionClient, 'teamClient'>, a: Actor, id: string) { const row = await db.teamClient.findFirst({ where: { id, workspaceId: a.workspaceId, mergedIntoId: null } }); if (!row)
     throw new TeamError('Contact unavailable or merged. Open the retained contact.', 409); return row; }
-const summarySelect = { id: true, title: true, description: true, ownerId: true, status: true, priority: true, dueAt: true, version: true, recordType: true, recordId: true, eventKey: true, clientId: true, followUpContext: true, checklist: true, approvalRequired: true, blocker: true, client: { select: { id: true, name: true, phone: true, email: true, interests: true, status: true } }, owner: { select: { id: true, user: { select: { name: true } }, jobTitle: true } } } satisfies Prisma.TeamTaskSelect;
+const summarySelect = { collaboratorIds: true, callPhase: true, callAttempts: true, conversationCount: true, id: true, title: true, description: true, ownerId: true, status: true, priority: true, dueAt: true, version: true, recordType: true, recordId: true, eventKey: true, clientId: true, followUpContext: true, checklist: true, approvalRequired: true, blocker: true, client: { select: { id: true, name: true, phone: true, email: true, interests: true, status: true } }, owner: { select: { id: true, user: { select: { name: true } }, jobTitle: true } } } satisfies Prisma.TeamTaskSelect;
 export async function stationRead(a: Actor, resource: string, p: URLSearchParams) {
     demand(a, 'clients.view');
     if (resource === 'workstation-members') {
@@ -48,7 +48,7 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
             ||(shared?await prisma.teamTask.findFirst({where:{...sharedWorkScope(a),id},include}):null);
         if(!row)throw new TeamError('Activity not found.',404);
         const task = currentConversationBrief(row);
-        if (task.ownerId !== a.id && !can(a, 'tasks.all')&&!shared)
+        if (task.ownerId !== a.id && !task.collaboratorIds.includes(a.id) && !can(a, 'tasks.all')&&!shared)
             throw new TeamError('Activity unavailable.', 403);
         // Native editor needs only the task/version and activity draft. Do not
         // block every open, save preflight and timeout readback on web history.
@@ -63,9 +63,9 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
             });
             client = accountContact;
         }
-        const [owner,profile] = await Promise.all([prisma.teamMember.findUnique({ where: { id: task.ownerId }, select: { jobTitle: true, user: { select: { name: true } } } }),client?.userId?prisma.user.findUnique({where:{id:client.userId},select:{onboardingUserType:true,onboardingPurpose:true,preferredLanguage:true}}):null]);
+        const [owner,profile,appointment] = await Promise.all([prisma.teamMember.findUnique({ where: { id: task.ownerId }, select: { jobTitle: true, user: { select: { name: true } } } }),client?.userId?prisma.user.findUnique({where:{id:client.userId},select:{onboardingUserType:true,onboardingPurpose:true,preferredLanguage:true}}):null,prisma.teamCalendarEvent.findUnique({where:{followUpTaskId:task.id},select:{id:true,googleMeetUrl:true,googleSyncStatus:true,kind:true,status:true}})]);
         const reports = client ? await prisma.teamAudit.findMany({ where: { workspaceId: a.workspaceId, entityId: { in: [client.id, ...(await prisma.teamClient.findMany({ where: { workspaceId: a.workspaceId, mergedIntoId: client.id }, select: { id: true } })).map(c => c.id)] }, action: { in: ['contact.call_report', 'contact.activity_report'] } }, orderBy: { createdAt: 'desc' }, take: 15 }) : [];
-        return { task: { ...task, owner }, activity: workActivity(task.followUpContext), client: client ? { id: client.id, name: client.name, email: client.email, phone: client.phone, interests: client.interests, status: client.status,registered:Boolean(client.userId),customerType:profile?.onboardingUserType||'',purpose:profile?.onboardingPurpose||'',preferredLanguage:profile?.preferredLanguage||'' } : null, ticket, history: reports.map(r => ({ id: r.id, createdAt: r.createdAt, ...obj(r.detail) })) };
+        return { task: { ...task, owner }, appointment, activity: workActivity(task.followUpContext), client: client ? { id: client.id, name: client.name, email: client.email, phone: client.phone, interests: client.interests, status: client.status,registered:Boolean(client.userId),customerType:profile?.onboardingUserType||'',purpose:profile?.onboardingPurpose||'',preferredLanguage:profile?.preferredLanguage||'' } : null, ticket, history: reports.map(r => ({ id: r.id, createdAt: r.createdAt, ...obj(r.detail) })) };
     }
     if (resource === 'workstation-tickets') {
         if (!ticketAccess(a))
@@ -80,9 +80,14 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
     const bucket = p.get('bucket') || 'today';
     const offset = z.coerce.number().int().min(0).max(100000).catch(0).parse(p.get('offset') || 0);
     const team = p.get('team') === '1' && (can(a,'tasks.all')||mayHelp(a));
-    const base: Prisma.TeamTaskWhereInput = { ...(team?sharedWorkScope(a):taskScope(a)), ...(!team ? { ownerId: a.id } : {}) };
+    const base: Prisma.TeamTaskWhereInput = { ...(team?sharedWorkScope(a):taskScope(a)), ...(!team ? { OR: [{ ownerId: a.id }, { collaboratorIds: { has: a.id } }] } : {}) };
     const date: Prisma.TeamTaskWhereInput = bucket==='assigned'?{}:bucket==='unanswered'?{OR:[{followUpContext:{path:['workActivity','outcome'],equals:'NO_ANSWER'}},{followUpContext:{path:['workActivity','outcome'],equals:'BUSY'}}]}:bucket === 'upcoming' ? { dueAt: { gte: end } } : bucket === 'overdue' ? { dueAt: { lt: start } } : bucket === 'finished' ? {} : { OR: [{ dueAt: { lt: end } }, { dueAt: null }, { followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] };
-    const where: Prisma.TeamTaskWhereInput = { AND:[base,date], status: bucket === 'finished' ? { in: terminal } : { notIn: terminal }, ...(p.get('q') ? { AND: [base,date,{ OR: [{ title: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } }, { client: { name: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } } }, {project:{title:{contains:p.get('q')!.slice(0,160),mode:'insensitive'}}}] }] } : {}) };
+    const where: Prisma.TeamTaskWhereInput = { AND:[base,date], status: bucket === 'finished' ? { in: terminal } : { notIn: terminal }, ...(p.get('q') ? { AND: [base,date,{ OR: [{ title: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } }, { client: { name: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } } }, { client: { phone: { contains: p.get('q')!.replace(/[^\d+]/g, '') || p.get('q')! } } }, { client: { email: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } } }, {project:{title:{contains:p.get('q')!.slice(0,160),mode:'insensitive'}}}] }] } : {}) };
+    const phase = p.get('phase');
+    if (phase && ['FIRST_CONVERSATION', 'FOLLOW_UP', 'CONSULTATION', 'ASSISTANCE'].includes(phase)) {
+      const phaseWhere: Prisma.TeamTaskWhereInput = phase === 'FIRST_CONVERSATION' ? { OR: [{ callPhase: phase }, { callPhase: null, AND: [{ OR: [{ followUpContext: { path: ['kind'], equals: 'CALL' } }, { eventKey: { endsWith: ':call' } }, { eventKey: { startsWith: 'support-call:' } }, { followUpContext: { path: ['kind'], equals: 'SUPPORT_CALLBACK' } }] }, { consultation: { is: null } }] }] } : phase === 'CONSULTATION' ? { OR: [{ callPhase: phase }, { consultation: { isNot: null } }] } : { callPhase: phase };
+      const previous = where.AND; where.AND = [...(Array.isArray(previous) ? previous : previous ? [previous] : []), phaseWhere];
+    }
     if (p.get('view') === 'mobile') {
         const items = await prisma.teamTask.findMany({ where, select: { ...summarySelect, owner: false }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 31 });
         return { items: items.slice(0, 30).map(currentConversationBrief), hasMore: items.length > 30, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all')||mayHelp(a) };
@@ -350,6 +355,8 @@ export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, re
         const report = result.outcome === 'NO_ANSWER' ? 'Call not answered.' : result.outcome === 'BUSY' ? 'Customer was busy.' : result.outcome === 'WRONG_NUMBER' ? 'Wrong number reported; verify contact details before retrying.' : activity.notes.trim();
         activity = { ...activity, ...(noContact ? { notes: report, needs: '', commitments: '', nextAction: '', services: [] } : {}), status: 'FINISHED', endedAt: now.toISOString(), outcome: result.outcome };
         let status = task.status, dueAt = task.dueAt, blocker = '';
+        let recordedCallOutcome = false;
+        const didAttempt = calling && ['COMPLETED','FOLLOW_UP','NO_ANSWER','BUSY','WRONG_NUMBER'].includes(result.outcome);
         if (terminal.includes(task.status)) {
             status = task.status;
             blocker = task.blocker;
@@ -357,6 +364,7 @@ export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, re
         else if (calling && ['COMPLETED', 'NO_ANSWER', 'BUSY', 'FOLLOW_UP', 'DO_NOT_CONTACT'].includes(result.outcome)) {
             const mapped = result.outcome === 'COMPLETED' ? 'TALKED' : result.outcome === 'BUSY' ? 'NO_ANSWER' : result.outcome === 'FOLLOW_UP' ? (result.nextAt ? 'CALLBACK' : 'INTERESTED') : result.outcome;
             task = await recordCallbackOutcome(tx, a, { id: task.id, version: task.version, outcome: mapped, notes: activity.notes.slice(0, 2000), ...(result.nextAt ? { nextAt: result.nextAt } : {}) }, now, { queueEmail: false, workStation: true });
+            recordedCallOutcome = true;
             status = result.outcome==='COMPLETED'&&task.approvalRequired?'IN_REVIEW':task.status;
             dueAt = task.dueAt;
             blocker = task.blocker;
@@ -413,7 +421,7 @@ export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, re
                 await teamMutationTx(tx, a, 'prospect-call-save', { id: prospect.id, version: prospect.version, stage: ['NEW', 'NEEDS_RESEARCH', 'READY_TO_CONTACT', 'ASSIGNED', 'QUALIFIED'].includes(prospect.stage) ? 'CONTACTED' : prospect.stage, contact: { body: activity.notes.slice(0, 4000), evidence: `Work-station activity ${activity.id}` }, followUpAt: status === 'TODO' ? dueAt?.toISOString() : null });
             }
         }
-        const updated = await tx.teamTask.update({ where: { id: task.id }, data: { status, dueAt, blocker, evidence: activity.notes, completedAt: status === 'COMPLETED' ? now : null, checklist: json((Array.isArray(task.checklist) ? task.checklist : []).map((item, i) => ({ ...obj(item), done: activity!.checklist[i] }))), followUpContext: json({ ...obj(task.followUpContext), workActivity: activity }), version: { increment: 1 } } });
+        const updated = await tx.teamTask.update({ where: { id: task.id }, data: { status, dueAt, blocker, evidence: activity.notes, completedAt: status === 'COMPLETED' ? now : null, checklist: json((Array.isArray(task.checklist) ? task.checklist : []).map((item, i) => ({ ...obj(item), done: activity!.checklist[i] }))), ...(didAttempt && !recordedCallOutcome ? { callAttempts: { increment: 1 }, conversationCount: { increment: ['COMPLETED','FOLLOW_UP'].includes(result.outcome) ? 1 : 0 }, callPhase: context.consultationId ? 'CONSULTATION' : ['COMPLETED','FOLLOW_UP'].includes(result.outcome) ? 'FOLLOW_UP' : task.callPhase || 'FIRST_CONVERSATION' } : {}), followUpContext: json({ ...obj(task.followUpContext), ...(calling ? { callAttempts: task.callAttempts + (didAttempt && !recordedCallOutcome ? 1 : 0), conversationCount: task.conversationCount + (!recordedCallOutcome && ['COMPLETED','FOLLOW_UP'].includes(result.outcome) ? 1 : 0), callPhase: context.consultationId ? 'CONSULTATION' : ['COMPLETED','FOLLOW_UP'].includes(result.outcome) ? 'FOLLOW_UP' : task.callPhase || 'FIRST_CONVERSATION' } : {}), workActivity: activity }), version: { increment: 1 } } });
         const member = await tx.teamMember.findUniqueOrThrow({ where: { id: a.id }, include: { user: { select: { name: true } } } });
         await audit(tx, a, calling ? 'contact.call_report' : 'contact.activity_report', task.clientId || task.id, { activityId: activity.id, taskId: task.id, contactName: task.title, occurredAt: activity.startedAt, endedAt: activity.endedAt, elapsedSeconds: activitySeconds(activity), authorName: member.user.name, authorRole: member.jobTitle, memberId: a.id, source: calling ? 'PERSONAL_PHONE' : 'WORK_STATION', outcome: calling && result.outcome === 'COMPLETED' ? 'TALKED' : result.outcome, discussion: activity.notes, needs: activity.needs, commitments: activity.commitments, nextAction: activity.nextAction, services: activity.services, nextAt: dueAt?.toISOString(), status });
         if (task.clientId) {

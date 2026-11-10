@@ -10,6 +10,7 @@ import { employeeCallSlot } from './availability';
 import { acceptsAssignmentsNow, activeWindows, moveWorkWeek, planMeetsTarget, record, workWeek } from './availability-rules';
 import { internalIdentities, matchesInternalIdentity } from './internal-identity';
 import { queueAppointment } from './appointments';
+import { allocateCustomerCall } from './call-assignment';
 import { callLoadScore } from './call-allocation';
 import { callWorkload } from './call-workload';
 export const WORK_KINDS={CALL:'Customer callback',RELEASE_HELP:'Release assistance',BEAT_REVIEW:'Beat review',ENGINEER_PROFILE:'Engineer profile review',STUDIO_COORDINATION:'Studio coordination',GENERAL:'General operations'} as const;
@@ -80,7 +81,11 @@ export async function dispatchIntake(tx:Prisma.TransactionClient,a:Actor,id:stri
   if(item.requestedAt&&item.requestedAt<=now) {
     await tx.teamWorkIntake.update({where:{id},data:{reason:'Requested callback time has passed. Operator must arrange a new time.'}});return;
   }
-  for(const member of candidates) {
+  if (item.kind === 'CALL') {
+    const choice = await allocateCustomerCall(tx, { workspaceId: a.workspaceId, after: desired, exact: !!item.requestedAt });
+    if (choice) { chosen = members.find(member => member.id === choice.member.id); due = choice.startsAt; }
+  }
+  for(const member of item.kind === 'CALL' ? [] : candidates) {
     const workload=score(member);
     if(workload>selectedLoad)break;
     const slot=await employeeCallSlot(tx,a.workspaceId,member.id,desired,undefined,undefined,permission);

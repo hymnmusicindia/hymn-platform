@@ -3,8 +3,13 @@ import { Prisma, ConsultationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { contactNumberToE164 } from "@/lib/contact-phone-countries";
 import { activeWindows, acceptsAssignmentsNow } from "@/lib/team/availability-rules";
-import { CONSULTATION_INTERESTS, CONSULTATION_STATUSES, consultationSlotsForMember, isConsultationSlotAvailable, selectConsultationAssignee, type ConsultationAssigneeCandidate } from "@/lib/consultation-domain";
+import { CONSULTATION_INTERESTS, CONSULTATION_STATUSES, consultationSlotsForMember } from "@/lib/consultation-domain";
 import { z } from "zod";
+import { allocateCustomerCall, loadCallAllocation } from "./team/call-assignment";
+import { syncConsultationTask } from "./team/consultation-work";
+import { queueAppointment } from "./team/appointments";
+import { callDayLimit } from "./team/daily-call-policy";
+import { indiaWorkday } from "./team/daily-work";
 
 const interestIds = CONSULTATION_INTERESTS.map(item => item.id) as [string, ...string[]];
 const consultationConsentVersion = "consultation-privacy-v2";
@@ -53,7 +58,6 @@ export class ConsultationPortalError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
 }
 
-const terminalStatuses: ConsultationStatus[] = ["CONVERTED", "NOT_INTERESTED", "LOST"];
 const cardInterest: Record<string, string> = {
   DISTRIBUTION: "DISTRIBUTION",
   BEAT_SALES: "BEAT_SALES",
@@ -67,7 +71,7 @@ const normaliseCardPhone = (value: string) => value.replace(/[^\d+]/g, "").slice
 
 function slotWindow(now = new Date()) {
   const after = new Date((Math.floor(now.getTime() / (30 * 60_000)) + 1) * (30 * 60_000));
-  return { after, until: new Date(after.getTime() + 14 * 86400_000) };
+  return { after, until: new Date(now.getTime() + 14 * 86400_000) };
 }
 
 async function eligibleMembers(db: Prisma.TransactionClient | typeof prisma, workspaceId: string) {
@@ -80,6 +84,7 @@ async function eligibleMembers(db: Prisma.TransactionClient | typeof prisma, wor
     member.role.permissions.includes("crm.prospects.view") &&
     member.role.permissions.includes("crm.outreach.manage") &&
     member.role.permissions.includes("calendar.manage") &&
+    member.role.permissions.includes("tasks.update") &&
     acceptsAssignmentsNow(member.preferences)
   );
 }
@@ -100,10 +105,19 @@ export async function consultationAvailability(now = new Date()) {
     where: { workspaceId: workspace.id, assigneeId: { in: members.map(member => member.id) }, status: "SCHEDULED", startsAt: { gte: new Date(after.getTime() - 7 * 86400_000), lt: until } },
     select: { assigneeId: true, kind: true, startsAt: true, endsAt: true }
   });
+  const capacity = await loadCallAllocation(prisma, workspace.id, after);
   const availableByTime = new Map<number, number>();
   for (const member of members) {
     const memberReservations = reservations.filter(event => event.assigneeId === member.id);
+    const days = new Map<string, boolean>();
     for (const slot of consultationSlotsForMember(member.preferences, memberReservations, after, until)) {
+      const { day, start, end } = indiaWorkday(slot);
+      if (!days.has(day)) {
+        const used = capacity.tasks.filter(task => task.ownerId === member.id && task.dueAt && task.dueAt >= start && task.dueAt < end).length + capacity.events.filter(event => event.assigneeId === member.id && !event.followUpTaskId && ["CALL", "FOLLOW_UP"].includes(event.kind) && event.startsAt >= start && event.startsAt < end).length;
+        const minutes = activeWindows(member.preferences, start, end).reduce((sum, window) => sum + (window.endsAt.getTime() - window.startsAt.getTime()) / 60000, 0);
+        days.set(day, used < callDayLimit(member.preferences, minutes));
+      }
+      if (!days.get(day)) continue;
       availableByTime.set(slot.getTime(), (availableByTime.get(slot.getTime()) || 0) + 1);
     }
   }
@@ -121,32 +135,6 @@ function sourceLabel(value: string) {
   return value.trim().replace(/[^a-zA-Z0-9 _.-]/g, "").slice(0, 80) || "website";
 }
 
-function candidateShape<T extends Awaited<ReturnType<typeof eligibleMembers>>[number]>(member: T, load: number, lastAssignedAt: number): ConsultationAssigneeCandidate & T {
-  return { ...member, id: member.id, name: member.user.name, preferences: member.preferences, load, lastAssignedAt };
-}
-
-async function chooseAssignee(tx: Prisma.TransactionClient, workspaceId: string, interests: string[], callbackAt: Date | null) {
-  const members = await eligibleMembers(tx, workspaceId);
-  const candidates = [];
-  for (const member of members) {
-    if (callbackAt) {
-      const reservations = await tx.teamCalendarEvent.findMany({
-        where: { workspaceId, assigneeId: member.id, status: "SCHEDULED", startsAt: { gte: new Date(callbackAt.getTime() - 7 * 86400_000), lt: new Date(callbackAt.getTime() + 30 * 60_000) } },
-        select: { kind: true, startsAt: true, endsAt: true }
-      });
-      if (!isConsultationSlotAvailable(member.preferences, callbackAt, reservations)) continue;
-    } else if (activeWindows(member.preferences, new Date(), new Date(Date.now() + 14 * 86400_000)).length === 0) {
-      continue;
-    }
-    const [load, latest] = await Promise.all([
-      tx.consultationRequest.count({ where: { workspaceId, assignedMemberId: member.id, status: { notIn: terminalStatuses } } }),
-      tx.consultationRequest.findFirst({ where: { workspaceId, assignedMemberId: member.id }, orderBy: { createdAt: "desc" }, select: { createdAt: true } })
-    ]);
-    candidates.push(candidateShape(member, load, latest?.createdAt.getTime() || 0));
-  }
-  return selectConsultationAssignee(candidates, interests);
-}
-
 async function notifyMember(tx: Prisma.TransactionClient, memberId: string, title: string, href: string) {
   const member = await tx.teamMember.findUnique({ where: { id: memberId }, select: { status: true, preferences: true } });
   if (member?.status === "ACTIVE" && (member.preferences as { notifications?: boolean }).notifications !== false) {
@@ -158,7 +146,7 @@ export async function submitConsultation(userId: number, raw: unknown) {
   const data = submitSchema.parse(raw);
   const mobile = contactNumberToE164(data.dialCode, data.phone);
   const callbackAt = data.callbackAt ? new Date(data.callbackAt) : null;
-  if (callbackAt && (!Number.isFinite(callbackAt.getTime()) || callbackAt <= new Date())) {
+  if (callbackAt && (!Number.isFinite(callbackAt.getTime()) || callbackAt <= new Date() || callbackAt.getTime() > Date.now() + 14 * 86400000)) {
     throw new ConsultationPortalError("Choose a preferred callback time in the future.", 400);
   }
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, status: true } });
@@ -191,9 +179,15 @@ export async function submitConsultation(userId: number, raw: unknown) {
       : await tx.teamClient.create({ data: { workspaceId: workspace.id, ownerId: owner.id, userId, name: data.fullName, email: account.email, phone: mobile, interests } });
     await tx.user.update({ where: { id: userId }, data: { name: data.fullName, mobile } });
 
-    const assignee = await chooseAssignee(tx, workspace.id, data.interests, null);
-    const calendarEventId: string | null = null;
-    const status = assignee ? ConsultationStatus.ASSIGNED : ConsultationStatus.UNASSIGNED;
+    const choice = await allocateCustomerCall(tx, { workspaceId: workspace.id, after: callbackAt || new Date(Date.now() + 1800000), exact: !!callbackAt, interests: data.interests, consultation: true });
+    const assignee = choice?.member || null;
+    let calendarEventId: string | null = null;
+    if (callbackAt && choice) {
+      const event = await tx.teamCalendarEvent.create({ data: { workspaceId: workspace.id, creatorId: owner.id, assigneeId: choice.member.id, clientId: client.id, kind: "CALL", title: `${data.fullName} ? ${data.interests.join(", ")}`, startsAt: callbackAt, endsAt: new Date(callbackAt.getTime() + 1800000), notes: "Customer-requested consultation." } });
+      calendarEventId = event.id;
+      await queueAppointment(tx, event);
+    }
+    const status = assignee ? callbackAt ? ConsultationStatus.CALLBACK_SCHEDULED : ConsultationStatus.ASSIGNED : ConsultationStatus.UNASSIGNED;
     const request = await tx.consultationRequest.create({
       data: {
         workspaceId: workspace.id,
@@ -225,6 +219,7 @@ export async function submitConsultation(userId: number, raw: unknown) {
       },
       include: { assignedMember: { include: { user: { select: { name: true } } } } }
     });
+    await syncConsultationTask(tx, request.id, owner.id);
     await tx.consultationActivity.create({ data: { consultationId: request.id, kind: "SUBMITTED", metadata: { source: request.source, campaign: request.campaign, status } } });
     for (const event of request.funnelEvents) {
       await tx.consultationActivity.create({ data: { consultationId: request.id, kind: "FUNNEL_EVENT", metadata: { event } } });

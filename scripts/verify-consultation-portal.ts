@@ -42,7 +42,7 @@ async function main() {
   const slot = new Date(Math.ceil((Date.now() + 90 * 60_000) / (30 * 60_000)) * (30 * 60_000));
   const idempotencyKey = "e5e1025a-1faf-4d6c-86a2-b2e03e11bbd3";
   const created = await submitConsultation(customer.id, makeInput(idempotencyKey, slot));
-  assert.equal(created.status, "ASSIGNED", "A preferred callback time is not a booked calendar appointment.");
+  assert.equal(created.status, "CALLBACK_SCHEDULED", "Available selected slots are reserved atomically.");
   assert.equal(created.assigned, true);
   const saved = await prisma.consultationRequest.findUniqueOrThrow({ where: { id: created.id }, include: { user: true, client: true } });
   assert.equal(saved.assignedMemberId, caller.id);
@@ -53,7 +53,7 @@ async function main() {
   assert.equal(saved.marketingConsent, false);
   assert.equal(saved.firstTouchSource, "instagram");
   assert.equal(saved.preferredCallback?.toISOString(), slot.toISOString());
-  assert.equal(saved.calendarEventId, null, "The preference is stored without reserving a team calendar slot.");
+  assert.ok(saved.calendarEventId && saved.taskId, "The booking links one shared task and calendar event.");
   assert.equal((await submitConsultation(customer.id, makeInput(idempotencyKey, slot))).duplicate, true, "Retrying the same request must not create a second consultation.");
   assert.equal(await prisma.consultationRequest.count({ where: { userId: customer.id } }), 1);
 
@@ -67,21 +67,21 @@ async function main() {
 
   const concurrentUsers = await Promise.all([createCustomer("lead-two"), createCustomer("lead-three")]);
   const concurrent = await Promise.all(concurrentUsers.map((user, index) => submitConsultation(user.id, makeInput(`44b393e${index}-9a6d-4fbe-912d-726a20a3d22${index}`, slot))));
-  assert.equal(concurrent.length, 2, "Simultaneous callback preferences are both accepted without competing calendar reservations.");
-  assert.ok(concurrent.every(result => result.status === "ASSIGNED" && result.assigned));
+  assert.equal(concurrent.length, 2, "Competing requests are retained without double booking.");
+  assert.ok(concurrent.every(result => result.status === "UNASSIGNED" && !result.assigned));
   const concurrentRequests = await prisma.consultationRequest.findMany({ where: { id: { in: concurrent.map(result => result.id) } } });
-  assert.ok(concurrentRequests.every(request => request.preferredCallback?.toISOString() === slot.toISOString() && request.calendarEventId === null), "Callback preferences are stored without creating calendar holds.");
+  assert.ok(concurrentRequests.every(request => request.preferredCallback?.toISOString() === slot.toISOString() && request.calendarEventId === null), "Overflow keeps its requested time without inventing a calendar hold.");
 
   await prisma.consultationRequest.update({ where: { id: created.id }, data: { assignedMemberId: researcher.id } });
   const scoped = await teamRead(researcher, "consultations", new URLSearchParams());
   assert.ok("items" in scoped && (scoped.items as Array<{ id: string }>).some(item => item.id === created.id));
-  await assert.rejects(() => teamMutation(researcher, "consultations", { action: "status", id: created.id, status: "CONTACTED" }), error => error instanceof TeamError && error.status === 403, "Read-only researchers cannot modify lead status.");
+  await assert.rejects(() => teamMutation(researcher, "consultations", { action: "status", id: created.id, version: saved.version, status: "CONTACTED" }), error => error instanceof TeamError && error.status === 403, "Read-only researchers cannot modify lead status.");
   const otherMembersLeads = await teamRead(caller, "consultations", new URLSearchParams({ q: customer.email }));
   assert.ok("items" in otherMembersLeads && (otherMembersLeads.items as unknown[]).length === 0, "Members see only leads assigned to them.");
 
   await prisma.consultationRequest.update({ where: { id: created.id }, data: { assignedMemberId: caller.id } });
-  await teamMutation(caller, "consultations", { action: "request_reassignment", id: created.id, message: "I need help covering this callback." });
-  await teamMutation(caller, "consultations", { action: "request_reassignment", id: created.id, message: "Duplicate reassignment request." });
+  await teamMutation(caller, "consultations", { action: "request_reassignment", id: created.id, version: saved.version, message: "I need help covering this callback." });
+  await teamMutation(caller, "consultations", { action: "request_reassignment", id: created.id, version: saved.version + 1, message: "Duplicate reassignment request." });
   assert.equal(await prisma.consultationActivity.count({ where: { consultationId: created.id, kind: "REASSIGNMENT_REQUESTED" } }), 1, "Repeated reassignment requests are deduplicated until assignment changes.");
   assert.ok(await prisma.teamNotification.count({ where: { memberId: owner.id, title: { contains: "Reassignment requested" } } }) > 0);
 

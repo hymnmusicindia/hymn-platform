@@ -1,18 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowDownUp, CalendarClock, ChevronLeft, ChevronRight, Clipboard, LoaderCircle, Mail, MessageCircle, Phone, RefreshCw, Search, ShieldCheck, UserRound, X } from "lucide-react";
+import { CustomerWorkActions } from "./customer-work-actions";
+import { ArrowDownUp, ChevronLeft, ChevronRight, Clipboard, LoaderCircle, Mail, MessageCircle, Phone, RefreshCw, Search, ShieldCheck, UserRound, X } from "lucide-react";
 import { CONSULTATION_INTERESTS, CONSULTATION_STATUSES } from "@/lib/consultation-domain";
 import styles from "./consultations.module.css";
 
 type Activity = { id: string; kind: string; message: string; createdAt: string; actorMember?: { user: { name: string } } | null };
 type Consultation = {
-  id: string; clientId: string; client: { id: string; name: string; email: string; phone: string }; fullName: string; email: string; phoneE164: string; dialCode: string; interests: string[];
+  id: string; version: number; taskId: string | null; clientId: string; client: { id: string; name: string; email: string; phone: string }; fullName: string; email: string; phoneE164: string; dialCode: string; interests: string[];
   otherRequirement: string; source: string; campaign: string | null; preferredCallback: string | null;
   status: string; createdAt: string; assignedMemberId: string | null;
   assignedMember?: { id: string; user: { name: string } } | null;
-  calendarEvent?: { id: string; startsAt: string; status: string } | null;
+  calendarEvent?: { id: string; startsAt: string; status: string; kind: string } | null;
   activities: Activity[];
 };
 type Payload = { items: Consultation[]; total: number; offset: number; statuses: Record<string, number>; members: { id: string; user: { name: string } }[] };
@@ -25,6 +26,7 @@ const interestLabel = (value: string) => CONSULTATION_INTERESTS.find(item => ite
 export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: { actor: Actor; initialId?: string; initialQuery?: string }) {
   const canAssign = actor.owner || actor.permissions.includes("crm.prospects.assign");
   const canManage = actor.owner || actor.permissions.includes("crm.outreach.manage");
+  const readGeneration = useRef(0);
   const [data, setData] = useState<Payload>({ items: [], total: 0, offset: 0, statuses: {}, members: [] });
   const [query, setQuery] = useState(initialQuery);
   const [statusFilter, setStatusFilter] = useState("");
@@ -37,16 +39,14 @@ export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: 
   const [selectedId, setSelectedId] = useState("");
   const [assignedId, setAssignedId] = useState("");
   const [status, setStatus] = useState("");
-  const [callbackValue, setCallbackValue] = useState("");
   const [note, setNote] = useState("");
-  const [contactAttempt, setContactAttempt] = useState("");
   const [reassignmentReason, setReassignmentReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const request = useCallback(async (resource: string, body?: unknown) => {
+  const request = useCallback(async <T,>(resource: string, body?: unknown): Promise<T> => {
     const url = `/api/team/${resource}${resource.includes("?") ? "&" : "?"}workspace=${encodeURIComponent(actor.workspaceId)}`;
     const response = await fetch(url, body === undefined ? { cache: "no-store" } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const result = await response.json();
@@ -55,6 +55,7 @@ export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: 
   }, [actor.workspaceId]);
 
   const refresh = useCallback(async () => {
+    const generation = ++readGeneration.current;
     setLoading(true);
     try {
       const params = new URLSearchParams({ offset: String(offset) });
@@ -66,13 +67,14 @@ export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: 
       if (toFilter) params.set("to", toFilter);
       params.set("sort", sort);
       const result = await request(`consultations?${params}`) as Payload;
+      if (generation !== readGeneration.current) return;
       setData(result);
       setSelectedId(current => result.items.some(item => item.id === current) ? current : result.items.some(item => item.id === initialId) ? initialId : "");
       setError("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Consultations could not be loaded.");
+      if (generation === readGeneration.current) setError(cause instanceof Error ? cause.message : "Consultations could not be loaded.");
     } finally {
-      setLoading(false);
+      if (generation === readGeneration.current) setLoading(false);
     }
   }, [fromFilter, initialId, interestFilter, memberFilter, offset, query, request, sort, statusFilter, toFilter]);
 
@@ -86,9 +88,7 @@ export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: 
   useEffect(() => {
     setAssignedId(selected?.assignedMemberId || "");
     setStatus(selected?.status || "");
-    setCallbackValue(selected?.preferredCallback ? new Date(new Date(selected.preferredCallback).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "");
     setNote("");
-    setContactAttempt("");
     setReassignmentReason("");
   }, [selected]);
 
@@ -97,11 +97,13 @@ export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: 
     setError("");
     setNotice("");
     try {
-      await request("consultations", body);
+      await request("consultations", { ...body, version: selected?.version });
       setNotice(message);
       await refresh();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Your change could not be saved.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -113,7 +115,7 @@ export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: 
     setError("");
     setNotice("");
     try {
-      const result = await request("consultations", { action: "request_reassignment", id: selected.id, message: reassignmentReason.trim() }) as { duplicate?: boolean };
+      const result = await request("consultations", { action: "request_reassignment", id: selected.id, version: selected.version, message: reassignmentReason.trim() }) as { duplicate?: boolean };
       setNotice(result.duplicate ? "A reassignment request is already waiting for the workspace managers." : "Reassignment request sent to the workspace managers.");
       setReassignmentReason("");
       await refresh();
@@ -212,17 +214,14 @@ export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: 
             <label>Status<select disabled={!canManage} value={status} onChange={event => setStatus(event.target.value)}>{CONSULTATION_STATUSES.map(value => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
             {canManage ? <button type="button" disabled={busy || status === selected.status} onClick={() => void mutate({ action: "status", id: selected.id, status }, "Consultation status updated.")}>{busy ? "Saving…" : "Update status"}</button> : null}
             {canAssign ? <><label>Assign to<select value={assignedId} onChange={event => setAssignedId(event.target.value)}><option value="">Unassigned</option>{data.members.map(member => <option key={member.id} value={member.id}>{member.user.name}</option>)}</select></label><button type="button" disabled={busy || !assignedId || assignedId === selected.assignedMemberId} onClick={() => void mutate({ action: "assign", id: selected.id, memberId: assignedId }, "Consultation assigned.")}>Assign lead</button></> : null}
-            {canManage ? <><label>Callback time <span className={styles.timeHint}>Your local time · saved and shown in IST</span><input type="datetime-local" value={callbackValue} onChange={event => setCallbackValue(event.target.value)}/></label>
-            <div className={styles.inlineActions}><button type="button" disabled={busy || !callbackValue} onClick={() => void mutate({ action: "callback", id: selected.id, callbackAt: callbackValue ? new Date(callbackValue).toISOString() : null }, "Callback schedule updated.")}><CalendarClock size={14}/> Set or reschedule</button>{selected.preferredCallback ? <button type="button" className={styles.quietButton} disabled={busy} onClick={() => void mutate({ action: "callback", id: selected.id, callbackAt: null }, "Callback cancelled.")}>Cancel callback</button> : null}</div>
-            </> : null}
+            {selected.taskId && canManage ? <><Link href={`/team?workspace=${actor.workspaceId}&module=work-station&task=${selected.taskId}`}>Open call activity & record outcome</Link><ConsultationWorkActions api={request} taskId={selected.taskId} revision={selected.version} confirmed={selected.calendarEvent?.kind === "CALL"} onSaved={() => void refresh()}/></> : null}
+            {!selected.taskId && selected.assignedMemberId && canManage ? <button onClick={()=>void mutate({action:"status",id:selected.id,status:selected.status},"Shared call task prepared.")}>Prepare shared call task</button> : null}
             {selected.assignedMemberId === actor.id ? <div className={styles.reassignment}><label>Request reassignment<textarea maxLength={1000} rows={2} placeholder="Tell the workspace owner why this lead should be reassigned." value={reassignmentReason} onChange={event => setReassignmentReason(event.target.value)}/></label><button type="button" disabled={busy || reassignmentReason.trim().length < 5} onClick={() => void requestReassignment()}>Request reassignment</button></div> : null}
           </div>
 
           {canManage ? <div className={styles.notePanel}>
             <label>Internal note<textarea maxLength={2000} rows={2} placeholder="Add context for the HYMN team…" value={note} onChange={event => setNote(event.target.value)}/></label>
-            <button type="button" disabled={busy || !note.trim()} onClick={async () => { await mutate({ action: "note", id: selected.id, message: note.trim() }, "Internal note added."); setNote(""); }}>Add note</button>
-            <label>Contact attempt<textarea maxLength={2000} rows={2} placeholder="Record the call or message outcome…" value={contactAttempt} onChange={event => setContactAttempt(event.target.value)}/></label>
-            <button type="button" disabled={busy || !contactAttempt.trim()} onClick={async () => { await mutate({ action: "contact_attempt", id: selected.id, message: contactAttempt.trim() }, "Contact attempt recorded."); setContactAttempt(""); }}>Log contact attempt</button>
+            <button type="button" disabled={busy || !note.trim()} onClick={async () => { if (await mutate({ action: "note", id: selected.id, message: note.trim() }, "Internal note added.")) setNote(""); }}>Add note</button>
           </div> : null}
 
           <div className={styles.history}>
@@ -233,4 +232,10 @@ export function TeamConsultations({ actor, initialId = "", initialQuery = "" }: 
       </div>
     </div>
   </section>;
+}
+
+function ConsultationWorkActions({api,taskId,onSaved,revision,confirmed}:{revision:number;confirmed:boolean;api:<T>(resource:string,body?:unknown)=>Promise<T>;taskId:string;onSaved:()=>void}) {
+  const [task,setTask]=useState<{id:string;title:string;version:number;dueAt:string|null}|null>(null);
+  useEffect(()=>{let active=true;void api<{task:NonNullable<typeof task>}>(`workstation-activity?id=${encodeURIComponent(taskId)}`).then(result=>{if(active)setTask(result.task);}).catch(()=>{if(active)setTask(null);});return()=>{active=false;};},[api,taskId,revision]);
+  return task?<CustomerWorkActions api={api} task={task} confirmed={confirmed} onSaved={onSaved}/>:null;
 }

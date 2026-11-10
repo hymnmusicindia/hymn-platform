@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
       {
         key: "Content-Security-Policy",
         value: [
-          "default-src 'self' https: http: data: blob:", "base-uri 'self'", "frame-ancestors 'self'", "form-action 'self'", "object-src 'none'",
+          "default-src 'self' https: http: data: blob:", "base-uri 'self'", "frame-ancestors 'self'", "form-action 'self' https://accounts.google.com", "object-src 'none'",
           "img-src 'self' data: blob: https: http:", "media-src 'self' blob: https: http:", "font-src 'self' data: https: http:",
           "style-src 'self' 'unsafe-inline' https:", `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://cdn.razorpay.com https://accounts.google.com https://*.google.com https://*.gstatic.com${developmentCspScriptSources}`, "connect-src 'self' https: http: wss: ws:", "frame-src 'self' https://*.razorpay.com https://accounts.google.com https://*.google.com https://open.spotify.com https://www.youtube-nocookie.com",
           "upgrade-insecure-requests"

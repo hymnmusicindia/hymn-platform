@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     if (!result.duplicate) {
       if (result.appointmentEventId) {
         const eventId = result.appointmentEventId;
-        after(async () => { await (await import("@/lib/team/appointments")).processAppointments(eventId, 4); });
+        after(async () => { await (await import("@/lib/team/google-calendar")).syncGoogleCalendar(undefined, eventId); await (await import("@/lib/team/appointments")).processAppointments(eventId, 4); });
       } else {
         const email = {
           title: "We received your HYMN consultation request",

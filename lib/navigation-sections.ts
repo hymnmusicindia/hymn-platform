@@ -20,16 +20,11 @@ export const adminSectionFor = (key: string) => Object.entries(adminSections).fi
 export const adminModuleKey = (key?: string) => ({ "distribution-queue": "releases", "delivery-failed": "releases", payments: "revenue", producers: "operations" } as Record<string, string>)[key || ""] || key;
 
 const teamSections: Record<string, string[]> = {
-  Today: ["work-station"],
-  Contacts: ["contacts"],
-  Consultations: ["consultations"],
-  "My Work": ["work"],
-  "Lead research": ["acquisition", "crm", "customer-calls", "referral"],
-  Home: ["overview"],
-  "Work & planning": ["tasks", "projects", "approvals", "calendar", "availability"],
+  "My day": ["work-station", "work", "tasks", "customer-calls"],
+  Customers: ["contacts"],
+  "Team queue": ["team-queue"],
+  Schedule: ["calendar", "availability"],
   Messages: ["inbox", "chat", "emails"],
-  "Quality & reports": ["creator-applications", "release-qc", "reports"],
-  Leadership: ["leadership"],
-  "Team & access": ["directory", "audit", "settings"],
+  Manage: ["overview", "projects", "approvals", "acquisition", "crm", "consultations", "referral", "creator-applications", "release-qc", "reports", "leadership", "directory", "audit", "settings"],
 };
-export const teamSectionFor = (key: string) => Object.entries(teamSections).find(([, keys]) => keys.includes(key))?.[0] ?? "Team & access";
+export const teamSectionFor = (key: string) => Object.entries(teamSections).find(([, keys]) => keys.includes(key))?.[0] ?? "Manage";

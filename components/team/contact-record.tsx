@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CalendarClock, Mail, MessageCircle, Phone, UserRound } from "lucide-react";
+import { ArrowLeft, Mail, MessageCircle, Phone, UserRound } from "lucide-react";
 import { whatsappLink } from "@/lib/team/phone";
-import { CallReport } from "./call-report";
+import { CustomerWorkActions } from "./customer-work-actions";
 import styles from "./contact-record.module.css";
 
 type Contact = {
@@ -43,6 +43,7 @@ type Profile = {
     preferredCallback: string | null;
     assignedMemberName: string | null;
   }[];
+  actions: { id: string; title: string; status: string; version: number; ownerId: string; ownerName: string; dueAt: string | null; isCall: boolean; canManage: boolean; journey: { label: string; attempts: number }; booking: { kind: string; googleMeetUrl: string | null; googleSyncStatus: string; googleSyncError: string | null } | null }[];
   history: HistoryItem[];
 };
 type Api = <T>(resource: string, body?: unknown) => Promise<T>;
@@ -59,6 +60,7 @@ export function TeamContactRecord({
   returnLabel,
   onEdit,
   revision,
+  canCall = false,
 }: {
   api: Api;
   clientId: string;
@@ -67,6 +69,7 @@ export function TeamContactRecord({
   returnLabel: string;
   onEdit: () => void;
   revision: number;
+  canCall?: boolean;
 }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,9 +134,8 @@ export function TeamContactRecord({
       {phone ? <a href={`tel:${phone}`}><Phone size={15}/>Call</a> : null}
       {whatsapp ? <a href={whatsapp} target="_blank" rel="noopener noreferrer"><MessageCircle size={15}/>WhatsApp</a> : null}
       {contact.email ? <a href={`mailto:${encodeURIComponent(contact.email)}`}><Mail size={15}/>Email</a> : null}
-      <CallReport api={api} clientId={contact.id} name={contact.name} onSaved={() => setRefreshVersion(value => value + 1)}/>
       <Link href={`/team?${activityHref}`}><UserRound size={15}/>Start activity</Link>
-      <Link href={`/team?${new URLSearchParams({ workspace: workspaceId, module: "calendar", client: contact.id })}`}><CalendarClock size={15}/>Schedule</Link>
+      {canCall && contact.status === "ACTIVE" ? <CustomerWorkActions api={api} clientId={contact.id} canHandoff={false} onSaved={() => setRefreshVersion(value => value + 1)}/> : null}
     </div>
 
     <div className={styles.summary}>
@@ -153,6 +155,16 @@ export function TeamContactRecord({
       </> : <p>No upcoming action is scheduled.</p>}
     </section>
 
+    <section className={styles.consultations}><h3>Open work & next conversations</h3>
+      {profile.actions?.length ? profile.actions.map(action => <article key={action.id}>
+        <strong>{action.title}</strong><span>{action.ownerName || "Unassigned"} ? {dateLabel(action.dueAt)}</span>
+        {action.isCall ? <span>{action.journey.label} ? {action.journey.attempts} attempts recorded</span> : null}
+        {action.booking?.googleMeetUrl ? <a href={action.booking.googleMeetUrl} target="_blank" rel="noopener noreferrer">Join Google Meet</a> : action.booking?.kind === "CALL" ? <span>Calendar: {action.booking.googleSyncStatus.replaceAll("_", " ")}</span> : null}
+        {action.booking?.googleSyncError ? <small>{action.booking.googleSyncError}</small> : null}
+        <Link href={`/team?${new URLSearchParams({ workspace: workspaceId, module: "work-station", task: action.id })}`}>Open work</Link>
+        {action.canManage ? <CustomerWorkActions api={api} task={action} confirmed={action.booking?.kind === "CALL"} canSchedule={canCall && action.isCall} onSaved={() => setRefreshVersion(value => value + 1)}/> : null}
+      </article>) : <p>No open work.</p>}
+    </section>
     {profile.consultations.length ? <section className={styles.consultations}>
       <h3>Consultation requests</h3>
       {profile.consultations.map(item => <article key={item.id}>
