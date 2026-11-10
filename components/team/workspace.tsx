@@ -2,13 +2,10 @@
 import { LeadershipActivity } from "./leadership-activity";
 import { TeamWorkbench } from "./workbench";
 import { WorkStation } from "./work-station";
+import dynamic from "next/dynamic";
 import { workStationModule } from "@/lib/team/work-station-policy";
 import { TeamCreatorApplications } from "./creator-applications";
-import { TeamContacts } from "./contacts";
 import { TeamAssistance } from "./assistance";
-import { TeamEmailWorkspace } from "./email-workspace";
-import { CustomerCalls } from "./customer-calls";
-import { TeamCalendar } from "./calendar";
 import { TeamCoordinator } from "./coordinator";
 import { TeamAvailability } from "./availability";
 import { TeamLiveChat } from "./live-chat";
@@ -18,15 +15,20 @@ import { ModuleTabs } from "../module-tabs";
 import { WorkspacePanel } from "../workspace-panel";
 import { TeamSectionNavigation } from "./section-navigation";
 import { sectionItems, teamSectionFor } from "@/lib/navigation-sections";
-import { CrmPipeline } from "./crm-pipeline";
 import { TeamManagement } from "./management";
 import { InternalWorkspaceSwitcher } from "../internal-workspace-switcher";
 import { TeamPushControl } from "./push-control";
 import { TeamAppLinks } from "./app-download-links";
 import { TeamRichText } from "./rich-text";
-import { ResearchAcquisitionDashboard } from "./research-acquisition-dashboard";
-import { TeamConsultations } from "./consultations";
-import { TeamGlobalSearch } from "./global-search";
+const ModuleLoading = () => <div className={styles.skeleton} aria-busy="true">Opening workspace…</div>;
+const TeamContacts = dynamic(() => import("./contacts").then(module => module.TeamContacts), { loading: ModuleLoading });
+const TeamEmailWorkspace = dynamic(() => import("./email-workspace").then(module => module.TeamEmailWorkspace), { loading: ModuleLoading });
+const CustomerCalls = dynamic(() => import("./customer-calls").then(module => module.CustomerCalls), { loading: ModuleLoading });
+const TeamCalendar = dynamic(() => import("./calendar").then(module => module.TeamCalendar), { loading: ModuleLoading });
+const CrmPipeline = dynamic(() => import("./crm-pipeline").then(module => module.CrmPipeline), { loading: ModuleLoading });
+const ResearchAcquisitionDashboard = dynamic(() => import("./research-acquisition-dashboard").then(module => module.ResearchAcquisitionDashboard), { loading: ModuleLoading });
+const TeamConsultations = dynamic(() => import("./consultations").then(module => module.TeamConsultations), { loading: ModuleLoading });
+const TeamGlobalSearch = dynamic(() => import("./global-search").then(module => module.TeamGlobalSearch), { loading: ModuleLoading });
 import { useSearchParams } from "next/navigation";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -98,7 +100,8 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
         return;
       }
       const urlFilters = new URLSearchParams(location.search);
-      const load = async <T,>(key: string, request: Promise<T>, apply: (value: T) => void) => request.then(apply).catch(e => { console.error(`Team OS ${key} refresh failed`, e); });
+      const failures: string[] = [];
+      const load = async <T,>(key: string, request: Promise<T>, apply: (value: T) => void) => request.then(apply).catch(e => { console.error(`Team OS ${key} refresh failed`, e); failures.push(key); });
       const jobs: Promise<unknown>[] = [];
       if (["tasks", "work", "approvals"].includes(module)) jobs.push(load("tasks", api<{ items: Task[]; total: number }>(`tasks?offset=${offset}&q=${encodeURIComponent(urlFilters.get("q") || "")}&status=${urlFilters.get("status") || ""}&mine=${urlFilters.get("mine") || "0"}`), result => { setTasks(result.items); setTotal(result.total); }));
       if (module === "overview") jobs.push(load("overview", api<Overview>("overview"), setOverview));
@@ -118,7 +121,7 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
       if (module === "audit" && allowed("audit.view")) jobs.push(load("audit", api<{items:Audit[]}>("audit"), result => setAudits(result.items)));
       if (module === "operations") jobs.push(load("operations", api<Operations>("operations"), setOperations));
       await Promise.all(jobs);
-      setError("");
+      setError(failures.length ? `Some ${failures.join(", ")} data could not refresh. Existing results are still available; retry when ready.` : "");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load workspace."); } finally { setLoading(false); }
   }, [api, allowed, module, offset, actor.owner, actor.permissions, modal]);
   useEffect(() => { const params = new URLSearchParams(location.search); setModule(workStationModule(params.get("module") || "work-station")); setSelected(params.get("task")); const stored = localStorage.getItem("hymn-team-view"); if (stored) setView(stored); }, []);

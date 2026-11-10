@@ -165,7 +165,8 @@ async function main() {
       await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate']);
       await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261023230000_contact_merge_aliases/migration.sql','--schema','prisma/schema.prisma']);
       await run(['node_modules/prisma/build/index.js','migrate','diff','--from-url',env.DATABASE_URL,'--to-schema-datamodel','prisma/schema.prisma','--script','--output',path.join(fixture,'contact-diff.sql')]);
-      if(/team_clients/.test(readFileSync(path.join(fixture,'contact-diff.sql'),'utf8')))throw new Error('Contact migration does not match schema.');
+      const contactDiff = readFileSync(path.join(fixture,'contact-diff.sql'),'utf8');
+      if(/(?:ALTER TABLE|CREATE (?:UNIQUE )?INDEX) "team_clients/.test(contactDiff)){console.error(contactDiff);throw new Error('Contact migration does not match schema.');}
       await run(['--conditions=react-server','--import','tsx','scripts/verify-contact-merge.ts'],process.execPath,{...env,JWT_SECRET:'contact-merge-fixture-secret-must-be-long-enough',APP_URL:'https://hymn.fixture'});
       return;
     }

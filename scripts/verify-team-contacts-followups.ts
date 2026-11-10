@@ -9,6 +9,9 @@ import { serviceForPath } from '../lib/team/service-interest';
 
 async function main() {
   assert.equal(process.env.DATABASE_URL, 'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
+  async function allowCallContact(userId: number) {
+    await prisma.growthEvent.create({ data: { key: `artist-profile:${userId}`, event: 'artist_journey_profile', source: 'artist_journey', userId, properties: { revision: 1, goal: 'RELEASE_MUSIC', mode: 'ACTIVE', contact: 'CALL', analytics: false, timezone: 'Asia/Kolkata', startHour: 8, endHour: 21, weekdays: [0, 1, 2, 3, 4, 5, 6], after: null, deadline: null, notes: '', shortlist: [] } } });
+  }
   const workspace = await prisma.teamWorkspace.create({ data: { name: 'Shared contacts fixture', clientCardsImportedAt: new Date() } });
   const ownerRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: 'Owner', owner: true } });
   const staffRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: 'Staff', permissions: ['calendar.view', 'calendar.manage'] } });
@@ -53,6 +56,7 @@ async function main() {
 
   const now = new Date('2026-10-22T06:00:00Z');
   const customer = await prisma.user.create({ data: { name: 'Draft customer', email: 'draft@contacts.fixture.invalid', googleId: 'draft-customer', mobile: '+919876543211', role: 'CUSTOMER' } });
+  await allowCallContact(customer.id);
   const release = await prisma.release.create({ data: { userId: customer.id, title: 'Inactive draft', artistName: 'Artist', genre: 'Hip Hop', releaseDate: now, lastEditedAt: new Date(now.getTime() - 30 * 3600000 + 1) } });
   const sync = async (time = now) => {
     // Reset fixture scan cursors to exercise a full rescan immediately; production resumes bounded batches each cron tick.
