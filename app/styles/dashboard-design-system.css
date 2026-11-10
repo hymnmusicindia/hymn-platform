@@ -51,9 +51,15 @@ html body [data-dashboard-surface][data-dashboard-surface] [data-module-tabs] [a
 html body [data-dashboard-surface][data-dashboard-surface] [data-dashboard-sidebar] { background:var(--dash-surface)!important; border-color:var(--dash-border)!important; border-radius:var(--dash-radius)!important; }
 html body [data-dashboard-surface][data-dashboard-surface] :is([data-admin-section],[data-team-section],[data-nav-section]) { display:flex; align-items:center; gap:10px; min-height:42px!important; padding:10px 12px!important; border-radius:var(--dash-control-radius)!important; font-size:13px!important; line-height:1.4; color:var(--dash-muted)!important; text-decoration:none; }
 html body [data-dashboard-surface][data-dashboard-surface] :is([data-admin-section],[data-team-section],[data-nav-section])[aria-current=page] { background:var(--accent-soft)!important; color:var(--dash-text)!important; }
+html body :is([data-dashboard-surface=team],[data-dashboard-surface=admin])[data-dashboard-surface] [data-dashboard-sidebar] [data-dashboard-search] { min-height:32px!important; }
+html body :is([data-dashboard-surface=team],[data-dashboard-surface=admin])[data-dashboard-surface] [data-dashboard-sidebar] [data-dashboard-search] input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]) { min-height:30px!important; padding:5px 6px!important; font-size:11px!important; }
 @media(max-width:640px) {
   html body [data-dashboard-surface][data-dashboard-surface] { --dash-space:14px; }
   html body [data-dashboard-surface][data-dashboard-surface] [data-module-tabs] { flex-wrap:nowrap; overflow-x:auto; }
   html body [data-dashboard-surface][data-dashboard-surface] [data-module-tabs] :is(a,button) { flex-shrink:0; }
   html body [data-dashboard-surface][data-dashboard-surface] th,html body [data-dashboard-surface][data-dashboard-surface] td { padding:10px 12px; }
 }
+
+/* Team OS and Admin OS continue the shared site header with a compact rail. */
+html body :is([data-dashboard-surface=team],[data-dashboard-surface=admin])[data-dashboard-surface] [data-dashboard-sidebar] { border-radius:0!important; }
+html body :is([data-dashboard-surface=team],[data-dashboard-surface=admin])[data-dashboard-surface] [data-dashboard-sidebar] :is([data-admin-section],[data-team-section]) { gap:8px; min-height:34px!important; padding:7px 10px!important; border-radius:6px!important; font-size:12px!important; }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import styles from "./internal-navigation.module.css";
 
@@ -9,6 +9,7 @@ export function InternalSectionMenu({ sections, active }: {
   active: string;
 }) {
   const id = useId();
+  const pointer = useRef<{ x: number; y: number } | null>(null);
   const current = sections.find(section => section.selected)?.label ?? null;
   const [expanded, setExpanded] = useState<{ active: string; label: string | null }>({ active, label: current });
   if (expanded.active !== active) setExpanded({ active, label: current });
@@ -18,7 +19,12 @@ export function InternalSectionMenu({ sections, active }: {
     const panelId = `${id}-${index}`;
     const visible = open === section.label;
     return <section key={section.label} className={styles.group}
-      onPointerEnter={event => { if (event.pointerType === "mouse") reveal(section.label); }}>
+      onPointerMove={event => {
+        if (event.pointerType !== "mouse") return;
+        const moved = !pointer.current || pointer.current.x !== event.clientX || pointer.current.y !== event.clientY;
+        pointer.current = { x: event.clientX, y: event.clientY };
+        if (moved && open !== section.label) reveal(section.label);
+      }}>
       <button type="button" className={styles.heading} {...section.attribute}
         aria-expanded={visible} aria-controls={panelId} aria-current={section.selected ? "page" : undefined}
         title={section.label} onClick={() => reveal(visible ? null : section.label)}
@@ -28,9 +34,9 @@ export function InternalSectionMenu({ sections, active }: {
         }}>
         {section.icon}<span>{section.label}</span>{!!section.badge && <b>{section.badge > 99 ? "99+" : section.badge}</b>}<ChevronDown size={14} className={styles.chevron}/>
       </button>
-      <div id={panelId} hidden={!visible} className={styles.links} onKeyDown={event => {
+      <div id={panelId} hidden={!visible} className={styles.panel} onKeyDown={event => {
         if (event.key === "Escape") { event.stopPropagation(); reveal(null); document.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(panelId)}"]`)?.focus(); }
-      }}>{section.content}</div>
+      }}><div className={styles.links}>{section.content}</div></div>
     </section>;
   })}</div>;
 }

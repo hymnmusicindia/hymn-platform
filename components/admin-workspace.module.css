@@ -5,8 +5,8 @@
 .sidebar nav a[aria-current=page] { background:var(--card); color:var(--text); box-shadow:var(--shadow-soft); }
 .sidebar nav h2 { color:var(--text-muted); }
 .switcher { padding:0; }
-.finder { display:flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:8px; margin:0 8px 22px; padding:0 8px; color:var(--text-muted); }
-.finder input { border:0; padding:10px 0; background:transparent; font-size:11px; }
+.finder { display:flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:8px; margin:0 0 8px; padding:0 8px; color:var(--text-muted); }
+.finder input { border:0; padding:7px 0; background:transparent; font-size:11px; }
 .identity { margin-left:auto; display:flex; align-items:center; gap:10px; color:var(--text-muted); }
 .identity strong,.identity span { display:block; }
 .identity span { font-size:11px; margin-top:3px; color:var(--text-muted); text-transform:capitalize; }
@@ -44,5 +44,5 @@
 .denied a { color:var(--text); }
 .backdrop { display:none!important; }
 @media(min-width:1001px) { .workspace[class*="collapsed"] .sidebar:not(:hover):not(:focus-within) :is(.switcher,.finder) { display:none; } .workspace[class*="collapsed"] .sidebar:not(:hover):not(:focus-within) nav a { justify-content:center; } .workspace[class*="collapsed"] .sidebar:not(:hover):not(:focus-within) nav a span { display:none; } }
-@media(max-width:1000px) { .content { padding:18px; } .identity { font-size:11px; } .identity span { max-width:140px; } .access { flex-wrap:wrap; } .access a { margin-left:24px; } .backdrop { display:block!important; position:fixed; inset:72px 0 0; z-index:1299; border:0!important; border-radius:0!important; background:var(--overlay)!important; } }
+@media(max-width:1000px) { .content { padding:18px; } .identity { font-size:11px; } .identity span { max-width:140px; } .access { flex-wrap:wrap; } .access a { margin-left:24px; } .backdrop { display:block!important; position:fixed; inset:var(--workspace-header-height) 0 0; z-index:1299; border:0!important; border-radius:0!important; background:var(--overlay)!important; } }
 @media(max-width:600px) { .content { padding:14px; } .content :global(.admin-module-toolbar)>label { max-width:none; width:100%; } .content :global(.admin-module-toolbar)>div { margin-left:0; width:100%; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); } .content :global(.admin-module-toolbar)>div button { min-width:0; width:100%; padding:8px 4px; font-size:11px; line-height:1.4; } .identity strong { display:none; } .access p { flex-basis:calc(100% - 30px); } }

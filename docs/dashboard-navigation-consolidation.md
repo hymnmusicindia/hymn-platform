@@ -49,3 +49,9 @@ Verification passed: navigation inventory and sidebar callback checks, browser c
 ## Shared internal sidebar verification
 
 The browser suite checks all 40 admin destinations for stable section/module inventories, restricted roles, actual Admin OS and Team OS shells, the absence of changing module tabs, hover and keyboard navigation, collapsed desktop navigation, authorized workspace switch buttons, browser back navigation, and 1440/390/320px layouts. Screenshot artifacts use the `internal-admin-sidebar-*` and `internal-team-sidebar-*` prefixes. Fixtures mock APIs and send no emails or invitations.
+
+## Compact header and rail
+
+Team OS and Admin OS use the main HYMN header's navigation toggle, without a second HYMN title/collapse row in the sidebar. The rail starts directly below the 58px desktop / 104px mobile header with square adjoining corners. Workspace switches, search and footer shortcuts use compact spacing. Primary sections use 12px labels and 34px rows; submenu labels use 11px and 30px rows (34px on narrow screens). Only one section expands at a time.
+
+Submenus reveal over 180ms with an expanding grid row and a subtle downward slide; reduced-motion preferences disable the animation. Pointer movement, rather than synthetic entry caused by layout shifts, activates hover sections so an expanding menu does not accidentally open a neighbouring section. Browser checks cover the real shared header toggle, header/rail alignment, font hierarchy, reduced motion, and a 640px-high desktop viewport without scrolling the member menu.

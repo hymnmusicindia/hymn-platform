@@ -1,21 +1,23 @@
-.groups { display:grid; gap:8px; padding:4px 0; }
+.groups { display:grid; gap:2px; padding:2px 0; }
 .groups .group { margin:0; padding:0; }
-.groups .heading { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:10px 12px; border:0; border-radius:8px; background:transparent; color:var(--text-muted); text-align:left; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.groups .heading { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:7px 10px; border:0; border-radius:6px; background:transparent; color:var(--text-muted); text-align:left; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
 .groups .heading>span { flex:1; }
-.groups .heading>svg { flex:none; width:16px; height:16px; stroke-width:1.6; }
+.groups .heading>svg { flex:none; width:15px; height:15px; stroke-width:1.6; }
 .groups .heading .chevron { width:13px; height:13px; transition:transform .15s; }
 .groups .heading[aria-expanded=true] .chevron { transform:rotate(180deg); }
 .groups .heading:is(:hover,[aria-current=page]),.groups .links :is(a,button):is(:hover,[aria-current=page]) { background:var(--hover,var(--card)); color:var(--text); box-shadow:none; }
-.groups .links:not([hidden]) { display:grid; gap:2px; padding:2px 0 4px 14px; }
-.groups .links :is(a,button) { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-height:36px; margin:0; padding:8px 12px; border:0; border-radius:8px; background:transparent; color:var(--text-muted); font:inherit; font-size:13px; font-weight:500; line-height:20px; text-align:left; text-decoration:none; cursor:pointer; }
-.groups .links :is(a,button)>svg { width:16px; height:16px; flex:none; stroke-width:1.6; }
+.groups .panel:not([hidden]) { display:grid; grid-template-rows:1fr; animation:submenu-expand 180ms cubic-bezier(.2,.7,.2,1) both; }
+.groups .links:not([hidden]) { display:grid; gap:1px; min-height:0; overflow:hidden; padding:0 0 2px 12px; }
+.groups .links :is(a,button) { display:flex; align-items:center; justify-content:flex-start; gap:8px; width:100%; min-height:30px; margin:0; padding:5px 10px; border:0; border-radius:6px; background:transparent; color:var(--text-muted); font:inherit; font-size:11px; font-weight:500; line-height:18px; text-align:left; text-decoration:none; cursor:pointer; }
+.groups .links :is(a,button)>svg { width:13px; height:13px; flex:none; stroke-width:1.6; }
+@keyframes submenu-expand { from { grid-template-rows:0fr; opacity:0; transform:translateY(-4px); } to { grid-template-rows:1fr; opacity:1; transform:translateY(0); } }
 .groups :is(a,button):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-.switcher { display:flex; flex-wrap:wrap; gap:4px; padding:4px; margin:16px 0 12px; border:1px solid var(--border); border-radius:10px; background:var(--card); }
-.switcher .destination { display:flex; flex:1; align-items:center; justify-content:center; gap:7px; min-width:0; min-height:40px; padding:8px; border:1px solid transparent; border-radius:7px; color:var(--text-muted); font-size:12px; font-weight:600; text-decoration:none; }
+.switcher { display:flex; flex-wrap:wrap; gap:3px; padding:3px; margin:0 0 8px; border:1px solid var(--border); border-radius:8px; background:var(--card); }
+.switcher .destination { display:flex; flex:1; align-items:center; justify-content:center; gap:6px; min-width:0; min-height:34px; padding:6px; border:1px solid transparent; border-radius:6px; color:var(--text-muted); font-size:11px; font-weight:600; text-decoration:none; }
 .switcher .destination:is(:hover,[aria-current=page]) { background:var(--hover,var(--bg-soft)); color:var(--text); border-color:var(--border); }
 .switcher .destination svg { width:16px; height:16px; flex:none; }
 .switcher .destination span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .switcher .destination:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .count { margin-left:auto; min-width:20px; padding:2px 5px; border-radius:10px; background:var(--accent); color:var(--accent-foreground); font-size:10px; text-align:center; }
-@media(max-width:1000px) { .groups .links :is(a,button) { min-height:44px; } }
-@media(prefers-reduced-motion:reduce) { .groups .heading .chevron { transition:none; } }
+@media(max-width:1000px) { .groups .heading { min-height:36px; }.groups .links :is(a,button) { min-height:34px; } }
+@media(prefers-reduced-motion:reduce) { .groups .heading .chevron { transition:none; }.groups .panel:not([hidden]) { animation:none; } }

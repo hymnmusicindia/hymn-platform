@@ -32,6 +32,7 @@ let server, browser, ownsFixture = false;
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(origin + '/navigation-sections-preview?mode=admin');
+    await expect(page.getByRole('navigation', {name:'Admin sections',exact:true})).toHaveAttribute('data-fixture-ready','true');
     await expect(page.locator('[data-admin-section]')).toHaveCount(6);
     await page.locator('[data-admin-section=Finance]').hover();
     await expect(page.locator('[data-admin-section=Finance]')).toHaveAttribute('aria-expanded', 'true');
@@ -83,16 +84,28 @@ let server, browser, ownsFixture = false;
     await expect(adminSwitch.getByRole('link', { name: 'Team OS', exact: true })).toHaveAttribute('href', '/team?workspace=fixture-workspace');
     await adminNav.locator('[data-admin-section=Finance]').hover();
     await expect(adminNav.locator('[data-admin-module=earnings-entry]')).toBeVisible();
+    await expect(adminNav.locator('[data-admin-section=Finance]')).toHaveCSS('font-size','12px');
+    await expect(adminNav.locator('[data-admin-module=earnings-entry]')).toHaveCSS('font-size','11px');
+    const financePanel = page.locator('[id="' + await adminNav.locator('[data-admin-section=Finance]').getAttribute('aria-controls') + '"]');
+    await expect(financePanel).toHaveCSS('animation-duration','0.18s');
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await expect(financePanel).toHaveCSS('animation-name','none');
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    const headerBox = await page.locator('header.hymn-studio-header').boundingBox();
+    const railBox = await page.locator('[data-dashboard-sidebar]').boundingBox();
+    expect(Math.abs(railBox.y - headerBox.y - headerBox.height)).toBeLessThanOrEqual(1);
+    await expect(page.locator('[data-dashboard-sidebar]').getByText('HYMN', {exact:true})).toHaveCount(0);
+
     if (width === 1440) {
       await page.screenshot({path:'artifacts/internal-admin-sidebar-desktop.png',fullPage:true});
-      await page.getByRole('button', {name:'Collapse admin sidebar',exact:true}).click();
+      await page.getByRole('button', {name:'Toggle service navigation',exact:true}).click();
       await page.mouse.move(900,400);
       await page.getByRole('heading', {name:'Admin preview',exact:true}).click();
       await expect(page.locator('[data-dashboard-sidebar]')).toHaveCSS('width','76px');
       await adminNav.locator('[data-admin-section=Distribution]').hover();
       await expect(adminNav.locator('[data-admin-module=releases]')).toBeVisible();
       await expect(page.locator('[data-dashboard-sidebar]')).toHaveCSS('width','236px');
-      await page.getByRole('button', {name:'Expand admin sidebar',exact:true}).click();
+      await page.getByRole('button', {name:'Toggle service navigation',exact:true}).click();
     } else {
       await page.getByRole('button', {name:'Close navigation',exact:true}).click();
       await expect(adminNav).toBeHidden();
@@ -101,6 +114,7 @@ let server, browser, ownsFixture = false;
       await expect(adminNav).toBeHidden();
     }
       await page.goto(origin + '/navigation-sections-preview?mode=team&module=work');
+      await expect(page.locator('[data-fixture-mode=team]')).toHaveAttribute('data-fixture-ready','true');
       await expect(page.locator('[data-team-section="My day"]')).toHaveAttribute('aria-current', 'page');
       await expect(page.getByRole('button', { name: 'All assigned', exact: true })).toHaveAttribute('aria-pressed', 'true');
       const mobileMenu = page.getByRole('button', { name: 'Open workspace navigation' });
@@ -133,12 +147,18 @@ let server, browser, ownsFixture = false;
       await page.goBack();
       await expect(page.getByRole('heading', { name: 'Weekly active hours', exact: true })).toBeVisible();
     await page.goto(origin + '/navigation-sections-preview?mode=team&module=referral');
+    await expect(page.locator('[data-fixture-mode=team]')).toHaveAttribute('data-fixture-ready','true');
     await expect(page.getByRole('button', { name: 'Get my referral link', exact: true })).toBeVisible();
     await expect(page.locator('[data-module-key=release-qc]')).toHaveCount(0);
     if (await mobileMenu.isVisible()) await mobileMenu.click();
     await expect(page.getByRole('navigation', { name: 'Switch internal workspace' }).getByRole('link', { name: 'Team OS', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('navigation', { name: 'Switch internal workspace' }).getByRole('link', { name: 'Admin OS', exact: true })).toHaveAttribute('href', '/admin');
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw Error('Team horizontal overflow at ' + width);
+
+    if (width === 1440) {
+      await page.setViewportSize({width:1440,height:640});
+      await expect.poll(() => page.getByRole('navigation', {name:'Team workspace',exact:true}).evaluate(node => node.scrollHeight <= node.clientHeight + 1)).toBe(true);
+    }
     await page.screenshot({path:'artifacts/internal-team-sidebar-' + width + '.png',fullPage:true});
     console.log('PASS merged admin/team/customer/producer navigation at width ' + width);
   }
