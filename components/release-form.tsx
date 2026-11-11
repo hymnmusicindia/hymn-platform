@@ -25,7 +25,7 @@ import { customerMessage } from "@/lib/customer-message";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { distributionSubmittedUrl, isCompletedDistributionSubmission } from "@/lib/distribution-return";
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
-import { isValidYoutubeChannelUrl, shouldAutoSelectContentId, type ContentIdAccessStatus } from "@/lib/content-id-access";
+import { shouldAutoSelectContentId, type ContentIdAccessStatus } from "@/lib/content-id-access";
 import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
 import { wizardTrackTitle } from "@/lib/distribution-title";
 
@@ -69,7 +69,6 @@ import {
   CountrySelector,
   MonetisationConsentModal,
   SuccessState,
-  YoutubeContentIdModal,
   createMonetisationClauseState,
   type ContributorDraft,
   type ContributorModalState,
@@ -1148,8 +1147,6 @@ export function ReleaseForm({
       producers: [createContributor()],
     });
   const [monetisationModalOpen, setMonetisationModalOpen] = useState(false);
-  const [youtubeContentIdModalOpen, setYoutubeContentIdModalOpen] =
-    useState(false);
   const [draftReleaseId, setDraftReleaseId] = useState<number | null>(() =>
     initialRelease?.id ?? null,
   );
@@ -1193,8 +1190,7 @@ export function ReleaseForm({
       } as MonetisationClauseState;
     });
   const [youtubeContentIdEnabled, setYoutubeContentIdEnabled] = useState(() =>
-    Boolean(initialRelease?.youtubeContentIdEnabled)
-      || (contentIdAccessStatus === "approved" && initialRelease?.platforms?.includes("YouTube Music") === true),
+    contentIdAccessStatus === "approved" && initialRelease?.platforms?.includes("YouTube Music") === true,
   );
   const [youtubeContentIdChannelUrl, setYoutubeContentIdChannelUrl] = useState(
     () => initialRelease?.youtubeContentIdChannelUrl ?? contentIdChannelUrl ?? "",
@@ -1227,7 +1223,7 @@ export function ReleaseForm({
       : defaultStorePlatforms,
   );
   useEffect(() => {
-    if (contentIdAccessStatus === "pending") {
+    if (contentIdAccessStatus !== "approved") {
       setYoutubeContentIdEnabled(false);
       return;
     }
@@ -1245,7 +1241,6 @@ export function ReleaseForm({
     if (contentIdEligibility.eligible || !youtubeContentIdEnabled) return;
     setYoutubeContentIdEnabled(false);
     setYoutubeContentIdChannelUrl("");
-    setYoutubeContentIdModalOpen(false);
   }, [contentIdEligibility.eligible, youtubeContentIdEnabled]);
   useEffect(() => {
     if (contentIdEligibility.eligible) return;
@@ -1941,18 +1936,9 @@ export function ReleaseForm({
       if (platform === "YouTube Music" && !next.includes(platform)) {
         setYoutubeContentIdEnabled(false);
         setYoutubeContentIdChannelUrl("");
-        setYoutubeContentIdModalOpen(false);
       }
       return next;
     });
-  }
-
-  function openYoutubeContentIdModal() {
-    if (!socialConsentAccepted || !contentIdEligibility.eligible) return;
-    if (!platforms.includes("YouTube Music")) {
-      setPlatforms((current) => [...current, "YouTube Music"]);
-    }
-    setYoutubeContentIdModalOpen(true);
   }
 
   async function uploadRequiredRightsProof(file: File) {
@@ -2415,15 +2401,6 @@ export function ReleaseForm({
             step: 5,
             key: "social-confirmation",
             message: "Enable monetisation before selecting UGC platforms.",
-          }
-        : null,
-      platforms.includes("YouTube Music") &&
-      youtubeContentIdEnabled &&
-      !isValidYoutubeChannelUrl(youtubeContentIdChannelUrl)
-        ? {
-            step: 5,
-            key: "youtube-content-id-url",
-            message: "Add your YouTube channel URL for Content ID.",
           }
         : null,
       !Object.values(legal).every(Boolean)
@@ -4916,7 +4893,6 @@ export function ReleaseForm({
                     if (!next.includes("YouTube Music")) {
                       setYoutubeContentIdEnabled(false);
                       setYoutubeContentIdChannelUrl("");
-                      setYoutubeContentIdModalOpen(false);
                     }
                   }} />
                 </div></div>
@@ -4971,7 +4947,6 @@ export function ReleaseForm({
                           );
                           setYoutubeContentIdEnabled(false);
                           setYoutubeContentIdChannelUrl("");
-                          setYoutubeContentIdModalOpen(false);
                           setMonetisationClauses(
                             createMonetisationClauseState(),
                           );
@@ -5019,55 +4994,15 @@ export function ReleaseForm({
                         disabled={!socialConsentAccepted || !contentIdEligibility.eligible}
                         onChange={() => togglePlatform(platform.name, "social")} />
                     ))}
-                    <StoreChoice name="YouTube Content ID" checked={youtubeContentIdEnabled}
-                      disabled={!socialConsentAccepted || !contentIdEligibility.eligible || contentIdAccessStatus === "pending" || contentIdAccessStatus === "approved" || (selectedPlan !== "one_time" && !hasActiveSubscription)}
-                      onChange={() => {
-                        if (youtubeContentIdEnabled) {
-                          setYoutubeContentIdEnabled(false);
-                          setYoutubeContentIdChannelUrl("");
-                        } else openYoutubeContentIdModal();
-                      }} />
                   </div>
-
-                  {platforms.includes("YouTube Music") ? (
-                  <div className={layoutStyles.contentIdAction} style={{ borderColor: "var(--border)" }}>
-                    <span style={{ color: "var(--text-muted)" }}>
-                      {!contentIdEligibility.eligible
-                        ? contentIdEligibility.reason
-                        : contentIdAccessStatus === "approved"
-                          ? "Approved. Content ID is automatically selected for eligible YouTube Music releases."
-                          : contentIdAccessStatus === "pending"
-                            ? "HYMN is reviewing your request (typically 2–3 weeks). Content ID stays off until approval."
-                            : selectedPlan !== "one_time" && !hasActiveSubscription
-                              ? "Activate your subscription first; then request account-wide Content ID access with an eligible release for ₹250."
-                              : selectedPlan !== "one_time"
-                                ? hasYearlyPlusEntitlement
-                                  ? "Your active Yearly+ subscription includes the Content ID request; access remains off until HYMN approves it."
-                                  : "Your plan covers distribution. Request account-wide Content ID access for ₹250; access remains off until HYMN approves it."
-                              : contentIdAccessStatus === "declined"
-                                ? hasYearlyPlusEntitlement
-                                  ? "Your request was declined. Your active Yearly+ plan includes a new request."
-                                  : "Your request was declined. You can submit a new ₹250 approval request."
-                                : hasYearlyPlusEntitlement
-                                  ? "Request account-wide Content ID access at no extra charge with Yearly+. It will remain off until HYMN approves it."
-                                  : "Request account-wide Content ID access for ₹250. It will remain off until HYMN approves it."}
-                    </span>
-                    {contentIdAccessStatus !== "approved" && contentIdAccessStatus !== "pending" && (selectedPlan === "one_time" || hasActiveSubscription) ? <button
-                      type="button"
-                      disabled={!socialConsentAccepted || !contentIdEligibility.eligible}
-                      className={layoutStyles.contentIdButton}
-                      onClick={() => openYoutubeContentIdModal()}
-                    >
-                      {youtubeContentIdEnabled ? "Review request" : "Request access"}
-                    </button> : null}
-                    {youtubeContentIdEnabled && contentIdAccessStatus === "none" || youtubeContentIdEnabled && contentIdAccessStatus === "declined" ? (
-                      <span className="w-full text-xs" style={{ color: "var(--text-soft)" }}>
-                        {youtubeContentIdAddOnAmount === 0 ? "Included with Yearly+; access starts only after HYMN approval." : "One-time ₹250 request fee; access starts only after HYMN approval."}
-                      </span>
-                    ) : null}
-                  </div>
-                  ) : null}
-                </div></div><div className={layoutStyles.deliveryTerritories}><div>
+                </div>
+                <section className="mt-5 rounded-xl border p-5" aria-labelledby="youtube-oac-title" style={{ borderColor: "var(--border)" }}>
+                  <h3 id="youtube-oac-title" className="font-semibold">YouTube OAC</h3>
+                  <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Request a YouTube Official Artist Channel to bring your artist channel and music together. Your verified artist profile needs at least five live releases before HYMN can submit the request.</p>
+                  <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>After distribution, open the release Requests tab and choose YouTube OAC. OAC is separate from Content ID and does not enable audio fingerprinting or monetisation claims.</p>
+                  <a className="btn-outline mt-4 inline-flex" target="_blank" rel="noopener noreferrer" href={initialRelease && ["live", "partially_live", "scheduled", "distributor_processing"].includes(initialRelease.status) ? `/dashboard/releases/${initialRelease.id}?tab=requests&service=request_yt_oac` : "/dashboard/releases"}>Open OAC requests<span className="sr-only"> (opens in a new tab)</span></a>
+                </section>
+                </div><div className={layoutStyles.deliveryTerritories}><div>
                   <div
                     ref={
                       registerField("country-selector") as (
@@ -5185,7 +5120,7 @@ export function ReleaseForm({
             <div className="record-review-details">{[
               {title:"Release details",stage:2,rows:[["Genre",release.primaryGenre],["Subgenre",release.secondaryGenre],["Language",release.language],["Mood",release.mood]]},
               {title:"Rights & ownership",stage:5,rows:[["Copyright",release.copyrightOwner],["Recording rights",release.publishingRights],["Content ownership",release.contentType],["Rights proof",release.licenseReceiptUrl ? "Attached" : "Not attached"]]},
-              {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],["Content ID",contentIdAccessStatus === "approved" && youtubeContentIdEnabled ? "Enabled" : contentIdAccessStatus === "pending" ? "Approval in process · off" : youtubeContentIdEnabled ? "Approval request" : "Off"],["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
+              {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],["YouTube OAC","Request after five live releases"],...(contentIdAccessStatus === "approved" && youtubeContentIdEnabled ? [["Existing Content ID access","Enabled"]] : []),["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
             ].map(group => <section key={group.title}><header><h3>{group.title}</h3><button type="button" onClick={() => goToStep(group.stage)}>Edit →</button></header><dl>{group.rows.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl></section>)}</div>
             {validationIssues.length > 0 ? <section className="record-review-issues"><h3>A few details need your attention</h3>{validationIssues.map(issue => <button type="button" key={`${issue.key}-${issue.trackIndex}`} onClick={() => triggerFieldFocus(issue)}><span>{customerMessage(issue.message)}</span><span aria-hidden="true">→</span></button>)}</section> : <p className="record-review-ready"><CheckCircle2 size={18} /> All required release details are complete.</p>}
                   {isPaidReleaseResubmission ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">No additional payment</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your existing release entitlement covers these corrections. Submit the updated release for review.</p></section> : subscriptionCovered && youtubeContentIdAddOnAmount > 0 ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">Content ID access request</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your plan covers the release distribution. Pay ₹{youtubeContentIdAddOnAmount.toLocaleString("en-IN")} once for account-wide Content ID access; it remains off during HYMN’s review.</p><div className="payment-total mt-4 flex items-end justify-between border-t pt-4" style={{ borderColor: "var(--border)" }}><span className="font-semibold">Due today</span><span className="text-2xl font-semibold" style={{ color: "var(--accent)" }}>₹{distributionCheckoutAmount.toLocaleString("en-IN")}</span></div></section> : !subscriptionCovered ? <section className="payment-summary p-5 md:p-7">
@@ -5270,17 +5205,6 @@ export function ReleaseForm({
         }}
         value={monetisationClauses}
         onChange={setMonetisationClauses}
-      />
-      <YoutubeContentIdModal
-        open={youtubeContentIdModalOpen}
-        onClose={() => setYoutubeContentIdModalOpen(false)}
-        onSave={() => {
-          setYoutubeContentIdEnabled(true);
-          setYoutubeContentIdModalOpen(false);
-        }}
-        channelUrl={youtubeContentIdChannelUrl}
-        onChannelUrlChange={setYoutubeContentIdChannelUrl}
-        requestFeeAmount={youtubeContentIdAddOnAmount}
       />
       <ContributorsModal
         state={contributorsModal}
