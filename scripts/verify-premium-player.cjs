@@ -21,7 +21,7 @@ function audioFixture() {
   const browser = await chromium.launch();
   try {
     for (const width of [1440, 768, 390, 320]) {
-      const page = await browser.newPage({ viewport: { width, height: 860 } });
+      const page = await browser.newPage({ viewport: { width, height: 860 }, hasTouch: width <= 900, isMobile: width <= 600 });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       const waveformRequests = [], audioFetches = [];
       await page.route('https://hymn.test/**', route => {
@@ -51,6 +51,29 @@ function audioFixture() {
       assert((await page.locator('.hymn-player-waveform > svg').evaluate(node => getComputedStyle(node).maskImage)).includes('linear-gradient'), 'Waveform edges must fade');
       const distinct = await page.locator('.hymn-player-waveform svg g').first().locator('rect').evaluateAll(nodes => new Set(nodes.map(node => node.getAttribute('height'))).size); assert(distinct > 10, 'Real audio should produce distinct waveform peaks');
       await page.getByRole('button', { name: 'Pause Midnight Motion', exact: true }).click(); await expect.poll(() => page.evaluate(() => window.player.playing)).toBe(false);
+      if (width <= 900) {
+        const bounds = await player.boundingBox();
+        assert(860 - bounds.y - bounds.height >= 47, 'Touch player must sit at least 48px above the bottom edge');
+        const touch = await page.context().newCDPSession(page);
+        const range = await page.getByRole('slider', { name: 'Seek Midnight Motion', exact: true }).boundingBox();
+        assert(range.height >= 43, 'Waveform needs a usable finger target');
+        const y = range.y + range.height / 2;
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: range.x + range.width * .2, y }] });
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: range.x + range.width * .75, y }] });
+        await expect.poll(() => page.getByRole('slider', { name: 'Seek Midnight Motion', exact: true }).inputValue().then(Number)).toBeGreaterThan(8);
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await expect.poll(() => page.evaluate(() => window.player.currentTime)).toBeGreaterThan(8);
+        // Pointer capture must retain the gesture when a finger leaves the waveform.
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: range.x + range.width * .5, y }] });
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: range.x - 12, y: y - 16 }] });
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await expect.poll(() => page.evaluate(() => window.player.currentTime)).toBeLessThan(.2);
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: range.x + range.width * .6, y }] });
+        await touch.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+        await expect.poll(() => page.evaluate(() => window.player.currentTime)).toBeLessThan(.2);
+        await touch.detach();
+        console.log(`PASS ${width}px touch player: raised position, finger drag, out-of-bounds capture and cancelled gesture`);
+      }
       const slider = page.getByRole('slider', { name: 'Seek Midnight Motion', exact: true }); await slider.focus(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight'); await expect.poll(() => page.evaluate(() => window.player.currentTime)).toBeGreaterThan(0);
       await page.getByRole('button', { name: 'Share Midnight Motion', exact: true }).focus(); await slider.click();
       await expect(page.locator('.hymn-player-waveform')).toHaveCSS('outline-style', 'none');

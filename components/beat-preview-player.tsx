@@ -509,7 +509,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
 
   return (
     <BeatPreviewContext.Provider value={value}>
-      <div className={activeBeat ? "pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-[7rem]" : undefined}>
+      <div className={activeBeat ? "hymn-player-page-space" : undefined}>
         {children}
       </div>
       <BottomPlayer value={value} licensingOpen={licensingOpen} />

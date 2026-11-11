@@ -1,11 +1,11 @@
 .hymn-player {
   --text:#fafafa;--text-muted:#c0c0c5;--text-soft:#a4a5ad;--card:#252628;--bg:#1c1d20;--border:#ffffff24;--accent:#f0e75c;--accent-foreground:#161719;--hover:#ffffff12;
-  position:fixed;z-index:190;bottom:max(20px,env(safe-area-inset-bottom));left:50%;width:min(1040px,calc(100% - 40px));transform:translateX(-50%);
+  --player-bottom-gap:20px;position:fixed;z-index:190;bottom:calc(var(--player-bottom-gap) + env(safe-area-inset-bottom,0px));left:50%;width:min(1040px,calc(100% - 40px));transform:translateX(-50%);
   padding:10px 14px 10px 10px;border:1px solid #ffffff1c;border-radius:999px;background:linear-gradient(135deg,rgb(53 54 56 / 50%),rgb(32 33 35 / 50%) 75%);color:var(--text);
   box-shadow:inset 0 1px 0 #ffffff0c,0 16px 54px #0005,0 4px 12px #0002;-webkit-backdrop-filter:blur(28px) saturate(150%) brightness(.7);backdrop-filter:blur(28px) saturate(150%) brightness(.7);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue","Segoe UI Variable",Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
   transition:transform .25s ease,opacity .25s ease;animation:hymn-player-appear .3s ease-out;
 }
-.hymn-player[data-collapsed=true] { transform:translate(-50%,calc(100% + 8px)); }
+.hymn-player[data-collapsed=true] { transform:translate(-50%,calc(100% + var(--player-bottom-gap) + env(safe-area-inset-bottom,0px) - 8px)); }
 .hymn-player-shell { display:grid;grid-template-columns:56px minmax(100px,.9fr) auto minmax(160px,1.4fr) auto;align-items:center;gap:14px;min-width:0; }
 .hymn-player button { cursor:pointer; font:inherit; }
 .hymn-player-cover { position:relative;display:grid;place-items:center;width:56px;height:56px;padding:0;border:0;border-radius:50%;overflow:hidden;color:#fff;flex:none;background:#414247;box-shadow:0 0 0 1px #ffffff1c; }
@@ -21,7 +21,7 @@
 .hymn-player .hymn-player-icon:hover,.hymn-player .hymn-player-icon[aria-pressed=true] { background:#ffffff10;color:var(--text); }.hymn-player-icon svg { width:17px;height:17px; }
 .hymn-player-timeline { min-width:0; }.hymn-player-waveform { position:relative;isolation:isolate;height:43px;width:100%;color:#f6f6f7; }
 .hymn-player-waveform>svg { display:block;width:100%;height:100%;-webkit-mask-image:linear-gradient(to right,transparent,#000 10%,#000 82%,transparent);mask-image:linear-gradient(to right,transparent,#000 10%,#000 82%,transparent); }.hymn-player-playhead { position:absolute;top:-2px;bottom:-2px;width:1px;border-radius:1px;background:#f5ed50;pointer-events:none;transform:translateX(-.5px); }
-.hymn-player .hymn-player-waveform>input { position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:ew-resize;touch-action:pan-y; }
+.hymn-player .hymn-player-waveform>input { position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:ew-resize;touch-action:none;-webkit-user-select:none;user-select:none; }
 .hymn-player-waveform:has(>input:focus-visible) { outline:1px solid #ffffff90;outline-offset:4px;border-radius:5px; }
 .hymn-player-waveform-message { position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;font-size:9px;color:#c0c0c5;background:linear-gradient(to right,transparent,#252628b3 25%,#252628b3 75%,transparent); }.hymn-player-time { display:flex;justify-content:space-between;margin-top:0;font-size:9px;font-variant-numeric:tabular-nums;color:var(--text-muted); }
 .hymn-player-volume { display:flex;align-items:center;gap:2px; }.hymn-player-volume>input { width:52px; }
@@ -38,10 +38,14 @@
 @keyframes hymn-player-appear { from { opacity:0;translate:0 12px; } to { opacity:1;translate:0 0; } }
 @media(max-width:900px) { .hymn-player-volume>input,.hymn-player-price { display:none; }.hymn-player-shell { grid-template-columns:52px minmax(90px,.8fr) minmax(120px,1fr) auto;gap:10px; }.hymn-player-cover { width:52px;height:52px; }.hymn-player-transport { display:none; } }
 @media(max-width:600px) {
-  .hymn-player { bottom:calc(12px + env(safe-area-inset-bottom));width:calc(100% - 20px);padding:8px 10px 8px 8px; }
+  .hymn-player { --player-bottom-gap:48px;width:calc(100% - 20px);padding:8px 10px 8px 8px; }
   .hymn-player-shell { grid-template-columns:44px minmax(72px,.9fr) minmax(56px,1fr) auto;gap:8px; }.hymn-player-cover { width:44px;height:44px; }.hymn-player-cover>span svg { width:21px;height:21px; }
   .hymn-player-info strong { font-size:12px;font-weight:500; }.hymn-player-info small { font-size:10px; }.hymn-player-info .hymn-player-bpm { display:none; }
   .hymn-player .hymn-player-icon { width:30px;height:36px; }.hymn-player-icon svg { width:16px;height:16px; }.hymn-player-volume { display:none; }
-  .hymn-player-waveform { height:32px; }.hymn-player-time { font-size:8px; }.hymn-player-menu { position:fixed;bottom:calc(100% + 16px);right:0;width:min(560px,calc(100vw - 20px));border-radius:20px; }
+  .hymn-player-waveform { height:44px; }.hymn-player-time { font-size:8px; }.hymn-player-menu { position:fixed;bottom:calc(100% + 16px);right:0;width:min(560px,calc(100vw - 20px));border-radius:20px; }
 }
 @media(prefers-reduced-motion:reduce) { .hymn-player,.hymn-player * { animation:none!important;transition:none!important; } }
+
+.hymn-player-page-space { padding-bottom:calc(7rem + env(safe-area-inset-bottom,0px)); }
+@media(max-width:600px) { .hymn-player-page-space { padding-bottom:calc(10rem + env(safe-area-inset-bottom,0px)); } }
+@media(max-width:900px) and (pointer:coarse) { .hymn-player { --player-bottom-gap:48px; }.hymn-player-page-space { padding-bottom:calc(10rem + env(safe-area-inset-bottom,0px)); } }

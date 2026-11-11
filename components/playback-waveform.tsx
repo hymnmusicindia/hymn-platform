@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type PointerEvent } from "react";
 import { cachedPlaybackWaveform, savePlaybackWaveform } from "@/lib/playback-waveform-cache";
 import { validWaveform, type WaveformData } from "@/lib/waveform-data";
 
@@ -10,6 +10,15 @@ const barsCount = 88;
 export function PlaybackWaveform({ dataUrl, title, currentTime, duration, seek }: { dataUrl: string; title: string; currentTime: number; duration: number; seek: (time: number) => void }) {
   const clip = useId().replaceAll(":", "");
   const surface = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const drag = useRef<{ pointerId: number; url: string } | null>(null);
+  const [scrub, setScrub] = useState<{ url: string; time: number } | null>(null);
+  useEffect(() => {
+    const previous = drag.current;
+    drag.current = null;
+    setScrub(null);
+    if (previous && input.current?.hasPointerCapture(previous.pointerId)) input.current.releasePointerCapture(previous.pointerId);
+  }, [dataUrl]);
   const [visibleBars, setVisibleBars] = useState(barsCount);
   useEffect(() => {
     if (!surface.current || !window.ResizeObserver) return;
@@ -22,7 +31,31 @@ export function PlaybackWaveform({ dataUrl, title, currentTime, duration, seek }
   const data = loaded?.url === dataUrl ? loaded.data : cachedPlaybackWaveform(dataUrl);
   const bars = data?.peaks;
   const state = data ? "ready" : requestState.url === dataUrl ? requestState.state : "loading";
-  const progress = duration > 0 ? Math.max(0, Math.min(1, currentTime / duration)) : 0;
+  const displayedTime = scrub?.url === dataUrl ? scrub.time : currentTime;
+  const progress = duration > 0 ? Math.max(0, Math.min(1, displayedTime / duration)) : 0;
+  const pointerTime = (event: PointerEvent<HTMLInputElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (event.clientX - bounds.left) / Math.max(1, bounds.width))) * duration;
+  };
+  const startScrub = (event: PointerEvent<HTMLInputElement>) => {
+    if (!event.isPrimary || event.button !== 0 || duration <= 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { pointerId: event.pointerId, url: dataUrl };
+    setScrub({ url: dataUrl, time: pointerTime(event) });
+  };
+  const moveScrub = (event: PointerEvent<HTMLInputElement>) => {
+    if (drag.current?.pointerId !== event.pointerId || drag.current.url !== dataUrl) return;
+    setScrub({ url: dataUrl, time: pointerTime(event) });
+  };
+  const finishScrub = (event: PointerEvent<HTMLInputElement>, commit: boolean) => {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    const sameTrack = drag.current.url === dataUrl;
+    drag.current = null;
+    if (commit && sameTrack) seek(pointerTime(event));
+    setScrub(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
   useEffect(() => {
     if (!dataUrl || cachedPlaybackWaveform(dataUrl)) return;
     const controller = new AbortController();
@@ -67,6 +100,8 @@ export function PlaybackWaveform({ dataUrl, title, currentTime, duration, seek }
     </svg>
     {!data ? <span className="hymn-player-waveform-message">{state === "loading" ? "Preparing waveform" : "Waveform unavailable"}</span> : null}
     <span className="hymn-player-playhead" aria-hidden="true" style={{ left: `${progress * 100}%` }}/>
-    <input type="range" min="0" max={duration > 0 ? duration : 1} step="0.1" value={Math.min(currentTime, duration || 0)} disabled={duration <= 0} onChange={event => seek(Number(event.target.value))} aria-label={`Seek ${title}`} aria-valuetext={`${Math.floor(currentTime)} seconds of ${Math.floor(duration)} seconds`}/>
+    <input ref={input} type="range" min="0" max={duration > 0 ? duration : 1} step="0.1" value={Math.min(displayedTime, duration || 0)} disabled={duration <= 0}
+      onPointerDown={startScrub} onPointerMove={moveScrub} onPointerUp={event => finishScrub(event, true)} onPointerCancel={event => finishScrub(event, false)} onLostPointerCapture={event => finishScrub(event, false)}
+      onChange={event => { if (!drag.current) seek(Number(event.target.value)); }} aria-label={`Seek ${title}`} aria-valuetext={`${Math.floor(displayedTime)} seconds of ${Math.floor(duration)} seconds`}/>
   </div>;
 }

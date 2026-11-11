@@ -28,6 +28,8 @@ For a future multi-host deployment with independent disks, move envelopes to sha
 
 ## Verification
 
+On phones and touch tablets, the player floats 48 CSS pixels above the bottom safe area. Page padding reserves room for that position. The mobile waveform has a 44-pixel touch target and uses pointer capture with touch scrolling disabled only on the seek control. Dragging previews the playhead locally; releasing commits one audio seek, while cancellation or a track change discards the gesture. Native keyboard range controls remain available.
+
 ```sh
 npm run test:premium-player
 npx tsx scripts/verify-waveform-generation.ts --mp3 /path/to/a/real-preview.mp3
