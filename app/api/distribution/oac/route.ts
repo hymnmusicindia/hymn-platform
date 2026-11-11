@@ -13,7 +13,7 @@ export const runtime='nodejs';
 const headers={'Cache-Control':'private, no-store'};
 export async function GET(request:Request){
   const auth=await requireUser();if('error'in auth)return auth.error;
-  const artists=await prisma.artistCard.findMany({where:{userId:auth.user.id,archivedAt:null,user:{status:'ACTIVE'}},orderBy:{artistName:'asc'},select:{id:true,artistName:true},take:200});
+  const artists=await prisma.artistCard.findMany({where:{userId:auth.user.id,archivedAt:null,user:{status:'ACTIVE'}},orderBy:{artistName:'asc'},select:{id:true,artistName:true,imageUrl:true},take:200});
   const rawId=new URL(request.url).searchParams.get('artistId');
   if(rawId!==null&&(!/^\d+$/.test(rawId)||!Number.isSafeInteger(Number(rawId))||Number(rawId)<1||Number(rawId)>2147483647))return NextResponse.json({error:'Invalid artist profile.'},{status:400,headers});
   const id=rawId===null?artists[0]?.id:Number(rawId);

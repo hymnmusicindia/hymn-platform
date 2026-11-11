@@ -7,8 +7,9 @@ import { useAccessibleDialog } from './ui/use-accessible-dialog';
 import { loadBioRazorpay } from '@/lib/client-razorpay';
 import { OAC_RETRY_AMOUNT,oacChannelUrl } from '@/lib/youtube-oac-contract';
 import styles from './youtube-oac-page.module.css';
+import { OacArtistSelect } from './oac-artist-select';
 
-type Artist={id:number;artistName:string};
+type Artist={id:number;artistName:string;imageUrl?:string|null};
 type State={artist:{id:number;name:string};status:'not_applied'|'under_review'|'approved'|'rejected'|'needs_attention';liveCount:number;requiredLiveCount:number;verified:boolean;eligible:boolean;requestId:number|null;channelUrl:string|null;reason:string;retryAmount:number;legacy:boolean;paymentPending?:boolean};
 const labels={not_applied:'Official Artist Channel',under_review:'Under review',approved:'Approved',rejected:'Application rejected',needs_attention:'HYMN assistance needed'};
 const fieldStyle={background:'var(--input)',color:'var(--text)',borderColor:'var(--border)'};
@@ -81,7 +82,7 @@ export function YoutubeOacCard({initialArtistId,standalone=false}:{initialArtist
   const canApply=state?.eligible&&!state.legacy&&['not_applied','rejected','needs_attention'].includes(state.status);
   const channelValid=oacChannelUrl.safeParse(channel).success;
   return <section className={standalone?styles.artistPicker:"mt-5 rounded-2xl border p-5"} aria-labelledby={`oac-title-${initialArtistId||'artist'}`} style={{borderColor:'var(--border)',background:'var(--bg-soft)'}}>
-    {standalone?<label className={styles.chooseLabel}>Choose artist<select aria-label="Choose artist" value={artistId} disabled={loading||busy} onChange={event=>choose(Number(event.target.value))}><option value={0} disabled>{loading?'Loading artists...':'Choose artist...'}</option>{artists.map(artist=><option key={artist.id} value={artist.id}>{artist.artistName}</option>)}</select></label>:null}
+    {standalone?<OacArtistSelect artists={artists} value={artistId} disabled={loading||busy} loading={loading} onChange={choose}/>:null}
     {standalone&&!loading&&!artists.length?<p className="mt-3 text-sm">No artist profiles yet. <a className="underline" href="/distribution/start">Create an artist profile</a> to get started.</p>:null}
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 id={`oac-title-${initialArtistId||'artist'}`} className="font-semibold">YouTube OAC</h3><p className="mt-1 text-sm" style={{color:'var(--text-muted)'}}>One application per artist channel. Future releases do not need a new OAC application.</p></div>{state?<span className="status-pill inline-flex items-center gap-2" style={{color:approved?'var(--success)':state.status==='rejected'?'var(--danger)':'var(--text-muted)'}}>{approved?<CheckCircle2 size={15}/>:reviewing?<Clock3 size={15}/>:null}{labels[state.status]}</span>:null}</div>
     {state?<p className="mt-3 text-sm"><strong>{state.artist.name}</strong>{reviewing?' · Your application is under review. Allow 4–8 weeks after partner submission.':approved?' · Your Official Artist Channel application is approved.':` · ${state.liveCount} of ${state.requiredLiveCount} required live releases.`}</p>:null}
@@ -92,7 +93,7 @@ export function YoutubeOacCard({initialArtistId,standalone=false}:{initialArtist
     <CustomerOverlay open={open}><div className="fixed inset-0 flex items-center justify-center bg-black/60 p-4" onMouseDown={event=>{if(event.target===event.currentTarget)close();}}><section ref={node=>{dialog.current=node;}} role="dialog" aria-modal="true" aria-labelledby="oac-dialog-title" tabIndex={-1} className="w-full max-w-2xl overflow-y-auto rounded-2xl border p-5 shadow-2xl sm:p-7" style={{fontFamily:'"HYMN Inter",Inter,system-ui,sans-serif',fontSynthesis:'none',maxHeight:'calc(100dvh - 2rem)',background:'var(--card)',borderColor:'var(--border)'}}>
       <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-widest" style={{color:'var(--text-muted)'}}>Artist services</p><h2 id="oac-dialog-title" className="mt-2 text-xl font-semibold">{changing?'Request a channel change':'YouTube Official Artist Channel'}</h2></div><button type="button" aria-label="Close OAC popup" className="rounded-lg p-2" disabled={busy} onClick={close}><X size={20}/></button></div>
       <p className="mt-3 text-sm" style={{color:'var(--text-muted)'}}>OAC brings your artist channel and official music together. It is separate from Content ID.</p>
-      <label className="mt-5 grid gap-2 text-sm font-semibold">Artist profile<select className="field" style={fieldStyle} value={artistId} disabled={busy||loading} onChange={e=>choose(Number(e.target.value))}><option value={0} disabled>Select an artist</option>{artists.map(artist=><option key={artist.id} value={artist.id}>{artist.artistName}</option>)}</select></label>
+      <div className="mt-5"><OacArtistSelect label="Artist profile" artists={artists} value={artistId} disabled={busy||loading} loading={loading} onChange={choose}/></div>
       {!artists.length&&!loading?<p className="mt-4 text-sm">Create an artist profile in the wizard’s Artist step first. Then reopen this popup.</p>:null}
       {loading?<p className="mt-4 text-sm" role="status">Loading application…</p>:null}
       {error?<p role="alert" className="mt-4 text-sm">{error} <button type="button" className="underline" onClick={()=>void refresh(artistId)}>Retry</button></p>:null}
