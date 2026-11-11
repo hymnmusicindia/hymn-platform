@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { createReleaseChangeRequest } from "@/lib/release-change-requests";
 import type { Prisma } from "@prisma/client";
+import { customerServiceRequest } from '@/lib/distribution-services-contract';
 
 const schema = z.object({ requestType: z.enum(["correction", "metadata_update", "asset_update", "takedown"]), reason: z.string().trim().min(10).max(2000), desiredEffectiveAt: z.string().datetime().optional(), requestedChanges: z.record(z.string(), z.unknown()).optional() });
 
@@ -13,7 +14,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
   const owned = await prisma.release.count({ where: { id: releaseId, userId: user.user.id } });
   if (!owned) return NextResponse.json({ error: "Release not found." }, { status: 404 });
   const requests = await prisma.releaseChangeRequest.findMany({ where: { releaseId }, orderBy: { submittedAt: "desc" }, take: 100, include: { events: { orderBy: { createdAt: "asc" }, select: { id: true, actorType: true, previousStatus: true, newStatus: true, note: true, createdAt: true } } } });
-  return NextResponse.json({ requests: requests.map(({ providerReference: _reference, reviewedByAdminId: _reviewer, ...item }) => { void _reference; void _reviewer; return item; }) });
+  return NextResponse.json({ requests: requests.map(({ providerReference: _reference, reviewedByAdminId: _reviewer, ...item }) => { void _reference; void _reviewer; return item.requestType==='distribution_service'?customerServiceRequest(item):item; }) },{headers:{'Cache-Control':'private, no-store'}});
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {

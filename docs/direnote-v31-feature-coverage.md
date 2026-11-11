@@ -2,7 +2,9 @@
 
 Source: [official live API documentation](https://distribution.direnotemedia.com/dnm_api), JavaScript-rendered reference read on 11 November 2026. The earlier v2.4 audit is historical; it is not the complete current API inventory. This audit compares documented capabilities with executable HYMN integration code, not production account permissions.
 
-## Useful additions, in priority order
+Current implementation: [Distribution services workflow and activation](distribution-services.md). The table below records the audit findings before implementation; the listed gaps are now implemented in code, with live activation requirements documented separately.
+
+## Original audit findings, in priority order
 
 | Priority | Capability | Current HYMN gap | Customer benefit |
 | --- | --- | --- | --- |

@@ -4,6 +4,11 @@ const developmentCspScriptSources = process.env.NODE_ENV === "development" ? " '
 
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR?.trim() || ".next",
+  webpack(config) {
+    // Disposable validation builds can avoid filling disk with persistent cache packs.
+    if (process.env.HYMN_BUILD_DISABLE_CACHE === "true") config.cache = false;
+    return config;
+  },
   experimental: {
     // Shared build hosts can report more CPUs than their process limits allow.
     cpus: 2,

@@ -3,7 +3,7 @@ import { adminNavigation, adminModuleAllowed, adminWorkspaceNavigation } from ".
 import { consistentWorkspaceNavigation } from "../lib/workspace-navigation";
 import { adminModuleKey, sectionItems, teamSectionFor } from "../lib/navigation-sections";
 
-const expected = "overview notifications analytics manual-catalogue releases content-id-requests delivery updates fraud referrals-admin growth revenue royalties earnings-entry reconciliation kyc managed-services artists client-cards-admin promotions playlist-reviews timed-playlists content newsletter operations reviews contracts support studio-admin contributors-admin campaign-redemptions leads-admin audit-admin email-admin webhooks-admin users team activity integrations settings".split(" ");
+const expected = "overview notifications analytics manual-catalogue releases content-id-requests delivery updates distribution-services fraud referrals-admin growth revenue royalties earnings-entry reconciliation kyc managed-services artists client-cards-admin promotions playlist-reviews timed-playlists content newsletter operations reviews contracts support studio-admin contributors-admin campaign-redemptions leads-admin audit-admin email-admin webhooks-admin users team activity integrations settings".split(" ");
 const permissions = ["system.manage", "users.read", "users.manage", "audit.read", "releases.read", "releases.review", "distribution.retry", "updates.review", "takedowns.review", "fraud.read", "wallets.adjust", "payouts.review", "royalties.import", "royalties.reconcile", "kyc.review", "services.manage"];
 const full = adminNavigation(permissions);
 assert.deepEqual(full.map(item => item.key).sort(), expected.sort(), "Every existing admin module must remain reachable");
@@ -19,6 +19,8 @@ assert.equal(adminModuleKey("distribution-queue"), "releases");
 assert.equal(adminModuleKey("producers"), "operations");
 assert.equal(adminModuleAllowed("content-id-requests", ["releases.review"]), true);
 assert.equal(adminModuleAllowed("content-id-requests", ["releases.read"]), false);
+assert.equal(adminModuleAllowed("distribution-services", ["releases.read"]), true);
+assert.equal(adminModuleAllowed("distribution-services", ["users.read"]), false);
 const teamKeys = "work-station contacts team-queue consultations work overview availability tasks inbox projects chat emails customer-calls calendar creator-applications release-qc directory approvals reports audit settings referral acquisition".split(" ");
 const team = sectionItems(teamKeys, teamSectionFor);
 assert.equal(team.length, 6);
@@ -43,4 +45,4 @@ for (const profile of ["customer", "producer"]) {
   assert.equal(merged.find(item => item.key === "earnings")?.group, "Money");
   assert.equal(merged.find(item => item.key === "settings")?.group, "Account & support");
 }
-console.log("PASS navigation consolidation: all 40 admin modules retained, simplified Team destinations, permission subsets, legacy aliases, and customer/producer financial, profile, referral and support modules preserved.");
+console.log("PASS navigation consolidation: all admin modules reachable, simplified Team destinations, permission subsets, legacy aliases, and customer/producer financial, profile, referral and support modules preserved.");

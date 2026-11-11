@@ -10,7 +10,7 @@ export async function requestDireNoteCorrection(action: ReleaseCorrection['actio
   const endpoint = new URL(`/${action}`, new URL(config.endpoint).origin);
   if (endpoint.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(endpoint.hostname)) throw Error('Distribution requests require HTTPS.');
   await reserveDireNoteRequest(action);
-  if (!file) return postToDireNote(endpoint.toString(), payload, { fetchImpl });
+  if (!file) return postToDireNote(endpoint.toString(), payload, { fetchImpl,timeoutMs:12000 });
   const body = new FormData();
   body.set('client_id', config.clientId!); body.set('pin', config.pin!);
   body.set('isrc', String(payload.isrc));

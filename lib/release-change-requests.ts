@@ -56,6 +56,7 @@ export async function reviewReleaseChangeRequest(input: { id: number; adminId?: 
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${identity.releaseId}::integer)`;
   const current = await tx.releaseChangeRequest.findUnique({ where: { id: input.id } });
   if (!current) throw new Error("Change request not found.");
+  if(current.requestType==='distribution_service')throw Error('Use the dedicated Distribution services queue to verify the receipt and result.');
   if (current.status === input.decision && current.adminNote === input.note.trim() && (!input.providerReference?.trim() || current.providerReference === input.providerReference.trim())) return current;
   if (!allowedRequestTransitions[current.status]?.includes(input.decision)) throw new Error(`Change request cannot move from ${current.status} to ${input.decision}.`);
   const isSupport = Boolean((current.requestedChanges as Record<string, unknown> | null)?.supportCorrection);

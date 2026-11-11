@@ -106,7 +106,9 @@
     "test:dashboard-design": "node scripts/verify-dashboard-design-browser.cjs",
     "test:release-document-upload": "node scripts/verify-release-document-upload.cjs && node scripts/verify-release-document-browser.cjs",
     "test:submission-feedback": "tsx scripts/verify-operation-progress.ts && node scripts/verify-submission-feedback-browser.cjs",
-    "test:team-mail-policy": "tsx scripts/verify-acquisition-isolated.ts --team-mail-policy-only"
+    "test:team-mail-policy": "tsx scripts/verify-acquisition-isolated.ts --team-mail-policy-only",
+    "test:distribution-services": "node --import tsx scripts/verify-acquisition-isolated.ts --distribution-services-only && node scripts/verify-distribution-services-browser.cjs && tsx scripts/verify-navigation-sections.ts",
+    "test:distribution-services:build": "node --import tsx scripts/verify-acquisition-isolated.ts --distribution-services-only --build"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

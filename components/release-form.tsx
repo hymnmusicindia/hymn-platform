@@ -1,5 +1,6 @@
 "use client";
 import {subscriptionPaymentFailureMessage} from "@/lib/subscription-recurrence";
+import { DistributionReferenceBrowser } from "./distribution-insights-panel";
 import { StoreChoice } from "./distribution/store-choice";
 import { IncludedStores } from "./distribution/included-stores";
 import { ReleaseAmendmentConfirmation } from './release-amendment-confirmation';
@@ -3433,6 +3434,7 @@ export function ReleaseForm({
           </section>
         </div></CustomerOverlay>
       ) : null}
+      {step === 2 ? <DistributionReferenceBrowser/> : null}
       <form
         id="release-distribution-form"
         onSubmit={handleFinalSubmit}

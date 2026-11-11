@@ -114,8 +114,8 @@ export async function syncSupportCorrection(requestId: number) {
   }, amendmentTransactionOptions);
 }
 
-export async function syncPendingSupportCorrections() {
-  const requests = await prisma.releaseChangeRequest.findMany({ where: { status: 'submitted_to_partner', providerReference: { startsWith: 'support:' } }, orderBy: { updatedAt: 'asc' }, take: 5 });
+export async function syncPendingSupportCorrections(limit=5) {
+  const requests = await prisma.releaseChangeRequest.findMany({ where: { status: 'submitted_to_partner', providerReference: { startsWith: 'support:' } }, orderBy: { updatedAt: 'asc' }, take: Math.max(1,Math.min(5,limit)) });
   for (const request of requests) {
     try { await syncSupportCorrection(request.id); } catch { /* Keep pending; a read failure never triggers another write. */ }
     finally { await prisma.releaseChangeRequest.updateMany({ where: { id: request.id, status: 'submitted_to_partner' }, data: { updatedAt: new Date() } }); }

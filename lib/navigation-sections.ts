@@ -10,7 +10,7 @@ export function sectionItems<T>(items: readonly T[], sectionFor: (item: T) => st
 
 const adminSections: Record<string, string[]> = {
   Overview: ["overview", "notifications", "analytics"],
-  Distribution: ["manual-catalogue", "releases", "content-id-requests", "delivery", "updates", "fraud", "contracts", "managed-services"],
+  Distribution: ["manual-catalogue", "releases", "content-id-requests", "delivery", "updates", "distribution-services", "fraud", "contracts", "managed-services"],
   Finance: ["revenue", "royalties", "earnings-entry", "reconciliation", "kyc"],
   "Customers & growth": ["users", "artists", "client-cards-admin", "contributors-admin", "referrals-admin", "growth", "promotions", "campaign-redemptions", "playlist-reviews", "timed-playlists", "newsletter", "leads-admin"],
   "Marketplace & Studio": ["producers", "operations", "reviews", "studio-admin"],

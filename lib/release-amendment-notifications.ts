@@ -7,24 +7,26 @@ import { customerBrandText } from './customer-message';
 import { emailLayout, emailText } from './email/email-templates';
 import { getPublicAppUrl } from './public-app-url';
 import { amendmentSourceRevision } from './release-amendment-revision';
+import { distributionServiceStatusLabel,distributionServiceStatusCopy } from './distribution-services-contract';
 
 export const amendmentTransactionOptions = { timeout: 30000, maxWait: 10000 };
 
 /** Durable notification + retryable email are written in the business transaction. */
 export async function enqueueAmendmentUpdate(tx: Prisma.TransactionClient, requestId: number, eventId: number) {
   const request = await tx.releaseChangeRequest.findUniqueOrThrow({ where: { id: requestId }, include: { release: { include: { user: true, tracks: true } } } });
-  if (request.requestType !== 'metadata_update' && request.requestType !== 'asset_update') return null;
+  if (!['metadata_update','asset_update','distribution_service'].includes(request.requestType)) return null;
   const event = await tx.releaseChangeRequestEvent.findFirstOrThrow({ where: { id: eventId, requestId } });
   const changes = request.requestedChanges && typeof request.requestedChanges === 'object' ? request.requestedChanges as Record<string, unknown> : {};
   let summary = amendmentChanges(changes);
   if (!summary.length && changes.wizard_metadata) summary = summarizeAmendment({ ...deserializeRelease(request.release), artworkUrl: request.release.artworkUrl || '' }, (changes.wizard_metadata as { requested?: unknown }).requested);
-  const title = amendmentStatusLabel(event.newStatus), copy = amendmentStatusCopy(event.newStatus);
+  const service=request.requestType==='distribution_service';
+  const title = service?distributionServiceStatusLabel(event.newStatus):amendmentStatusLabel(event.newStatus), copy = service?distributionServiceStatusCopy(event.newStatus):amendmentStatusCopy(event.newStatus);
   const path = `/dashboard/releases/${request.releaseId}?tab=requests&request=${request.id}`;
   const eventKey = `amendment:${request.id}:event:${event.id}`;
   const user = request.release.user;
-  if (request.requestedByUserId !== request.release.userId) return null;
+  if (request.requestedByUserId !== request.release.userId || user.status!=='ACTIVE') return null;
   const sections = [
-    { title: 'Release and request', body: `${request.release.title}\nAmendment #${request.id}\n${title}` },
+    { title: 'Release and request', body: `${request.release.title}\n${service?'Service request':'Amendment'} #${request.id}\n${title}` },
     { title: 'Requested changes', body: summary.length ? summary.map(row => `${row.label}: ${row.before.slice(0, 400)} → ${row.after.slice(0, 400)}`).join('\n') : 'The submitted amendment details are available in your HYMN release workspace.' },
     { title: 'Recorded update', body: customerBrandText(event.note) },
     { title: 'What happens next', body: copy }
@@ -59,7 +61,7 @@ export async function repairRecentAmendmentAcknowledgements() {
     JOIN LATERAL (SELECT e.id FROM release_change_request_events e WHERE e.request_id=r.id ORDER BY e.id DESC LIMIT 1) latest ON true
     LEFT JOIN email_logs mail ON mail.event_key=('amendment:' || r.id || ':event:' || latest.id || ':email')
     LEFT JOIN notifications notice ON notice.event_key=('amendment:' || r.id || ':event:' || latest.id || ':notification')
-    WHERE r.request_type IN ('metadata_update','asset_update') AND r.updated_at >= ${new Date(Date.now() - 7 * 86400000)}
+    WHERE r.request_type IN ('metadata_update','asset_update','distribution_service') AND r.updated_at >= ${new Date(Date.now() - 7 * 86400000)}
       AND (mail.id IS NULL OR notice.id IS NULL)
     ORDER BY r.updated_at ASC LIMIT 3`;
   for (const request of missing) await ensureAmendmentAcknowledgement(request.id);
