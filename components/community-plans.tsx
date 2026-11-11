@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { ArrowDown, ArrowRight, AudioLines, Check, GraduationCap, Handshake, LoaderCircle, Megaphone, Mic2, Users } from "lucide-react";
 import type { SupportTicket } from "@/lib/types";
 import styles from "./community-plans.module.css";
-import { PromotionOacLink } from "./youtube-oac-page";
+import { PromotionTools } from "./promotion-tools";
 
 const segments = [{ id: "promotion-playlists", label: "Playlist discovery" }, { id: "community-plans", label: "Community Plans" }, { id: "promotion-campaigns", label: "Campaign support" }];
 const plans = [
@@ -24,12 +24,15 @@ export function PromotionCommunityPage({ playlists, campaigns, onCreated }: { pl
   const formRef = useRef<HTMLFormElement>(null);
   function jump(id: string) {
     setActive(id);
+    const section = document.getElementById(id);
+    const disclosure = section?.closest("details");
+    if (disclosure) disclosure.open = true;
     document.getElementById(id)?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
     const url = new URL(window.location.href); url.hash = id; window.history.replaceState(null, "", url);
   }
   useEffect(() => {
     const hash = window.location.hash.slice(1);
-    if (segments.some(item => item.id === hash)) requestAnimationFrame(() => document.getElementById(hash)?.scrollIntoView({ block: "start" }));
+    if (segments.some(item => item.id === hash)) requestAnimationFrame(() => jump(hash));
     const observer = new IntersectionObserver(entries => {
       const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio);
       if (visible[0]) setActive(visible[0].target.id);
@@ -54,12 +57,12 @@ export function PromotionCommunityPage({ playlists, campaigns, onCreated }: { pl
     finally { submitting.current = false; setBusy(false); }
   }
   return <div className={styles.page}>
-    <header className={styles.header}><div><span className={styles.kicker}><Megaphone size={15}/> PROMOTION & PARTNERSHIPS</span><h1>Good music goes further together.</h1><p>Find your audience, build your community and plan your next move with HYMN.</p></div>
+    <header className={styles.header}><div><span className={styles.kicker}><Megaphone size={15}/> PROMOTION & PARTNERSHIPS</span><h1>Promotion</h1><p>Make your next release go further.</p></div>
       <nav aria-label="Promotion sections">{segments.map(item => <a key={item.id} href={`#${item.id}`} aria-current={active === item.id ? "location" : undefined} onClick={event => { event.preventDefault(); jump(item.id); }}>{item.label}<ArrowDown size={13}/></a>)}</nav>
     </header>
-    <PromotionOacLink/>
-    <section id="promotion-playlists" className={styles.segment} aria-label="Playlist discovery">{playlists}</section>
-    <section id="community-plans" className={`${styles.segment} ${styles.community}`} aria-labelledby="community-heading">
+    <PromotionTools onSelect={jump}/>
+    <details className={styles.toolDisclosure}><summary>Playlist discovery <ArrowDown size={16}/></summary><section id="promotion-playlists" className={styles.segment} aria-label="Playlist discovery">{playlists}</section></details>
+    <details className={styles.toolDisclosure}><summary>Community plans <ArrowDown size={16}/></summary><section id="community-plans" className={`${styles.segment} ${styles.community}`} aria-labelledby="community-heading">
       <div className={styles.intro}><span className={styles.kicker}><Users size={16}/> COMMUNITY PLANS</span><h2 id="community-heading">Your community.<br/><span>More room to create.</span></h2><p>For societies, clubs, cypher crews and artist collectives. Get a tailored proposal for beats, mixing, mastering and subscriptions, with bulk deals built around what your members actually need.</p><a href="#community-application" onClick={event => { event.preventDefault(); formRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); }}>Build our community plan <ArrowRight size={16}/></a></div>
       <div className={styles.plans}>{plans.map(item => <article key={item.name}><item.icon size={24}/><p className={styles.audience}>{item.audience}</p><h3>{item.name}</h3><p>{item.description}</p><ul>{item.benefits.map(benefit => <li key={benefit}><Check size={14}/>{benefit}</li>)}</ul><button type="button" onClick={() => { setPlan(item.name); formRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); }}>Explore {item.name} <ArrowRight size={15}/></button></article>)}</div>
       <div className={styles.exchange}><div><Handshake size={23}/><h3>A simple exchange.</h3><p>We tailor access and pricing. Your community helps more artists discover HYMN.</p></div><ul><li><strong>Branding where it belongs</strong>Include agreed HYMN branding on supported event artwork, posts or release-related materials.</li><li><strong>Social mentions & regular shout-outs</strong>Tag HYMN and share agreed updates with your members at a cadence we decide together.</li><li><strong>One point of contact</strong>Nominate a coordinator to organise projects, member eligibility and partnership check-ins.</li></ul></div>
@@ -83,6 +86,6 @@ export function PromotionCommunityPage({ playlists, campaigns, onCreated }: { pl
       </form>}
       <details className={styles.faq}><summary>How are discounts and responsibilities decided?</summary><p>HYMN reviews your community size, expected projects and promotion commitments, then agrees the eligible services, prices, billing, term and deliverables with your coordinator. Discounts are activated only after approval. No fixed discount or unlimited usage is promised on this page.</p></details>
     </section>
-    <section id="promotion-campaigns" className={styles.segment} aria-label="Campaign support">{campaigns}</section>
+    </details><details className={styles.toolDisclosure}><summary>Campaign support <ArrowDown size={16}/></summary><section id="promotion-campaigns" className={styles.segment} aria-label="Campaign support">{campaigns}</section></details>
   </div>;
 }

@@ -6,6 +6,7 @@ import { CustomerOverlay } from './customer-overlay';
 import { useAccessibleDialog } from './ui/use-accessible-dialog';
 import { loadBioRazorpay } from '@/lib/client-razorpay';
 import { OAC_RETRY_AMOUNT,oacChannelUrl } from '@/lib/youtube-oac-contract';
+import styles from './youtube-oac-page.module.css';
 
 type Artist={id:number;artistName:string};
 type State={artist:{id:number;name:string};status:'not_applied'|'under_review'|'approved'|'rejected'|'needs_attention';liveCount:number;requiredLiveCount:number;verified:boolean;eligible:boolean;requestId:number|null;channelUrl:string|null;reason:string;retryAmount:number;legacy:boolean;paymentPending?:boolean};
@@ -30,11 +31,11 @@ export function YoutubeOacCard({initialArtistId,standalone=false}:{initialArtist
       const response=await fetch(`/api/distribution/oac${id?`?artistId=${id}`:''}`,{cache:'no-store',signal}),data=await response.json();
       if(!response.ok)throw Error(data.error||'Could not load OAC status.');
       if(current!==sequence.current)return;
-      setArtists(data.artists);setState(data.state);setError('');
-      if(!id&&data.state)setArtistId(data.state.artist.id);
+      setArtists(data.artists);setState(standalone&&!id?null:data.state);setError('');
+      if(!standalone&&!id&&data.state)setArtistId(data.state.artist.id);
     }catch(err){if(signal?.aborted||current!==sequence.current)return;setError(err instanceof Error?err.message:'Could not load OAC status.');setState(null);}
     finally{if(current===sequence.current&&!signal?.aborted)setLoading(false);}
-  },[]);
+  },[standalone]);
   useEffect(()=>{setLoading(true);const controller=new AbortController();void refresh(artistId,controller.signal);const timer=setInterval(()=>{if(!document.hidden&&!busyRef.current)void refresh(selected.current,controller.signal);},30000);return()=>{controller.abort();clearInterval(timer);};},[artistId,refresh]);
   function choose(id:number){setArtistId(id);setState(null);setLoading(true);setChannel('');setReason('');setConsent(false);setChanging(false);setTicketId(null);setMessage('');setPaymentPending(false);key.current=crypto.randomUUID();}
   async function post(body:unknown){const response=await fetch('/api/distribution/oac',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),data=await response.json();if(!response.ok)throw Error(data.error||'Could not save the OAC application.');return data;}
@@ -79,14 +80,16 @@ export function YoutubeOacCard({initialArtistId,standalone=false}:{initialArtist
   const approved=state?.status==='approved',reviewing=state?.status==='under_review';
   const canApply=state?.eligible&&!state.legacy&&['not_applied','rejected','needs_attention'].includes(state.status);
   const channelValid=oacChannelUrl.safeParse(channel).success;
-  return <section className="mt-5 rounded-2xl border p-5" aria-labelledby={`oac-title-${initialArtistId||'artist'}`} style={{borderColor:'var(--border)',background:'var(--bg-soft)'}}>
+  return <section className={standalone?styles.artistPicker:"mt-5 rounded-2xl border p-5"} aria-labelledby={`oac-title-${initialArtistId||'artist'}`} style={{borderColor:'var(--border)',background:'var(--bg-soft)'}}>
+    {standalone?<label className={styles.chooseLabel}>Choose artist<select aria-label="Choose artist" value={artistId} disabled={loading||busy} onChange={event=>choose(Number(event.target.value))}><option value={0} disabled>{loading?'Loading artists...':'Choose artist...'}</option>{artists.map(artist=><option key={artist.id} value={artist.id}>{artist.artistName}</option>)}</select></label>:null}
+    {standalone&&!loading&&!artists.length?<p className="mt-3 text-sm">No artist profiles yet. <a className="underline" href="/distribution/start">Create an artist profile</a> to get started.</p>:null}
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 id={`oac-title-${initialArtistId||'artist'}`} className="font-semibold">YouTube OAC</h3><p className="mt-1 text-sm" style={{color:'var(--text-muted)'}}>One application per artist channel. Future releases do not need a new OAC application.</p></div>{state?<span className="status-pill inline-flex items-center gap-2" style={{color:approved?'var(--success)':state.status==='rejected'?'var(--danger)':'var(--text-muted)'}}>{approved?<CheckCircle2 size={15}/>:reviewing?<Clock3 size={15}/>:null}{labels[state.status]}</span>:null}</div>
     {state?<p className="mt-3 text-sm"><strong>{state.artist.name}</strong>{reviewing?' · Your application is under review. Allow 4–8 weeks after partner submission.':approved?' · Your Official Artist Channel application is approved.':` · ${state.liveCount} of ${state.requiredLiveCount} required live releases.`}</p>:null}
     {state?.status==='rejected'?<p className="mt-3 rounded-xl border p-3 text-sm" style={{borderColor:'var(--border)'}}><strong>Reason: </strong>{state.reason||'A detailed rejection reason is not available. Ask HYMN support before paying to resubmit.'}</p>:null}
     {loading?<p role="status" className="mt-3 text-sm">Checking OAC status…</p>:null}
     {error?<p role="alert" className="mt-3 text-sm">{error} <button type="button" className="underline" onClick={()=>void refresh(artistId)}>Retry status</button></p>:null}
-    <div className="mt-4 flex flex-wrap gap-3">{approved&&state.channelUrl?<a className="btn-outline inline-flex items-center gap-2" href={state.channelUrl} target="_blank" rel="noopener noreferrer">View channel <ExternalLink size={14}/></a>:null}<button type="button" className="btn-outline" disabled={loading} onClick={()=>{setOpen(true);setChanging(false);setMessage('');}}>{reviewing?'View application':approved?'Manage OAC':state?.status==='rejected'?`Review & resubmit · INR ${OAC_RETRY_AMOUNT}`:'Set up YouTube OAC'}</button></div>
-    <CustomerOverlay open={open}><div className="fixed inset-0 flex items-center justify-center bg-black/60 p-4" onMouseDown={event=>{if(event.target===event.currentTarget)close();}}><section ref={node=>{dialog.current=node;}} role="dialog" aria-modal="true" aria-labelledby="oac-dialog-title" tabIndex={-1} className="w-full max-w-2xl overflow-y-auto rounded-2xl border p-5 shadow-2xl sm:p-7" style={{maxHeight:'calc(100dvh - 2rem)',background:'var(--card)',borderColor:'var(--border)'}}>
+    <div className="mt-4 flex flex-wrap gap-3">{approved&&state.channelUrl?<a className="btn-outline inline-flex items-center gap-2" href={state.channelUrl} target="_blank" rel="noopener noreferrer">View channel <ExternalLink size={14}/></a>:null}<button type="button" className="btn-outline" disabled={loading||(standalone&&!artistId)} onClick={()=>{setOpen(true);setChanging(false);setMessage('');}}>{reviewing?'View application':approved?'Manage OAC':state?.status==='rejected'?`Review & resubmit · INR ${OAC_RETRY_AMOUNT}`:'Set up YouTube OAC'}</button></div>
+    <CustomerOverlay open={open}><div className="fixed inset-0 flex items-center justify-center bg-black/60 p-4" onMouseDown={event=>{if(event.target===event.currentTarget)close();}}><section ref={node=>{dialog.current=node;}} role="dialog" aria-modal="true" aria-labelledby="oac-dialog-title" tabIndex={-1} className="w-full max-w-2xl overflow-y-auto rounded-2xl border p-5 shadow-2xl sm:p-7" style={{fontFamily:'"HYMN Inter",Inter,system-ui,sans-serif',fontSynthesis:'none',maxHeight:'calc(100dvh - 2rem)',background:'var(--card)',borderColor:'var(--border)'}}>
       <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-widest" style={{color:'var(--text-muted)'}}>Artist services</p><h2 id="oac-dialog-title" className="mt-2 text-xl font-semibold">{changing?'Request a channel change':'YouTube Official Artist Channel'}</h2></div><button type="button" aria-label="Close OAC popup" className="rounded-lg p-2" disabled={busy} onClick={close}><X size={20}/></button></div>
       <p className="mt-3 text-sm" style={{color:'var(--text-muted)'}}>OAC brings your artist channel and official music together. It is separate from Content ID.</p>
       <label className="mt-5 grid gap-2 text-sm font-semibold">Artist profile<select className="field" style={fieldStyle} value={artistId} disabled={busy||loading} onChange={e=>choose(Number(e.target.value))}><option value={0} disabled>Select an artist</option>{artists.map(artist=><option key={artist.id} value={artist.id}>{artist.artistName}</option>)}</select></label>
