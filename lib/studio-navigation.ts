@@ -1,6 +1,6 @@
 export function usesHymnStudioShell(pathname: string) {
   return ['/studio','/dashboard','/dashboard/customer','/producer/dashboard','/producer-dashboard','/library','/audio-library','/analytics','/payout'].includes(pathname)
-    || ['/studio/','/dashboard/purchases'].some(path => pathname.startsWith(path));
+    || ['/promotion/','/studio/','/dashboard/purchases'].some(path => pathname.startsWith(path));
 }
 
 export const studioDestinations = [
@@ -24,6 +24,7 @@ export const studioDestinations = [
 ] as const;
 
 export const studioTools = [
+  { title: 'YouTube Official Artist Channel', detail: 'Check eligibility and manage your OAC application', href: '/promotion/youtube-oac', icon: 'music' },
   { title: 'New release', detail: 'Audio, artwork and distribution', href: '/distribution/start', icon: 'disc' },
   { title: 'Mix-readiness check', detail: 'Check your recording before mixing', href: '/studio/readiness', icon: 'sliders' },
   { title: 'Find an engineer', detail: 'Professional mixing and mastering', href: '/studio?view=engineers', icon: 'headphones' },

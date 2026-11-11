@@ -12,7 +12,7 @@ type State={artist:{id:number;name:string};status:'not_applied'|'under_review'|'
 const labels={not_applied:'Official Artist Channel',under_review:'Under review',approved:'Approved',rejected:'Application rejected',needs_attention:'HYMN assistance needed'};
 const fieldStyle={background:'var(--input)',color:'var(--text)',borderColor:'var(--border)'};
 
-export function YoutubeOacCard({initialArtistId}:{initialArtistId?:number}){
+export function YoutubeOacCard({initialArtistId,standalone=false}:{initialArtistId?:number;standalone?:boolean}){
   const [open,setOpen]=useState(false),[artists,setArtists]=useState<Artist[]>([]),[artistId,setArtistId]=useState(initialArtistId||0);
   const [state,setState]=useState<State|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [checkoutOpen,setCheckoutOpen]=useState(false);
@@ -114,7 +114,7 @@ export function YoutubeOacCard({initialArtistId}:{initialArtistId?:number}){
       </>:null}
       {paymentPending?<div className="mt-4 text-sm"><p>Payment confirmation is pending. Do not pay again. The signed payment webhook can complete your application if this window closes.</p>{!state?.paymentPending?<button type="button" className="btn-outline mt-3" disabled={busy} onClick={confirmAgain}>Retry payment confirmation</button>:null}</div>:null}
       <p role="status" aria-live="polite" className="mt-4 whitespace-pre-wrap text-sm">{message}</p>
-      <button type="button" className="btn-outline mt-5" disabled={busy} onClick={close}>Close & continue distribution</button>
+      <button type="button" className="btn-outline mt-5" disabled={busy} onClick={close}>{standalone?'Done':'Close & continue distribution'}</button>
     </section></div></CustomerOverlay>
   </section>;
 }

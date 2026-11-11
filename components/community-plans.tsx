@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { ArrowDown, ArrowRight, AudioLines, Check, GraduationCap, Handshake, LoaderCircle, Megaphone, Mic2, Users } from "lucide-react";
 import type { SupportTicket } from "@/lib/types";
 import styles from "./community-plans.module.css";
+import { PromotionOacLink } from "./youtube-oac-page";
 
 const segments = [{ id: "promotion-playlists", label: "Playlist discovery" }, { id: "community-plans", label: "Community Plans" }, { id: "promotion-campaigns", label: "Campaign support" }];
 const plans = [
@@ -56,6 +57,7 @@ export function PromotionCommunityPage({ playlists, campaigns, onCreated }: { pl
     <header className={styles.header}><div><span className={styles.kicker}><Megaphone size={15}/> PROMOTION & PARTNERSHIPS</span><h1>Good music goes further together.</h1><p>Find your audience, build your community and plan your next move with HYMN.</p></div>
       <nav aria-label="Promotion sections">{segments.map(item => <a key={item.id} href={`#${item.id}`} aria-current={active === item.id ? "location" : undefined} onClick={event => { event.preventDefault(); jump(item.id); }}>{item.label}<ArrowDown size={13}/></a>)}</nav>
     </header>
+    <PromotionOacLink/>
     <section id="promotion-playlists" className={styles.segment} aria-label="Playlist discovery">{playlists}</section>
     <section id="community-plans" className={`${styles.segment} ${styles.community}`} aria-labelledby="community-heading">
       <div className={styles.intro}><span className={styles.kicker}><Users size={16}/> COMMUNITY PLANS</span><h2 id="community-heading">Your community.<br/><span>More room to create.</span></h2><p>For societies, clubs, cypher crews and artist collectives. Get a tailored proposal for beats, mixing, mastering and subscriptions, with bulk deals built around what your members actually need.</p><a href="#community-application" onClick={event => { event.preventDefault(); formRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); }}>Build our community plan <ArrowRight size={16}/></a></div>

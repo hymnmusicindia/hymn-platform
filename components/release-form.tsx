@@ -21,7 +21,6 @@ import { ReleaseStageCarousel } from "./release-stage-carousel";
 import { ReleaseNavigationSlot } from "./release-navigation-slot";
 import { loadBioRazorpay as loadRazorpayCheckout } from "@/lib/client-razorpay";
 
-import { YoutubeOacCard } from "./youtube-oac-card";
 import { customerMessage } from "@/lib/customer-message";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { distributionSubmittedUrl, isCompletedDistributionSubmission } from "@/lib/distribution-return";
@@ -4997,7 +4996,6 @@ export function ReleaseForm({
                     ))}
                   </div>
                 </div>
-                <YoutubeOacCard initialArtistId={tracks[0]?.primaryArtistIds?.[0]} />
                 </div><div className={layoutStyles.deliveryTerritories}><div>
                   <div
                     ref={
@@ -5116,7 +5114,7 @@ export function ReleaseForm({
             <div className="record-review-details">{[
               {title:"Release details",stage:2,rows:[["Genre",release.primaryGenre],["Subgenre",release.secondaryGenre],["Language",release.language],["Mood",release.mood]]},
               {title:"Rights & ownership",stage:5,rows:[["Copyright",release.copyrightOwner],["Recording rights",release.publishingRights],["Content ownership",release.contentType],["Rights proof",release.licenseReceiptUrl ? "Attached" : "Not attached"]]},
-              {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],["YouTube OAC","Request after five live releases"],...(contentIdAccessStatus === "approved" && youtubeContentIdEnabled ? [["Existing Content ID access","Enabled"]] : []),["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
+              {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],...(contentIdAccessStatus === "approved" && youtubeContentIdEnabled ? [["Existing Content ID access","Enabled"]] : []),["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
             ].map(group => <section key={group.title}><header><h3>{group.title}</h3><button type="button" onClick={() => goToStep(group.stage)}>Edit →</button></header><dl>{group.rows.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl></section>)}</div>
             {validationIssues.length > 0 ? <section className="record-review-issues"><h3>A few details need your attention</h3>{validationIssues.map(issue => <button type="button" key={`${issue.key}-${issue.trackIndex}`} onClick={() => triggerFieldFocus(issue)}><span>{customerMessage(issue.message)}</span><span aria-hidden="true">→</span></button>)}</section> : <p className="record-review-ready"><CheckCircle2 size={18} /> All required release details are complete.</p>}
                   {isPaidReleaseResubmission ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">No additional payment</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your existing release entitlement covers these corrections. Submit the updated release for review.</p></section> : subscriptionCovered && youtubeContentIdAddOnAmount > 0 ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">Content ID access request</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your plan covers the release distribution. Pay ₹{youtubeContentIdAddOnAmount.toLocaleString("en-IN")} once for account-wide Content ID access; it remains off during HYMN’s review.</p><div className="payment-total mt-4 flex items-end justify-between border-t pt-4" style={{ borderColor: "var(--border)" }}><span className="font-semibold">Due today</span><span className="text-2xl font-semibold" style={{ color: "var(--accent)" }}>₹{distributionCheckoutAmount.toLocaleString("en-IN")}</span></div></section> : !subscriptionCovered ? <section className="payment-summary p-5 md:p-7">
