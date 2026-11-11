@@ -74,6 +74,18 @@ Read failures retry with backoff; abandoned processing leases recover after ten 
 
 ## Verification
 
+### Guided Requests workspace
+
+The Requests tab starts with six goal-based choices: release corrections, artist profiles, content claims, video delivery, master collection and removal. Only the selected service opens. Artist profiles and claim platforms are grouped rather than displayed as nine competing services. OAC retains its dedicated artist-level popup and paid-retry safeguards.
+
+Standard service requests use Recording → Details → Instructions → Review; video separates media files from video metadata. The review page allows changes to each section while retaining the other answers. No request is sent while advancing or checking answers. Shared service validation catches incorrect links and incompatible details before submission; final checks and server validation remain authoritative. A failed send preserves answers and its submission key. Draft answers are held in memory for the current release only.
+
+Track requests combines distribution service history with earlier release changes and Meta appeals. Status filters, attention counts and expandable cards replace always-visible notes and event lists. Each card keeps its instructions, current HYMN response and dated activity together. Earlier information requests link to the existing secure response workflow. New-service duplicates are checked per recording; OAC identity and duplicate checks remain artist-scoped. History failures block new submissions until status can be refreshed, and stale responses from a different release cannot update the current workspace.
+
+The correction tools, Meta availability form, reference browser and earlier update/removal wizard are available through **Fix release details** and **Release changes & additional help**. Response-needed legacy requests expand that area automatically. These forms and their endpoints are unchanged.
+
+The design uses progressive disclosure and a check-answers stage, informed by [Nielsen Norman Group](https://www.nngroup.com/articles/progressive-disclosure/), [GOV.UK question-page guidance](https://design-system.service.gov.uk/patterns/question-pages/) and [GOV.UK check-answers guidance](https://design-system.service.gov.uk/patterns/check-answers/). These patterns guide presentation; they do not imply testing with HYMN artists. Automated browser checks cover the grouped entry page, all eight standard service flows, retained answers, editing from review, no early submission, platform validation, duplicate blocking, unified tracking and OAC at 320/390/1440 pixels.
+
 `npm run test:distribution-services` runs disposable PostgreSQL integration checks, responsive component/browser checks at 320/390/1440 pixels, and navigation/permission checks. Provider HTTP and email delivery are simulated; tests submit no production releases, rights requests or artist emails.
 
 Coverage includes every new write/receipt family and all 25 analytics endpoints, ownership and cross-origin denial, unreviewed/duplicate/concurrent send prevention, immutable audio IDs, source changes, invalid URLs/dates/shares, exact payload fields, receipt recovery, uncertain outcomes, currency/scope isolation, cached reads, actual route authorization, raw signature tampering, stale/future timestamps, duplicate/conflicting event IDs, oversized webhook bodies, delayed events, one-time claim notifications, settlement isolation, takedown lifecycle, server-error form recovery, active-request disabling, staff confirmations, reporting and reference navigation.
