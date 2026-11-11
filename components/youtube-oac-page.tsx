@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, Play, X } from 'lucide-react';
+import { OacAnalyticsPreview } from './oac-analytics-preview';
 import { YoutubeOacCard } from './youtube-oac-card';
 import { CustomerOverlay } from './customer-overlay';
 import { useAccessibleDialog } from './ui/use-accessible-dialog';
@@ -18,18 +19,18 @@ export function YoutubeOacPage() {
     <div className={styles.hero}>
       <div>
         <div className={styles.visual}>
-          <div className={styles.visualBrand}><img src="/assets/promotion/youtube-music-original.png" alt="YouTube Music"/></div>
-          <img className={styles.analyticsImage} src="/assets/promotion/youtube-overview.webp" alt="YouTube's example Artist Analytics dashboard"/>
-          <div className={styles.phone}><div className={styles.portrait} role="img" aria-label="Shreya Ghoshal, illustrative artist channel portrait"/><div className={styles.artist}><span>Artist channel example</span><strong>Shreya Ghoshal</strong></div><div className={styles.phoneTracks}><div>Home <span>Releases</span> Videos</div><b>Discover the music</b><span className={styles.trackRow}><i/>Albums & singles</span><span className={styles.trackRow}><i/>Music videos</span></div></div>
+          <div className={styles.visualBrand}><img src="/assets/promotion/youtube-music-transparent.png" alt="YouTube Music"/></div>
+          <div className={styles.analyticsFrame}><OacAnalyticsPreview/></div>
+          <div className={styles.phone}><div className={styles.portrait} role="img" aria-label="Shreya Ghoshal, illustrative artist channel portrait"/><div className={styles.artist}><strong>Shreya Ghoshal</strong></div><div className={styles.phoneTracks}><div>Home <span>Releases</span> Videos</div><b>Discover the music</b><span className={styles.trackRow}><i/>Albums & singles</span><span className={styles.trackRow}><i/>Music videos</span></div></div>
           <button type="button" className={styles.play} onClick={() => setPlaying(true)} aria-label="Play Official Artist Channel explainer"><Play size={19} fill="currentColor"/></button><span className={styles.playLabel}>See how it works</span>
         </div>
-        <p className={styles.credit}>Illustrative channel; no artist endorsement. Analytics image: YouTube. Photo: <a href="https://commons.wikimedia.org/wiki/File:Shreya.Ghoshal.jpg" target="_blank" rel="noreferrer">Bollywood Hungama / Wikimedia Commons</a>, <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noreferrer">CC BY 3.0</a>. Cropped for display.</p>
+        <p className={styles.credit}>Illustrative channel; no artist endorsement. Analytics: illustrative sample data. Photo: <a href="https://commons.wikimedia.org/wiki/File:Shreya.Ghoshal.jpg" target="_blank" rel="noreferrer">Bollywood Hungama / Wikimedia Commons</a>, <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noreferrer">CC BY 3.0</a>. Cropped for display.</p>
       </div>
       <section className={styles.requirements} aria-labelledby="oac-requirements"><h2 id="oac-requirements">Make a channel request</h2><p>A one-time application for each artist. You do not need to reapply after every release.</p><ol>
-        <li><strong>One artist, one channel</strong><p>Manage a channel dedicated to your artist’s music. Use the artist’s name so reviewers can identify it.</p></li>
-        <li><strong>Get your artist profile ready</strong><p>HYMN requires a verified artist profile and at least five fully live releases before submission.</p></li>
-        <li><strong>Use your channel ID link</strong><p>Paste <code>https://www.youtube.com/channel/UC…</code>. Handle links such as <code>/@artist</code>, custom URLs and video links are not accepted. Find your channel ID in YouTube’s advanced account settings.</p></li>
-        <li><strong>Give reviewers a clear picture</strong><p>Your channel must follow YouTube policies. A public artist video is recommended; channels without public uploads may need additional review.</p></li>
+        <li><strong>One artist, one channel</strong><p>Use your artist name on a channel dedicated to their music.</p></li>
+        <li><strong>Get your artist profile ready</strong><p>A verified HYMN artist profile and five fully live releases are required.</p></li>
+        <li><strong>Use your channel ID link</strong><p>Only <code>youtube.com/channel/UC...</code> links work. Handles and video links are not accepted. <a href="https://www.youtube.com/account_advanced" target="_blank" rel="noreferrer">Find your channel ID</a>.</p></li>
+        <li><strong>Give reviewers a clear picture</strong><p>Follow YouTube policies. A public artist video is recommended to help reviewers verify your channel.</p></li>
       </ol><div id="oac-application"><YoutubeOacCard standalone/></div><p className={styles.terms}>First application: no resubmission fee. Rejected applications: ₹80 to resubmit after correcting the issue.</p><a className={styles.help} href="https://support.google.com/youtube/answer/7336634?hl=en" target="_blank" rel="noreferrer">YouTube's eligibility guidelines <ExternalLink size={13}/></a></section>
     </div>
     <section className={styles.application} aria-labelledby="oac-next-heading"><h2 id="oac-next-heading">What happens next?</h2><div className={styles.steps}><article><span>01</span><h3>Choose your artist</h3><p>Check your profile and live releases, then confirm the channel you own.</p></article><article><span>02</span><h3>Submit for review</h3><p>HYMN checks your application before sending it for partner review. Review usually takes 4–8 weeks after submission.</p></article><article><span>03</span><h3>Follow your progress</h3><p>Select the same artist here to see updates, approval or a rejection reason. Once approved, future releases do not need a new OAC application.</p></article></div><p className={styles.terms}>OAC is separate from Content ID. Approved artists can request channel-change assistance from their application status.</p></section>

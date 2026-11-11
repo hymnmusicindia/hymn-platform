@@ -8,14 +8,16 @@ import { razorpay } from './razorpay';
 import { customerBrandText } from './customer-message';
 import { createAdminTaskOnce } from './task-queue';
 import { oacChannelUrl } from './youtube-oac-contract';
+import { oacArtistLiveReleases,oacArtistReleaseWhere } from './oac-artist-releases';
 
 export async function oacArtistState(userId:number,artistId:number){
   const artist=await prisma.artistCard.findFirstOrThrow({where:{id:artistId,userId,archivedAt:null,user:{status:'ACTIVE'}}});
-  const [liveCount,history,legacy]=await Promise.all([
-    prisma.release.count({where:{userId,artistProfileId:artistId,status:'LIVE',archivedAt:null}}),
+  const [liveReleases,history,legacy]=await Promise.all([
+    oacArtistLiveReleases(userId,artistId),
     prisma.releaseChangeRequest.findMany({where:{requestedByUserId:userId,requestType:'distribution_service',requestedChanges:{path:['resource'],equals:`artist:${artistId}`}},orderBy:{id:'desc'},include:{events:{orderBy:{id:'desc'}}}}),
-    prisma.managedServiceRequest.findMany({where:{userId,serviceType:'YOUTUBE_OAC',release:{userId,artistProfileId:artistId}},orderBy:{id:'desc'},take:30})
+    prisma.managedServiceRequest.findMany({where:{userId,serviceType:'YOUTUBE_OAC',release:oacArtistReleaseWhere(userId,artistId)},orderBy:{id:'desc'},take:30})
   ]);
+  const liveCount=liveReleases.length;
   const current=history.find(row=>oacOutcome(row)==='approved')||history[0];
   const old=legacy.find(row=>row.status==='completed')||legacy.find(row=>!['failed','rejected','cancelled'].includes(row.status))||legacy[0];
   const legacyWins=old&&(!current||old.status==='completed');
@@ -36,9 +38,9 @@ export async function prepareOacApplication(userId:number,raw:unknown){
   if(['approved','under_review'].includes(state.status))throw Error('This artist already has an approved or active OAC application.');
   if(state.legacy)throw Error('Contact HYMN support to reconcile the earlier OAC application before applying again.');
   if(!state.eligible)throw Error(`A verified artist profile and five fully live releases are required. Current live releases: ${state.liveCount}.`);
-  const release=await prisma.release.findFirst({where:{userId,artistProfileId:input.artistId,status:'LIVE',archivedAt:null,upc:{not:null},tracks:{some:{isrc:{not:null}}}},orderBy:{id:'desc'},include:{tracks:{where:{isrc:{not:null}},orderBy:{id:'asc'}}}});
+  const release=(await oacArtistLiveReleases(userId,input.artistId)).find(row=>row.upc&&row.tracks.some(track=>track.isrc));
   if(!release)throw Error('A live release with confirmed identifiers is required. Contact HYMN support.');
-  const operation={action:'request_yt_oac' as const,trackId:release.tracks[0].id,reason:input.reason,rightsConfirmed:true as const,fields:{channel_url:input.channelUrl,channel_id:oacChannelId(input.channelUrl)},requestKey:input.requestKey};
+  const operation={action:'request_yt_oac' as const,artistProfileId:input.artistId,trackId:release.tracks.find(track=>track.isrc)!.id,reason:input.reason,rightsConfirmed:true as const,fields:{channel_url:input.channelUrl,channel_id:oacChannelId(input.channelUrl)},requestKey:input.requestKey};
   const built=await buildService(release.id,userId,operation);
   return {state,releaseId:release.id,operation,fingerprint:serviceFingerprint(operation,built)};
 }

@@ -13,6 +13,7 @@ import { enqueueAmendmentUpdate, amendmentTransactionOptions } from './release-a
 import { createAdminTaskOnce, resolveAdminTask } from './task-queue';
 import { attachedArtistProfileIds,savedArtistStoreLinks,verifiedArtistStoreLinks } from './artist-store-links';
 import { normalizeInstagramUrl } from './validation';
+import { oacArtistLiveReleases,oacArtistReleaseWhere } from './oac-artist-releases';
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)])):value;
@@ -29,6 +30,7 @@ export async function callDistributionEndpoint(action: string, payload: Record<s
 }
 
 export async function buildService(releaseId: number, userId: number, input: ReturnType<typeof serviceRequest.parse>) {
+  if(input.artistProfileId&&input.action!=='request_yt_oac')throw Error('Artist selection is only supported for OAC requests.');
   const release = await prisma.release.findFirstOrThrow({where:{id:releaseId,userId,archivedAt:null},include:{tracks:true,user:true,artistProfile:true}});
   if (release.user.status !== 'ACTIVE') throw Error('Your account must be active.');
   if (!['LIVE','PARTIALLY_LIVE','SCHEDULED','DISTRIBUTOR_PROCESSING'].includes(release.status)) throw Error('This service requires a delivered release.');
@@ -42,14 +44,17 @@ export async function buildService(releaseId: number, userId: number, input: Ret
   if (input.action === 'request_instagram_linking') payload = {...payload,instagram_url:fields.instagram_url,facebook_url:fields.facebook_url};
   if (input.action.endsWith('_claim')) payload = {...payload,url:normalizeClaimLink(input.action,fields.url)};
   if (input.action === 'request_yt_oac') {
-    const artist = release.artistProfile;
+    const attached=attachedArtistProfileIds(track.metadata,release.artistProfileId);
+    const artistId=input.artistProfileId??release.artistProfileId??(attached.length===1?attached[0]:null);
+    if(!artistId||!attached.includes(artistId))throw Error('Choose a primary artist linked to this recording.');
+    const artist = await prisma.artistCard.findFirst({where:{id:artistId,userId,archivedAt:null}});
     if (!artist || artist.userId !== userId || artist.archivedAt || (!/^\d+$/.test(artist.direNoteArtistId || '') || !Number.isSafeInteger(Number(artist.direNoteArtistId)) || Number(artist.direNoteArtistId)<1)) throw Error('HYMN must verify the artist profile identity first.');
-    const legacy=await prisma.managedServiceRequest.findFirst({where:{userId,serviceType:'YOUTUBE_OAC',release:{artistProfileId:artist.id},status:{notIn:['completed','failed','rejected','cancelled']}}});
+    const legacy=await prisma.managedServiceRequest.findFirst({where:{userId,serviceType:'YOUTUBE_OAC',release:oacArtistReleaseWhere(userId,artist.id),status:{notIn:['completed','failed','rejected','cancelled']}}});
     if(legacy)throw Error(`Existing OAC request #${legacy.id} is still active in Managed services. Track it before submitting another.`);
-    if(await prisma.managedServiceRequest.count({where:{userId,serviceType:'YOUTUBE_OAC',release:{artistProfileId:artist.id},status:'completed'}}))throw Error('This artist already has an approved OAC. Request a channel change through HYMN support.');
-    const unresolvedLegacy=await prisma.managedServiceRequest.count({where:{userId,serviceType:'YOUTUBE_OAC',release:{artistProfileId:artist.id},status:{in:['failed','rejected','cancelled']}}});
+    if(await prisma.managedServiceRequest.count({where:{userId,serviceType:'YOUTUBE_OAC',release:oacArtistReleaseWhere(userId,artist.id),status:'completed'}}))throw Error('This artist already has an approved OAC. Request a channel change through HYMN support.');
+    const unresolvedLegacy=await prisma.managedServiceRequest.count({where:{userId,serviceType:'YOUTUBE_OAC',release:oacArtistReleaseWhere(userId,artist.id),status:{in:['failed','rejected','cancelled']}}});
     if(unresolvedLegacy&&!await prisma.releaseChangeRequest.count({where:{requestedByUserId:userId,requestType:'distribution_service',requestedChanges:{path:['resource'],equals:`artist:${artist.id}`}}}))throw Error('HYMN must reconcile the earlier OAC application before another application or payment. Contact support.');
-    const live = await prisma.release.count({where:{userId,artistProfileId:artist.id,status:'LIVE',archivedAt:null}});
+    const live = (await oacArtistLiveReleases(userId,artist.id)).length;
     if (live < 5) throw Error('An Official Artist Channel requires at least five live releases for this verified artist profile.');
     payload = {artist_id:Number(artist.direNoteArtistId),...fields}; resource = `artist:${artist.id}`;
   }

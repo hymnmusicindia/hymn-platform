@@ -9,7 +9,7 @@ import {createRequire} from 'node:module';
 import {NextResponse} from 'next/server';
 import {randomUUID,createHmac} from 'node:crypto';
 import {prisma} from '../lib/prisma';
-import {createDistributionService,reviewDistributionService,submitDistributionService,syncDistributionService,reconcileDistributionService} from '../lib/distribution-services';
+import {buildService,createDistributionService,reviewDistributionService,submitDistributionService,syncDistributionService,reconcileDistributionService} from '../lib/distribution-services';
 import {analyticsActions,serviceActions,parseServiceFields} from '../lib/distribution-services-contract';
 import {readDistributionAnalytics,readCustomerSmartLink,readCustomerReference,verifyAnalyticsScope,safeAnalytics} from '../lib/distribution-insights';
 import {receiveDistributionWebhook,verifyDistributionSignature,processDistributionWebhookQueue} from '../lib/distribution-webhooks';
@@ -23,6 +23,20 @@ async function main(){
  const release=await prisma.release.create({data:{userId:user.id,artistProfileId:artist.id,title:'Services release',artistName:'Service Artist',genre:'Pop',releaseDate:new Date('2025-01-01'),status:'LIVE',upc:'012345678905',tracks:{create:{trackNumber:1,title:'Service track',primaryArtist:'Service Artist',isrc:'USAAA2600001',audioUrl:'/original.wav'}}},include:{tracks:true}});
  const trackId=release.tracks[0].id;
  for(let i=0;i<4;i++)await prisma.release.create({data:{userId:user.id,artistProfileId:artist.id,title:`Other live ${i}`,artistName:'Service Artist',genre:'Pop',releaseDate:new Date('2025-01-01'),status:'LIVE'}});
+
+ // Older wizard releases store primary artist associations in track metadata, not release.artistProfileId.
+ const linkedArtist=await prisma.artistCard.create({data:{userId:user.id,artistName:'Metadata Artist',direNoteArtistId:'910'}});
+ const makeLinked=(title:string,status:any='LIVE',owner=user.id,meta:any={metadata:{artistProfileIds:[linkedArtist.id]}})=>prisma.release.create({data:{userId:owner,title,artistName:'Metadata Artist',genre:'Pop',releaseDate:new Date('2025-01-01'),status,upc:'012345678906',tracks:{create:[{trackNumber:1,title:'Metadata recording',primaryArtist:'Metadata Artist',isrc:'USAAA2600010',metadata:meta},{trackNumber:2,title:'Second recording',primaryArtist:'Metadata Artist',isrc:'USAAA2600011',metadata:meta}]}},include:{tracks:true}});
+ for(let i=0;i<4;i++)await makeLinked(`Metadata live ${i}`,'LIVE',user.id,i%2?{artistProfileIds:[linkedArtist.id]}:{metadata:{artistProfileIds:[linkedArtist.id]}});
+ await makeLinked('Draft does not count','DRAFT');await makeLinked('Partially live does not count','PARTIALLY_LIVE');await makeLinked('Foreign owner does not count','LIVE',stranger.id);await makeLinked('Featured credit does not count','LIVE',user.id,{featuredArtistProfileIds:[linkedArtist.id]});
+ const archivedLinked=await makeLinked('Archived does not count');await prisma.release.update({where:{id:archivedLinked.id},data:{archivedAt:new Date()}});
+ assert.equal((await oacArtistState(user.id,linkedArtist.id)).liveCount,4,'Count canonical track links once per release, excluding non-live, archived, foreign and featured-only releases.');
+ assert.equal((await oacArtistState(user.id,linkedArtist.id)).eligible,false);
+ const fifthLinked=await makeLinked('Fifth metadata-linked release');
+ assert.equal((await oacArtistState(user.id,linkedArtist.id)).eligible,true);
+ const metadataApplication=await prepareOacApplication(user.id,{artistId:linkedArtist.id,channelUrl:'https://www.youtube.com/channel/UC0123456789012345678901',reason:'I own this artist channel and authorize its application.',rightsConfirmed:true,requestKey:randomUUID()});
+ assert.equal(metadataApplication.releaseId,fifthLinked.id);assert.equal(metadataApplication.operation.artistProfileId,linkedArtist.id);
+ await assert.rejects(buildService(fifthLinked.id,user.id,{...metadataApplication.operation,artistProfileId:artist.id}),/primary artist linked/);
  await prisma.releaseStatusTransition.create({data:{releaseId:release.id,previousStatus:'DISTRIBUTOR_PROCESSING',newStatus:'LIVE',actorType:'system',createdAt:new Date(Date.now()-100*86400000)}});
  const spotify={spotifyTrackUrl:'https://open.spotify.com/track/0123456789012345678901',spotifyLiveConfirmed:true};
  const future=new Date(Date.now()+10*86400000).toISOString().slice(0,10);

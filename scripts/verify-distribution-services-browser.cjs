@@ -16,7 +16,7 @@ const {build}=require('esbuild'),postcss=require('postcss'),tailwind=require('ta
   await page.route('**/assets/promotion/shreya-ghoshal.jpg',r=>r.fulfill({path:path.resolve('public/assets/promotion/shreya-ghoshal.jpg'),contentType:'image/jpeg'}));
   await page.route('https://www.youtube-nocookie.com/**',r=>r.fulfill({contentType:'text/html',body:'<p>Video fixture</p>'}));
   await page.route('**/api/distribution/oac*',r=>r.fulfill({json:{artists:[{id:7,artistName:'Example Artist'}],state:{artist:{id:7,name:'Example Artist'},status:'not_applied',liveCount:5,requiredLiveCount:5,verified:true,eligible:true,requestId:null,channelUrl:null,reason:'',retryAmount:80,legacy:false}}}));
-  await page.goto(origin+'/oac-page');await expect(page.getByRole('heading',{name:'Make a channel request'})).toBeVisible();
+  await page.goto(origin+'/oac-page');await expect(page.getByRole('heading',{name:'Make a channel request'})).toBeVisible();await expect(page.getByRole('img',{name:/Sample artist analytics dashboard/})).toBeVisible();expect((await page.getByRole('img',{name:/Sample artist analytics dashboard/}).locator('svg').boundingBox()).height).toBeGreaterThan(15);await expect(page.getByText('Artist channel example',{exact:true})).toHaveCount(0);
   await expect(page.locator('iframe')).toHaveCount(0);const play=page.getByRole('button',{name:'Play Official Artist Channel explainer'});await play.click();
   await expect(page.getByRole('dialog')).toBeVisible();await expect(page.locator('iframe')).toHaveAttribute('src','https://www.youtube-nocookie.com/embed/EwY6doa-0Bg?start=31&autoplay=1&rel=0');
   await expect(page.getByRole('link',{name:'Watch on YouTube'})).toHaveAttribute('href','https://www.youtube.com/watch?v=EwY6doa-0Bg&t=31s');

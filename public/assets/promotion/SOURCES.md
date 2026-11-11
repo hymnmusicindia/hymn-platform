@@ -12,3 +12,7 @@ Platform marks are original raster assets, not redrawn SVG logos. They identify 
 - Playlist artwork: existing `public/assets/playlist-images/previews/` catalogue assets.
 
 Typography: original Inter variable font from https://github.com/rsms/inter, locally served as `/fonts/inter-variable.woff2`. SIL Open Font License is preserved at `/fonts/inter-LICENSE.txt`.
+
+- `youtube-music-transparent.png`: original transparent dark-background Music mark from YouTube for Artists, https://www.gstatic.com/marketing-cms/assets/images/fa/46/39b7e6e54863a5a9c68c8671db2b/logo.webp. Converted to PNG as requested, preserving colour and alpha.
+
+The OAC analytics preview now uses a code-rendered sample dashboard, clearly labelled sample data. It contains no provider tutorial annotations and represents no artist or customer account. The previous tutorial screenshots remain source assets only.
