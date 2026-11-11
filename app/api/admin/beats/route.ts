@@ -7,6 +7,7 @@ import { createBeat, listAllBeats } from "@/lib/db";
 import { saveUploadedFile } from "@/lib/storage";
 import { localPrivateStorage } from "@/lib/private-storage";
 import { prisma } from "@/lib/prisma";
+import { prepareBeatWaveforms } from "@/lib/beat-waveform";
 
 export async function GET() {
   let result = await requireAdminPermission("users.read");
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
       enabled: false
     });
     await prisma.storedAsset.update({ where: { id: privateAudio.id }, data: { beatId: beat.id } });
+    await prepareBeatWaveforms(beat.id).catch(() => console.error("Beat waveform preparation deferred", { beatId: beat.id }));
 
     await prisma.auditLog.create({data:{actorType:"admin",actorId:"sub" in result?Number(result.sub):null,entity:"beat",entityId:String(beat.id),action:"beat.sample_rights_declared",metadata:{sampleDeclaration:"NO_UNCONTROLLED_SAMPLES",source:"admin_original_upload"}}});
     const published=await autoPublishProducerBeat(beat.id).catch(()=>false);

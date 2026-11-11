@@ -10,6 +10,10 @@ function audioFixture() {
 }
 (async () => {
   const out = path.resolve('.cache/premium-player'); await fs.mkdir(out, { recursive: true }); await fs.mkdir('artifacts', { recursive: true });
+  await build({ entryPoints: ['lib/waveform-generator.ts'], outfile: path.join(out, 'generator.cjs'), bundle: true, platform: 'node', format: 'cjs', packages: 'external' });
+  const fixturePath = path.join(out, 'fixture.wav'); await fs.writeFile(fixturePath, audioFixture());
+  const fixtureHandle = await fs.open(fixturePath, 'r');
+  const envelope = await require(path.join(out, 'generator.cjs')).generateWaveform(fixtureHandle); await fixtureHandle.close();
   await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import{BeatPreviewPlayerProvider,useBeatPreviewPlayer}from'./components/beat-preview-player';const beat=id=>({id,title:id===1?'Midnight Motion':'The Next Chapter',previewUrl:'/preview'+id+'.wav',fileUrl:'/preview'+id+'.wav',coverImage:'/cover.svg',producer:{name:'HYMN Sessions',slug:'hymn-sessions'},bpm:92,price:499,mp3Price:499,availableLicenses:['mp3'],startingPrice:499});function Test(){const p=useBeatPreviewPlayer();window.player=p;return <main style={{padding:40,color:'#1b1d24',fontFamily:'Arial'}}><p style={{letterSpacing:3,fontSize:11}}>HYMN / LISTENING ROOM</p><h1 style={{fontSize:38,marginTop:20}}>A little after midnight.</h1><p style={{color:'#687080',marginTop:12}}>Your next idea starts with a sound.</p><button style={{marginTop:30,padding:'12px 20px',border:'1px solid #ccc',borderRadius:24}} onClick={()=>p.playBeat(beat(1),[beat(1),beat(2)])}>Listen to Midnight Motion</button></main>}createRoot(document.getElementById('root')).render(<BeatPreviewPlayerProvider><Test/></BeatPreviewPlayerProvider>);`, loader: 'tsx', resolveDir: process.cwd() }, bundle: true, outfile: path.join(out, 'ui.js'), jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' }, plugins: [{ name: 'next', setup(b) { b.onResolve({ filter: /^next\// }, a => ({ path: a.path, namespace: 'mock' })); b.onLoad({ filter: /.*/, namespace: 'mock' }, () => ({ contents: 'import React from "react";export default function Link({children,prefetch,...props}){return <a {...props}>{children}</a>};export const usePathname=()=>"/beat-store";export const useRouter=()=>({});', loader: 'tsx', resolveDir: process.cwd() })); } }] });
   const layout = await fs.readFile('app/layout.tsx', 'utf8');
   const globalStyles = await Promise.all([...layout.matchAll(/import\s+"(\.\/[^"\n]+\.css)"/g)].map(match => fs.readFile(path.join('app', match[1]), 'utf8')));
@@ -19,8 +23,11 @@ function audioFixture() {
     for (const width of [1440, 768, 390, 320]) {
       const page = await browser.newPage({ viewport: { width, height: 860 } });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
+      const waveformRequests = [], audioFetches = [];
       await page.route('https://hymn.test/**', route => {
         const url = new URL(route.request().url());
+        if (/\/waveform$/.test(url.pathname)) { waveformRequests.push(url.pathname); return route.fulfill({ json: envelope }); }
+        if (/preview\d\.wav/.test(url.pathname) && route.request().resourceType() === 'fetch') audioFetches.push(url.pathname);
         if (/preview\d\.wav/.test(url.pathname)) { const bytes = audioFixture(); const range = route.request().headers().range?.match(/bytes=(\d+)-(\d*)/); if (range) { const start = Number(range[1]), end = range[2] ? Math.min(Number(range[2]), bytes.length - 1) : bytes.length - 1; return route.fulfill({ status: 206, contentType: 'audio/wav', headers: { 'Content-Range': `bytes ${start}-${end}/${bytes.length}`, 'Accept-Ranges': 'bytes' }, body: bytes.subarray(start, end + 1) }); } return route.fulfill({ contentType: 'audio/wav', body: bytes }); }
         if (url.pathname === '/cover.svg') return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#726250"/><stop offset="1" stop-color="#171b30"/></linearGradient></defs><rect width="120" height="120" fill="url(#g)"/><circle cx="60" cy="60" r="42" fill="none" stroke="#d6b585" stroke-width="2"/><circle cx="60" cy="60" r="27" fill="none" stroke="#d6b585"/><circle cx="60" cy="60" r="5" fill="#f1e4bb"/></svg>' });
         if (url.pathname.startsWith('/api/')) return route.fulfill({ json: { items: [], liked: false } });
@@ -30,16 +37,23 @@ function audioFixture() {
       await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; document.getElementById('root').className = 'hymn-portal-root hymn-landing'; });
       await page.evaluate(() => { Object.defineProperty(navigator, 'share', { configurable: true, value: undefined }); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.copiedLink = text; } } }); });
       await page.addStyleTag({ content: css.css }); await page.addStyleTag({ path: path.join(out, 'ui.css') }); await page.addScriptTag({ path: path.join(out, 'ui.js') });
+      assert.equal(waveformRequests.length, 0, 'Catalogue must not fetch waveforms before playback');
       await page.getByRole('button', { name: 'Listen to Midnight Motion', exact: true }).click();
       const player = page.getByRole('complementary', { name: 'Now playing', exact: true });
       await expect(player).toBeVisible(); await expect.poll(() => page.evaluate(() => window.player.playing)).toBe(true);
       await expect(page.locator('[data-waveform-ready=true]')).toBeVisible();
+      assert.deepEqual(waveformRequests, ['/api/beats/1/waveform'], 'Only the active beat loads peaks');
+      assert.deepEqual(audioFetches, [], 'Waveform must not download another copy of the audio');
+      await expect(page.locator('.hymn-player-playhead')).toHaveCSS('width', '1px');
+      assert((await player.evaluate(node => getComputedStyle(node).backdropFilter)).includes('blur(28px)'), 'Player must have frosted blur');
       await expect(page.locator('.hymn-waveform-played')).toHaveCSS('fill', 'rgb(255, 255, 255)');
       await expect(page.locator('.hymn-waveform-upcoming')).toHaveCSS('fill', 'rgb(119, 119, 124)');
       assert((await page.locator('.hymn-player-waveform > svg').evaluate(node => getComputedStyle(node).maskImage)).includes('linear-gradient'), 'Waveform edges must fade');
       const distinct = await page.locator('.hymn-player-waveform svg g').first().locator('rect').evaluateAll(nodes => new Set(nodes.map(node => node.getAttribute('height'))).size); assert(distinct > 10, 'Real audio should produce distinct waveform peaks');
       await page.getByRole('button', { name: 'Pause Midnight Motion', exact: true }).click(); await expect.poll(() => page.evaluate(() => window.player.playing)).toBe(false);
       const slider = page.getByRole('slider', { name: 'Seek Midnight Motion', exact: true }); await slider.focus(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight'); await expect.poll(() => page.evaluate(() => window.player.currentTime)).toBeGreaterThan(0);
+      await page.getByRole('button', { name: 'Share Midnight Motion', exact: true }).focus(); await slider.click();
+      await expect(page.locator('.hymn-player-waveform')).toHaveCSS('outline-style', 'none');
       await page.getByRole('button', { name: 'Play Midnight Motion', exact: true }).click(); await expect.poll(() => page.evaluate(() => window.player.playing)).toBe(true);
       await page.getByRole('button', { name: 'Share Midnight Motion', exact: true }).click(); await expect.poll(() => page.evaluate(() => window.copiedLink)).toBe('https://hymn.test/beat-store/producers/hymn-sessions#beat-1');
       await page.getByRole('button', { name: 'More beat actions', exact: true }).click();
@@ -48,6 +62,8 @@ function audioFixture() {
       await expect(actions.getByRole('button', { name: /Download free personal-use/ })).toBeVisible(); await expect(actions.getByRole('slider', { name: 'Preview volume' })).toBeVisible();
       const volume = actions.getByRole('slider', { name: 'Preview volume' });
       await expect(volume).toHaveCSS('accent-color', 'rgb(255, 255, 255)');
+      await expect(volume).toHaveCSS('background-size', '100% 2px');
+      await expect(volume).toHaveCSS('height', '24px');
       await volume.focus(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight');
       await expect.poll(() => page.evaluate(() => window.player.volume)).toBe(0.01);
       await page.keyboard.press('End'); await expect.poll(() => page.evaluate(() => window.player.volume)).toBe(1);

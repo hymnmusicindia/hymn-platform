@@ -14,6 +14,7 @@ import { producerSetup } from "@/lib/producer-setup";
 import { beatMutationSchema } from "@/lib/validation";
 import { autoPublishProducerBeat } from '@/lib/beat-publication';
 import { normalizeBeatKey, normalizeBeatMoods } from '@/lib/beat-metadata';
+import { prepareBeatWaveforms } from '@/lib/beat-waveform';
 
 import { readBeatUsageForm } from '@/lib/beat-licence-terms';
 function normalizedAudioMime(file: File) {
@@ -133,6 +134,7 @@ export async function POST(request: Request) {
     });
     if (!beat) throw new Error("The beat draft could not be finalized. No incomplete beat was kept.");
     finalized = true;
+    await prepareBeatWaveforms(beat.id).catch(() => console.error("Beat waveform preparation deferred", { beatId: beat.id }));
     await prisma.auditLog.create({data:{actorId:result.user.id,actorType:'user',entity:'beat',entityId:String(beat.id),action:'beat.sample_rights_declared',metadata:{sampleDeclaration,sampleDisclosure,statement:'I confirm my declaration is accurate and that any stated licence covers my use and the rights offered to buyers. I will provide licence evidence on request.'}}});
 
     await prisma.auditLog.create({data:{actorId:result.user.id,actorType:"user",entity:"beat",entityId:String(beat.id),action:"beat.master_content_confirmed",metadata:{beatTitle:title,checksum:privateAudio.checksum,assetId:privateAudio.id,statement:"Producer confirms listening to the uploaded master and matching it to the submitted beat title."}}});

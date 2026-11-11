@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
     // Serve original image URLs so public assets and user uploads remain reliable.
     unoptimized: true
   },
-  serverExternalPackages: ["@prisma/client", "mysql2", "bcrypt"],
+  serverExternalPackages: ["@prisma/client", "mysql2", "bcrypt", "mpg123-decoder"],
   async headers() {
     const securityHeaders = [
       { key: "X-Content-Type-Options", value: "nosniff" },
