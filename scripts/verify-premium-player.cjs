@@ -48,7 +48,7 @@ function audioFixture() {
       assert((await player.evaluate(node => getComputedStyle(node).backdropFilter)).includes('blur(28px)'), 'Player must have frosted blur');
       await expect(page.locator('.hymn-waveform-played')).toHaveCSS('fill', 'rgb(255, 255, 255)');
       await expect(page.locator('.hymn-waveform-upcoming')).toHaveCSS('fill', 'rgb(119, 119, 124)');
-      assert((await page.locator('.hymn-player-waveform > svg').evaluate(node => getComputedStyle(node).maskImage)).includes('linear-gradient'), 'Waveform edges must fade');
+      assert((await page.locator('.hymn-player-waveform > svg.hymn-player-song-waveform').evaluate(node => getComputedStyle(node).maskImage)).includes('linear-gradient'), 'Waveform edges must fade');
       const distinct = await page.locator('.hymn-player-waveform svg g').first().locator('rect').evaluateAll(nodes => new Set(nodes.map(node => node.getAttribute('height'))).size); assert(distinct > 10, 'Real audio should produce distinct waveform peaks');
       await page.getByRole('button', { name: 'Pause Midnight Motion', exact: true }).click(); await expect.poll(() => page.evaluate(() => window.player.playing)).toBe(false);
       if (width <= 900) {

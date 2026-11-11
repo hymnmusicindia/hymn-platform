@@ -87,18 +87,23 @@ export function PlaybackWaveform({ dataUrl, title, currentTime, duration, seek }
     void load();
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [dataUrl]);
+  const loaderBars = Array.from({ length: visibleBars }, (_, index) => {
+    const height = 8 + (Math.sin(index * .46) * .5 + .5) * 22;
+    return <rect key={index} x={index * 6 + 1.7} y={(56 - height) / 2} width="2.6" height={height} rx="1.3" style={{ animationDelay: `${index * -55}ms`, transformOrigin: `${index * 6 + 3}px 28px` }}/>;
+  });
   const waveform = Array.from({ length: visibleBars }, (_, index) => {
     const start = Math.floor(index * (bars?.length || barsCount) / visibleBars), end = Math.floor((index + 1) * (bars?.length || barsCount) / visibleBars);
     const height = bars ? Math.max(...bars.slice(start, end)) / 255 : 0;
     const pixels = 2 + height * 46;
     return <rect key={index} x={index * 6 + 1.7} y={(56 - pixels) / 2} width="2.6" height={pixels} rx="1.3"/>;
   });
-  return <div ref={surface} className="hymn-player-waveform" data-waveform-ready={Boolean(bars)} data-waveform-state={state}>
-    <svg viewBox={`0 0 ${visibleBars * 6} 56`} preserveAspectRatio="none" aria-hidden="true">
+  return <div ref={surface} className="hymn-player-waveform" data-waveform-ready={Boolean(bars)} data-waveform-state={state} aria-busy={state === "loading"}>
+    <svg className="hymn-player-song-waveform" viewBox={`0 0 ${visibleBars * 6} 56`} preserveAspectRatio="none" aria-hidden="true">
       <defs><clipPath id={clip}><rect width={progress * visibleBars * 6} height="56"/></clipPath></defs>
       <g className="hymn-waveform-upcoming" fill="#77777c" opacity=".62">{waveform}</g><g className="hymn-waveform-played" fill="#ffffff" clipPath={`url(#${clip})`}>{waveform}</g>
     </svg>
-    {!data ? <span className="hymn-player-waveform-message">{state === "loading" ? "Preparing waveform" : "Waveform unavailable"}</span> : null}
+    <svg className="hymn-player-loading-waveform" viewBox={`0 0 ${visibleBars * 6} 56`} preserveAspectRatio="none" aria-hidden="true"><g fill="#ceced4">{loaderBars}</g></svg>
+    {!data ? <span className="sr-only" role="status">{state === "loading" ? "Loading waveform" : "Waveform unavailable"}</span> : null}
     <span className="hymn-player-playhead" aria-hidden="true" style={{ left: `${progress * 100}%` }}/>
     <input ref={input} type="range" min="0" max={duration > 0 ? duration : 1} step="0.1" value={Math.min(displayedTime, duration || 0)} disabled={duration <= 0}
       onPointerDown={startScrub} onPointerMove={moveScrub} onPointerUp={event => finishScrub(event, true)} onPointerCancel={event => finishScrub(event, false)} onLostPointerCapture={event => finishScrub(event, false)}

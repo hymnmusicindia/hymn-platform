@@ -49,3 +49,11 @@
 .hymn-player-page-space { padding-bottom:calc(7rem + env(safe-area-inset-bottom,0px)); }
 @media(max-width:600px) { .hymn-player-page-space { padding-bottom:calc(10rem + env(safe-area-inset-bottom,0px)); } }
 @media(max-width:900px) and (pointer:coarse) { .hymn-player { --player-bottom-gap:48px; }.hymn-player-page-space { padding-bottom:calc(10rem + env(safe-area-inset-bottom,0px)); } }
+
+.hymn-player-waveform>svg.hymn-player-song-waveform { opacity:0;transition:opacity .55s ease; }
+.hymn-player-waveform[data-waveform-ready=true]>svg.hymn-player-song-waveform { opacity:1; }
+.hymn-player-waveform>svg.hymn-player-loading-waveform { position:absolute;inset:0;pointer-events:none;opacity:.55;transition:opacity .55s ease; }
+.hymn-player-waveform[data-waveform-ready=true]>svg.hymn-player-loading-waveform { opacity:0; }
+.hymn-player-loading-waveform rect { animation:hymn-wave-loading 1.4s ease-in-out infinite alternate;transform-box:view-box; }
+.hymn-player-waveform:not([data-waveform-state=loading]) .hymn-player-loading-waveform rect { animation-play-state:paused; }
+@keyframes hymn-wave-loading { from { transform:scaleY(.4);opacity:.35; } to { transform:scaleY(1);opacity:.9; } }

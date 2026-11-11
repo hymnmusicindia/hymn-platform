@@ -4,7 +4,7 @@ The player reads a compact, 128-bin envelope from `/api/beats/:id/waveform?sourc
 
 ## Generation and storage
 
-Producer and admin uploads prepare envelopes before attempting publication. Older beats are prepared on their first selected-track request, or with the bounded backfill below. A cold legacy beat shows “Preparing waveform” until its real envelope is ready; precomputed and recently played beats render without waiting for audio decoding. This is not a claim that uncached data can arrive before a network round trip.
+Producer and admin uploads prepare envelopes before attempting publication. Older beats are prepared on their first selected-track request, or with the bounded backfill below. A cold legacy beat shows an animated placeholder waveform until its real envelope is ready; precomputed and recently played beats render without waiting for audio decoding. This is not a claim that uncached data can arrive before a network round trip.
 
 Generation runs on the server against DB-linked files, never arbitrary visitor-supplied URLs. WAV analysis samples four windows in each of 128 time bins (roughly 0.5 MB read for a stereo 16-bit master regardless of track length). MP3 analysis streams 16 KB chunks through `mpg123-decoder`, yields between chunks, retains a bounded envelope, and frees decoder memory afterward. Limits: 500 MB, 30 minutes, and a 60-second MP3 analysis deadline. Genuine silence remains flat.
 
@@ -38,3 +38,5 @@ npx tsx scripts/verify-waveform-generation.ts --mp3 /path/to/a/real-preview.mp3
 The suite covers large WAVs, bounded reads, real peaks and silence, durable cache reuse, concurrency/backoff, API access rules, no eager catalogue loading, no secondary audio fetch, cache bounds, track switching, network recovery, playback fallback and the responsive player controls. The optional MP3 command checks a real encoded fixture without committing an audio recording.
 
 References: [MDN decodeAudioData](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/decodeAudioData), [WaveSurfer FAQ on precomputed peaks and streaming](https://wavesurfer.xyz/docs/), [mpg123-decoder streaming API](https://github.com/eshaz/wasm-audio-decoders/tree/main/src/mpg123-decoder).
+
+The loading envelope is a decorative wave, not measured audio. It crossfades into the real peaks when ready, retains a screen-reader loading status, and stops moving for reduced-motion preferences. It does not fetch audio or trigger extra generation.

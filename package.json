@@ -20,6 +20,7 @@
     "test:team-call-reports:browser": "node scripts/verify-team-call-report-browser.cjs",
     "test:beatstore": "node --import tsx scripts/verify-acquisition-isolated.ts --beat-engagement-only",
     "test:beatstore:browser": "node scripts/verify-beatstore-record-browser.cjs",
+    "test:beat-store-hero": "node scripts/verify-beat-store-hero.cjs",
     "test:premium-player": "tsx scripts/verify-waveform-generation.ts && node scripts/verify-beat-waveform-access.cjs && node scripts/verify-waveform-loading.cjs && node scripts/verify-beat-preview-playback.cjs && node scripts/verify-premium-player.cjs",
     "beats:prepare-waveforms": "tsx scripts/prepare-beat-waveforms.ts",
     "test:beat-preview-streaming": "tsx scripts/verify-audio-streaming.ts && node scripts/verify-beat-audio-access.cjs && tsx scripts/verify-audio-streaming-browser.ts && node scripts/verify-beat-preview-playback.cjs",

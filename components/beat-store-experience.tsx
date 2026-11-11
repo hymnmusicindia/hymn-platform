@@ -548,12 +548,12 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
             <div className="absolute inset-x-2 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[var(--border)]" />
             <div
               className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[var(--accent)]"
-              style={{ left: `calc(0.5rem + ${(draftBpmMin - 60) / 1.2}%)`, right: `calc(0.5rem + ${(180 - draftBpmMax) / 1.2}%)` }}
+              style={{ left: `calc(0.5rem + ${(draftBpmMin - 40) / 2.6}%)`, right: `calc(0.5rem + ${(300 - draftBpmMax) / 2.6}%)` }}
             />
             <input
               type="range"
-              min={60}
-              max={180}
+              min={40}
+              max={300}
               value={draftBpmMin}
               onChange={(event) => setDraftBpmMin(Math.min(Number(event.target.value), draftBpmMax))}
               onPointerUp={(event) => commitBpmRange(Math.min(Number(event.currentTarget.value), draftBpmMax), draftBpmMax)}
@@ -564,8 +564,8 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
             />
             <input
               type="range"
-              min={60}
-              max={180}
+              min={40}
+              max={300}
               value={draftBpmMax}
               onChange={(event) => setDraftBpmMax(Math.max(Number(event.target.value), draftBpmMin))}
               onPointerUp={(event) => commitBpmRange(draftBpmMin, Math.max(Number(event.currentTarget.value), draftBpmMin))}
@@ -629,13 +629,17 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
 
       <section className={`${storeStyles.store} mx-auto max-w-[1700px] pb-10 pt-0 lg:pb-14`}>
         <BeatStoreHero
+          beats={catalog}
           moods={quickMoods}
           search={searchQuery}
           onSearch={setSearchQuery}
           onMood={(mood) => findMyBeat(mood)}
-          onSurprise={() => findMyBeat()}
           onFinder={() => setBeatFinderOpen(true)}
-
+          onMatch={beat => {
+            clearFilters(); setSearchQuery(""); setSelectedProducerSlug(null);
+            setSelectedGenres(beat.genre ? [beat.genre] : []);
+            setBpmMin(Math.max(40, beat.bpm - 15)); setBpmMax(Math.min(300, beat.bpm + 15));
+          }}
         />
         <div id="beat-catalog" className="scroll-mt-24">
           <div className="space-y-5">
