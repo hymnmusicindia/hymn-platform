@@ -1,6 +1,7 @@
 import { enqueueAmendmentUpdate, amendmentTransactionOptions } from './release-amendment-notifications';
 import { applyCompletedWizardAmendment } from './release-amendment-fulfillment';
 import { validateReleaseCorrection, applyCompletedSupportCorrection } from './release-support-corrections';
+import { spotifyProfileMismatchSchema } from './spotify-profile-mismatch';
 import { correctionSchema } from './release-correction-contract';
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -27,13 +28,27 @@ export async function createReleaseChangeRequest(input: { releaseId: number; use
     if (validated.correction.action === 'request_meta_not_live' && (!validated.correction.spotifyTrackUrl || !validated.correction.spotifyLiveConfirmed)) throw Error('Provide the live Spotify track link and confirm availability before appealing for Instagram / Facebook.');
     input.requestedChanges = { supportCorrection: validated.correction, summary: [{ label: validated.correction.action === 'request_meta_not_live' ? 'Instagram / Facebook availability appeal' : 'Track correction', before: `${validated.track.title} · ${validated.track.isrc}`, after: validated.correction.action === 'request_meta_not_live' ? `Review missing Meta availability. Spotify evidence: ${validated.correction.spotifyTrackUrl}` : validated.correction.action.replace(/^request_/, '').replaceAll('_', ' ') }], locked: { upc: validated.release.upc, trackId: validated.track.id, isrc: validated.track.isrc } };
   }
+  if(input.requestedChanges&&typeof input.requestedChanges==='object'&&!Array.isArray(input.requestedChanges)&&'spotify_artist_url' in input.requestedChanges)throw Error('Use Wrong Spotify artist profile and include the existing track link. This cannot be handled by re-releasing.');
+  const mapping=input.requestedChanges&&typeof input.requestedChanges==='object'&&!Array.isArray(input.requestedChanges)?(input.requestedChanges as Record<string,unknown>).profileMapping:undefined;
+  if(mapping){
+    if(input.requestType!=='metadata_update'||support)throw Error('Use the dedicated Spotify profile-mismatch request.');
+    const parsed=spotifyProfileMismatchSchema.parse(mapping);
+    const release=await prisma.release.findFirstOrThrow({where:{id:input.releaseId,userId:input.userId,archivedAt:null},include:{tracks:true}});
+    const track=release.tracks.find(row=>row.id===parsed.trackId);
+    if(!['LIVE','PARTIALLY_LIVE'].includes(release.status)||!release.upc||!track?.isrc)throw Error('Select an existing live recording with confirmed UPC and ISRC.');
+    const names=[track.primaryArtist||'',String((track.metadata as Record<string,unknown>|null)?.featuredArtists||'')].flatMap(name=>name.split(/,| & /)).map(name=>name.trim().toLowerCase());
+    if(!names.includes(parsed.artistName.toLowerCase()))throw Error('Select an artist already credited on this recording.');
+    input.requestedChanges={profileMapping:parsed,workflow:'spotify_content_mismatch',locked:{upc:release.upc,trackId:track.id,isrc:track.isrc},summary:[{label:'Spotify artist profile mapping',before:track.primaryArtist||release.artistName,after:parsed.spotifyArtistUrl}]};
+  }
   return prisma.$transaction(async tx => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${input.releaseId}::integer)`;
   const release = await tx.release.findFirst({ where: { id: input.releaseId, userId: input.userId, archivedAt: null } });
   if (!release) throw new Error("Release not found.");
   if (input.requestType !== "correction" && !["LIVE", "PARTIALLY_LIVE", "SCHEDULED", "AWAITING_LIVE_CONFIRMATION", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING"].includes(release.status)) throw new Error("This release is not eligible for a post-delivery change request.");
+  if(mapping){const changes=input.requestedChanges as Record<string,any>;const track=await tx.track.findFirst({where:{id:changes.locked.trackId,releaseId:release.id}});if(!['LIVE','PARTIALLY_LIVE'].includes(release.status)||release.upc!==changes.locked.upc||!track||track.isrc!==changes.locked.isrc)throw Error('The live recording changed. Refresh before submitting the mapping case.');}
   const existing = await tx.releaseChangeRequest.findFirst({ where: { releaseId: input.releaseId, requestType: input.requestType, status: { in: ["submitted", "under_review", "information_required", "approved", "processing_manually", "submitted_to_partner"] } } });
   if (existing) {
+    if(mapping){const prior=spotifyProfileMismatchSchema.safeParse((existing.requestedChanges as Record<string,unknown>|null)?.profileMapping);if(!prior.success||JSON.stringify(prior.data)!==JSON.stringify(spotifyProfileMismatchSchema.parse(mapping)))throw Error(`Request #${existing.id} is already active. Resolve it before starting a profile-mapping case.`);}
     if (support) {
       const prior = correctionSchema.safeParse((existing.requestedChanges as Record<string, unknown> | null)?.supportCorrection);
       if (!prior.success || JSON.stringify(prior.data) !== JSON.stringify(correctionSchema.parse(support))) throw Error(`Request #${existing.id} is already active. Track or resolve it before submitting another correction.`);
@@ -59,6 +74,14 @@ export async function reviewReleaseChangeRequest(input: { id: number; adminId?: 
   if(current.requestType==='distribution_service')throw Error('Use the dedicated Distribution services queue to verify the receipt and result.');
   if (current.status === input.decision && current.adminNote === input.note.trim() && (!input.providerReference?.trim() || current.providerReference === input.providerReference.trim())) return current;
   if (!allowedRequestTransitions[current.status]?.includes(input.decision)) throw new Error(`Change request cannot move from ${current.status} to ${input.decision}.`);
+  const isProfileMapping=Boolean((current.requestedChanges as Record<string,unknown>|null)?.profileMapping);
+  if(isProfileMapping&&input.decision==='submitted_to_partner'&&!/^spotify:/i.test(input.providerReference||''))throw Error('Record the Spotify content-mismatch case reference as spotify:CASE_ID. This is not a new release delivery.');
+  if(isProfileMapping&&input.decision==='completed'&&!/^spotify:/i.test(input.providerReference||current.providerReference||''))throw Error('Confirm the store mapping and record its Spotify content-mismatch case reference first.');
+  if(isProfileMapping&&input.decision==='completed'){
+    const changes=current.requestedChanges as Record<string,any>,locked=changes.locked;
+    const track=await tx.track.findFirst({where:{id:locked?.trackId,releaseId:current.releaseId},include:{release:true}});
+    if(!track||track.isrc!==locked?.isrc||track.release.upc!==locked?.upc)throw Error('The recording identifiers changed. Reconcile this profile-mapping case before completion.');
+  }
   const isSupport = Boolean((current.requestedChanges as Record<string, unknown> | null)?.supportCorrection);
   if (isSupport && input.decision === 'submitted_to_partner') throw Error('Send the approved correction through its preview to record a confirmed partner receipt.');
   if (isSupport && ['rejected', 'failed'].includes(input.decision)) {

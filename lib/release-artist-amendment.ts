@@ -1,6 +1,6 @@
 import 'server-only';
 import { projectWizardAmendment } from './release-amendment-proposal';
-import { applyCompletedWizardAmendment, restoreFailedWizardAmendment } from './release-amendment-fulfillment';
+import { applyCompletedWizardAmendment } from './release-amendment-fulfillment';
 import { enqueueAmendmentUpdate, amendmentTransactionOptions } from './release-amendment-notifications';
 import { createHash } from 'node:crypto';
 import { prisma } from './prisma';
@@ -70,32 +70,8 @@ export async function executeArtistAmendment(requestId: number, actorId?: number
 
 /** A rejected amendment cannot replace the preceding live delivery. */
 export async function failArtistAmendment(requestId: number, attemptId: number) {
-  await prisma.$transaction(async tx => {
-    const request = await tx.releaseChangeRequest.findUnique({ where: { id: requestId } });
-    if (!request || request.status !== 'submitted_to_partner') return;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${request.releaseId}::integer)`;
-    const event = await tx.releaseChangeRequestEvent.findFirst({ where: { requestId, metadata: { path: ['attemptId'], equals: attemptId } }, orderBy: { id: 'desc' } });
-    const receipt = record(event?.metadata);
-    const previousId = Number(receipt.previousAttemptId);
-    if (!Number.isSafeInteger(previousId) || previousId < 1) return;
-    const previous = await tx.distributionSubmissionAttempt.findFirst({ where: { id: previousId, releaseId: request.releaseId, state: 'submitted' } });
-    const otherCurrent = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId: request.releaseId, isCurrent: true, id: { not: attemptId } } });
-    if (!previous || otherCurrent) return;
-    await tx.distributionSubmissionAttempt.update({ where: { id: previous.id }, data: { isCurrent: true, providerStatus: typeof receipt.previousProviderStatus === 'string' ? receipt.previousProviderStatus : 'live' } });
-    if (receipt.wizard === true) await restoreFailedWizardAmendment(tx, request);
-    const release = await tx.release.findUniqueOrThrow({ where: { id: request.releaseId } });
-    const metadata = record(release.metadata), provider = record(metadata.direNote);
-    const status = receipt.previousStatus === 'partially_live' ? 'PARTIALLY_LIVE' : 'LIVE';
-    await tx.release.update({ where: { id: release.id }, data: { status, direNoteStatus: typeof receipt.previousProviderStatus === 'string' ? receipt.previousProviderStatus : 'live', direNoteSyncError: null, version: { increment: 1 }, metadata: { ...metadata, direNote: { ...provider, currentAttemptId: previous.id, identifierAssignmentPending: false, reconciliationInProgress: false } } as never } });
-    const mapping = record(receipt.previousMapping);
-    if (Number.isSafeInteger(Number(receipt.artistCardId)) && Object.keys(mapping).length) {
-      await tx.releaseArtistIdentity.updateMany({ where: { releaseId: release.id, artistCardId: Number(receipt.artistCardId) }, data: { spotifyUrl: typeof mapping.spotifyUrl === 'string' ? mapping.spotifyUrl : null, providerArtistId: typeof mapping.providerArtistId === 'string' ? mapping.providerArtistId : null, sourceFingerprint: String(mapping.sourceFingerprint), previousProviderArtistId: typeof mapping.previousProviderArtistId === 'string' ? mapping.previousProviderArtistId : null, corrected: mapping.corrected === true } });
-    }
-    await tx.releaseChangeRequest.update({ where: { id: requestId }, data: { status: 'failed' } });
-    const failureEvent = await tx.releaseChangeRequestEvent.create({ data: { requestId, actorType: 'system', previousStatus: request.status, newStatus: 'failed', note: 'The amendment did not finish. Your original live release and its identifiers remain current.', metadata: { failedAttemptId: attemptId, restoredAttemptId: previous.id } } });
-    await enqueueAmendmentUpdate(tx, requestId, failureEvent.id);
-    await tx.releaseStatusTransition.create({ data: { releaseId: release.id, previousStatus: release.status, newStatus: status, actorType: 'system', reason: 'Amendment failed; original live delivery retained.', metadata: { requestId, attemptId } } });
-  }, amendmentTransactionOptions);
+  const {recoverLegacyLiveRelease}=await import('./release-live-recovery');
+  await recoverLegacyLiveRelease((await prisma.releaseChangeRequest.findUniqueOrThrow({where:{id:requestId},select:{releaseId:true}})).releaseId,attemptId);
 }
 
 export async function completeArtistAmendment(releaseId: number, attemptId: number, reportTracks: unknown[]) {

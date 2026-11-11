@@ -43,14 +43,14 @@ export async function applyCompletedWizardAmendment(tx: Prisma.TransactionClient
 }
 
 /** Restore the catalogue snapshot when an accepted asynchronous amendment is rejected. */
-export async function restoreFailedWizardAmendment(tx: Prisma.TransactionClient, request: ReleaseChangeRequest) {
+export async function restoreFailedWizardAmendment(tx: Prisma.TransactionClient, request: ReleaseChangeRequest, options: { restoreContributors?: boolean } = {}) {
   const audit = await tx.auditLog.findFirst({ where: { action: 'RELEASE_AMENDMENT_APPLIED', entityId: String(request.releaseId), metadata: { path: ['requestId'], equals: request.id } }, orderBy: { id: 'desc' } });
   const snapshot = (audit?.metadata as { previous?: { title: string; artistName: string; genre: string; artworkUrl: string; audioUrl: string; metadata: Prisma.InputJsonValue; tracks: Array<{ id: number; title: string; primaryArtist: string; audioUrl: string; metadata: Prisma.InputJsonValue; contributors?: ReleaseTrack['contributors'] }> } } | null)?.previous;
   if (!snapshot) return;
   await tx.release.update({ where: { id: request.releaseId }, data: { title: snapshot.title, artistName: snapshot.artistName, genre: snapshot.genre, artworkUrl: snapshot.artworkUrl, audioUrl: snapshot.audioUrl, metadata: snapshot.metadata, version: { increment: 1 } } });
   for (const track of snapshot.tracks) {
     await tx.track.update({ where: { id: track.id }, data: { title: track.title, primaryArtist: track.primaryArtist, audioUrl: track.audioUrl, metadata: track.metadata } });
-    if (track.contributors) await syncReleaseContributions(tx, { actorUserId: request.requestedByUserId, tracks: [{ trackId: track.id, contributions: track.contributors }] });
+    if (options.restoreContributors !== false && track.contributors) await syncReleaseContributions(tx, { actorUserId: request.requestedByUserId, tracks: [{ trackId: track.id, contributions: track.contributors }] });
   }
   await tx.auditLog.create({ data: { actorType: 'system', action: 'RELEASE_AMENDMENT_RESTORED', entity: 'release', entityId: String(request.releaseId), metadata: { requestId: request.id, snapshotAuditId: audit!.id } } });
 }

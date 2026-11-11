@@ -49,6 +49,7 @@ export async function previewSupportCorrection(requestId: number) {
   const request = await prisma.releaseChangeRequest.findUniqueOrThrow({ where: { id: requestId } });
   if (!['approved', 'submitted_to_partner', 'processing_manually'].includes(request.status)) throw Error('Approve the correction before sending it.');
   const changes = record(request.requestedChanges);
+  if(changes.profileMapping)throw Error('Use Spotify content-mismatch review for this case. No recording correction or new release is sent.');
   if (!changes.supportCorrection) throw Error('This legacy amendment requires manual partner review. It cannot be sent as a new release.');
   const data = await validateReleaseCorrection(request.releaseId, request.requestedByUserId, changes.supportCorrection);
   const locked = { upc: data.release.upc, isrc: data.track.isrc, trackId: data.track.id };

@@ -92,3 +92,15 @@ by deployment or tests. A git push is not confirmation of deployment completion.
 The older `verify-artist-amendment.ts` and `verify-automatic-amendment.ts` describe
 the retired re-ingestion model; use the correction suite above for new writes.
 Historical identifier and reconciliation tests remain relevant to old attempts.
+
+## Spotify profile mismatch and legacy live-release recovery
+
+The live v3.1 reference (12 November 2026) still requires `request_replace_artist.new_artist_name` to differ from the existing artist. `update_artist` edits the partner identity record; it does not establish that Spotify moved an existing recording. Neither operation authorizes re-ingestion for a same-artist profile mismatch.
+
+Requests now offer **Wrong Spotify artist profile**, collecting the credited artist, correct Spotify artist profile and existing live Spotify recording URL. HYMN validates ownership, credit and canonical link types, locks the current UPC/ISRC, and tracks a `spotify_content_mismatch` case. Staff records a `spotify:CASE_ID` reference and verifies the actual store result before completion. The case cannot be sent through the recording-correction API. Changing a single recording's mapping never silently rewrites a global artist card.
+
+Spotify's documented route: https://support.spotify.com/us/artists/article/music-mixed-up-with-another-artist/ (content-mismatch form in Spotify for Artists). Existing live delivery status, UPC, ISRC and delivery attempt remain intact.
+
+For historical wizard amendments that incorrectly re-ingested an existing live release, a rejected duplicate can be separated from its original delivery. Recovery requires an original attempt bound to the amendment's locked UPC, exact UPC/unique full ISRC matches for both partner reports, a rejected duplicate, and an independently verified fully live original. The transaction restores the original current attempt, UPC, release date and LIVE status, preserves failed-attempt evidence and immutable payloads, leaves canonical contributor credits intact when legacy snapshots contain incomplete credit data, closes the obsolete re-release request, and creates a mapping-review task. It sends no ingestion, takedown or artist-update write. A failed or incomplete lookup cannot force a live status. Normal status synchronization uses this recovery before applying a rejected legacy duplicate report.
+
+`verify-live-amendment-recovery.ts` runs with the disposable correction database and mocked partner reads. It checks incomplete/wrong proof, original availability, idempotence, identity preservation, mapping validation, case references and absence of re-ingestion.

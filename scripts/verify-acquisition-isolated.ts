@@ -168,6 +168,7 @@ async function main() {
     if (process.argv.includes('--release-corrections-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-release-support-corrections.ts'], process.execPath, { ...env, HYMN_STORAGE_ROOT: path.join(fixture, 'storage'), PRIVATE_STORAGE_ROOT: path.join(fixture, 'storage') });
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-live-amendment-recovery.ts']);
       return;
     }
     if (process.argv.includes('--catalogue-acceptance-only')) {

@@ -518,6 +518,11 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   if (["live", "partially_live", "scheduled", "awaiting_live_confirmation", "delivered"].includes(aggregateStatus.provider) && !hasVerifiedProviderListing) {
     throw new Error("DIRENOTE_INCOMPLETE_STATUS: Delivery confirmation requires the complete, uniquely matched current track list and UPC. The last verified release status was retained.");
   }
+  const legacyAmendmentId=Number(record(attempt.responseRedacted).amendmentRequestId);
+  if(legacyAmendmentId>0&&['changes_requested','rejected','delivery_failed'].includes(aggregateStatus.canonical||'')){
+    const {recoverLegacyLiveRelease}=await import('./release-live-recovery');
+    if(await recoverLegacyLiveRelease(releaseId,attempt.id,actorId))return {success:true,releaseId,attemptId:attempt.id,skipped:'legacy_original_live_recovered' as const};
+  }
   const previousDireNote = record(record(release.metadata).direNote);
   const safe = redactDireNoteDiagnostic(payload) as RecordValue;
   await prisma.direNoteLog.create({ data: { releaseId, action: "release_information", httpStatus: result.httpStatus, success: result.success, requestPayloadRedacted: { upc: lookupUpc, attemptId: attempt.id }, responseJson: safe as never, errorMessage: result.httpStatus === 401 ? "DIRENOTE_STATUS_AUTH_FAILED" : result.error ?? null, createdByAdminId: actorId ?? null } });
