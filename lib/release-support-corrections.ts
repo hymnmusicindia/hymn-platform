@@ -42,7 +42,7 @@ export async function validateReleaseCorrection(releaseId: number, userId: numbe
   void _action; void _track;
   const { assetId: _asset, ...body } = fields as Record<string, unknown>;
   void _asset;
-  return { correction, release, track, file, payload: { isrc: track.isrc, ...body } };
+  return { correction, release, track, file, payload: { isrc: track.isrc, ...(correction.action === 'request_meta_not_live' ? {} : body) } };
 }
 
 export async function previewSupportCorrection(requestId: number) {

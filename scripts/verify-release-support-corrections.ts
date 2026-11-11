@@ -21,7 +21,7 @@ async function main() {
   await assert.rejects(make({ action: 'request_replace_artist', trackId, artist_name: 'Original Artist', new_artist_name: 'Original Artist' }), /different artist/);
   const request = await make({ action: 'request_add_artist', trackId, artist_name: 'Guest', artist_type: 'featuring' });
   assert.equal((await make({ action: 'request_add_artist', trackId, artist_name: 'Guest', artist_type: 'featuring' })).id, request.id, 'Retry returns the same request.');
-  await assert.rejects(make({ action: 'request_meta_not_live', trackId }), /already active/);
+  await assert.rejects(make({ action: 'request_meta_not_live', trackId, spotifyTrackUrl: 'https://open.spotify.com/track/0123456789012345678901', spotifyLiveConfirmed:true }), /already active/);
   await assert.rejects(previewSupportCorrection(request.id), /Approve/);
   await reviewReleaseChangeRequest({ id: request.id, decision: 'approved', note: 'Reviewed the existing recording correction.' });
   const preview = await previewSupportCorrection(request.id);
@@ -35,6 +35,7 @@ async function main() {
     }
     const body = JSON.parse(String(init?.body)); assert.equal(body.pin, 'correction-fixture-pin');
     if (url.endsWith('/list_support_requests')) return Response.json({ success: true, requests: [{ request_id: 71, isrc: 'INDN22602494', status }] });
+    if(url.endsWith('/request_meta_not_live')){writes++;assert.deepEqual(Object.keys(body).sort(),['client_id','isrc','pin']);return Response.json({success:true,request:{request_id:73,status:'pending'}});}
     assert.ok(url.endsWith('/request_add_artist')); writes++; assert.equal(body.isrc, 'INDN22602494'); assert.equal(body.artist_name, 'Guest'); assert.equal(body.upc, undefined);
     if (uncertain) throw Error('Simulated timeout after provider receipt');
     return Response.json({ success: true, request: { request_id: 71, status: 'pending' } });
@@ -58,6 +59,18 @@ async function main() {
     await reviewReleaseChangeRequest({ id: art.id, decision: 'approved', note: 'Artwork reviewed against specifications.' });
     assert.equal((await submitSupportCorrection(art.id, (await previewSupportCorrection(art.id)).revision)).submitted, true);
     await prisma.releaseChangeRequest.update({ where: { id: art.id }, data: { status: 'completed' } });
+    await assert.rejects(make({action:'request_meta_not_live',trackId}),/Spotify/);
+    await assert.rejects(make({action:'request_meta_not_live',trackId,spotifyTrackUrl:'https://evil.test/track/0123456789012345678901',spotifyLiveConfirmed:true}));
+    const meta={action:'request_meta_not_live',trackId,spotifyTrackUrl:'https://open.spotify.com/track/0123456789012345678901',spotifyLiveConfirmed:true};
+    const appeal=await make(meta);
+    assert.equal((await make(meta)).id,appeal.id);
+    await assert.rejects(make(meta,stranger.id));
+    await reviewReleaseChangeRequest({id:appeal.id,decision:'approved',note:'Confirmed artist provided Spotify availability evidence.'});
+    const metaPreview=await previewSupportCorrection(appeal.id);
+    assert.deepEqual(metaPreview.payload,{isrc:'INDN22602494'},'Spotify evidence stays internal and is never sent as undocumented partner parameters.');
+    assert.equal((await submitSupportCorrection(appeal.id,metaPreview.revision)).submitted,true);
+    await assert.rejects(submitSupportCorrection(appeal.id,metaPreview.revision));
+    await prisma.releaseChangeRequest.update({where:{id:appeal.id},data:{status:'completed'}});
     uncertain = true;
     const failed = await make({ action: 'request_add_artist', trackId, artist_name: 'Guest', artist_type: 'featuring' });
     await reviewReleaseChangeRequest({ id: failed.id, decision: 'approved', note: 'Review timeout scenario fixture.' });
@@ -69,7 +82,7 @@ async function main() {
     const legacy = await prisma.releaseChangeRequest.create({ data: { releaseId: release.id, requestedByUserId: user.id, requestType: 'metadata_update', reason: 'Legacy queued wizard amendment', requestedChanges: { automaticDelivery: true, wizard_metadata: {} } } });
     await processAutomaticAmendment(legacy.id);
     assert.equal((await prisma.releaseChangeRequest.findUniqueOrThrow({ where: { id: legacy.id } })).status, 'processing_manually');
-    assert.equal(writes, 3);
+    assert.equal(writes, 4);
     assert.ok(await prisma.notification.count({ where: { userId: user.id, type: 'release_amendment' } }) > 0);
     console.log('Existing-recording correction contracts, ownership, multipart upload, receipts, uncertain-send protection, manual verification, immutable identifiers and legacy ingestion guard passed.');
   } finally { globalThis.fetch = nativeFetch; }

@@ -24,7 +24,8 @@ export async function createReleaseChangeRequest(input: { releaseId: number; use
   if (support) {
     if (input.requestType !== 'metadata_update') throw Error('Use a release correction request for this operation.');
     const validated = await validateReleaseCorrection(input.releaseId, input.userId, support);
-    input.requestedChanges = { supportCorrection: validated.correction, summary: [{ label: 'Track correction', before: `${validated.track.title} · ${validated.track.isrc}`, after: validated.correction.action.replace(/^request_/, '').replaceAll('_', ' ') }], locked: { upc: validated.release.upc, trackId: validated.track.id, isrc: validated.track.isrc } };
+    if (validated.correction.action === 'request_meta_not_live' && (!validated.correction.spotifyTrackUrl || !validated.correction.spotifyLiveConfirmed)) throw Error('Provide the live Spotify track link and confirm availability before appealing for Instagram / Facebook.');
+    input.requestedChanges = { supportCorrection: validated.correction, summary: [{ label: validated.correction.action === 'request_meta_not_live' ? 'Instagram / Facebook availability appeal' : 'Track correction', before: `${validated.track.title} · ${validated.track.isrc}`, after: validated.correction.action === 'request_meta_not_live' ? `Review missing Meta availability. Spotify evidence: ${validated.correction.spotifyTrackUrl}` : validated.correction.action.replace(/^request_/, '').replaceAll('_', ' ') }], locked: { upc: validated.release.upc, trackId: validated.track.id, isrc: validated.track.isrc } };
   }
   return prisma.$transaction(async tx => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${input.releaseId}::integer)`;

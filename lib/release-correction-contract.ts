@@ -4,7 +4,7 @@ export const correctionKinds = {
   request_add_artist: 'Add artist', request_remove_artist: 'Remove artist',
   request_replace_artist: 'Replace artist', request_swap_artist_type: 'Change artist role',
   request_cover_art_change: 'Replace cover artwork', request_audio_change: 'Replace audio master',
-  request_apple_not_live: 'Missing on Apple Music', request_meta_not_live: 'Missing on Meta',
+  request_apple_not_live: 'Missing on Apple Music', request_meta_not_live: 'Instagram / Facebook availability appeal',
 } as const;
 const track = { trackId: z.number().int().positive() };
 const name = z.string().trim().min(1).max(255);
@@ -17,6 +17,6 @@ export const correctionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('request_cover_art_change'), ...track, assetId: z.number().int().positive() }).strict(),
   z.object({ action: z.literal('request_audio_change'), ...track, assetId: z.number().int().positive() }).strict(),
   z.object({ action: z.literal('request_apple_not_live'), ...track }).strict(),
-  z.object({ action: z.literal('request_meta_not_live'), ...track }).strict(),
+  z.object({ action: z.literal('request_meta_not_live'), ...track, spotifyTrackUrl: z.string().regex(/^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]{22}(?:\?[^\s]*)?$/).optional(), spotifyLiveConfirmed: z.literal(true).optional() }).strict(),
 ]);
 export type ReleaseCorrection = z.infer<typeof correctionSchema>;
