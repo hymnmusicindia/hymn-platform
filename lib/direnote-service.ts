@@ -444,8 +444,19 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const withdrawn = confirmsDireNoteWithdrawal({ upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc }, payload);
   const providerCorrections = withdrawn ? [] : extractDireNoteCorrections(redactDireNoteDiagnostic(currentPayload) as RecordValue, mappingTracks, releaseId, attempt.id);
   const explicitProviderStatus = rejectOrCorrectionStatus(currentPayload);
+  // The partner retains previous review remarks after returning tracks to Pending.
+  // Ignore only the exact previously applied review, with a complete verified listing.
+  // New remarks and explicit blocking statuses still enter the correction workflow.
+  const retainedPendingReview = !explicitProviderStatus && providerCorrections.length > 0 &&
+    direNoteCorrectionFingerprint(providerCorrections) === record(record(release.metadata).direNote).appliedCorrectionFingerprint &&
+    normalizeDireNoteUpc(remoteRelease.upc_code) === lookupUpc &&
+    remoteTracks.length === mappingTracks.length && remoteTracks.length > 0 &&
+    new Set(remoteTracks.map(track => normalized(text(track.isrc)))).size === mappingTracks.length &&
+    remoteTracks.every(remote => /^pending$/i.test(text(remote.status)) &&
+      mappingTracks.some(track => validIsrc(text(remote.isrc)) && normalized(text(track.isrc)) === normalized(text(remote.isrc))));
+  if (retainedPendingReview) providerCorrections.splice(0);
   const lifecycleStatus = aggregateReleaseStatus(remoteTracks, remoteRelease.status ?? payload.status, release.releaseDate);
-  if (result.success && !withdrawn && lookupUpc && (providerCorrections.length || explicitProviderStatus || providerRequiresCorrections(remoteRelease.status) || remoteTracks.some(track => providerRequiresCorrections(track.status)))) {
+  if (result.success && !withdrawn && !retainedPendingReview && lookupUpc && (providerCorrections.length || explicitProviderStatus || providerRequiresCorrections(remoteRelease.status) || remoteTracks.some(track => providerRequiresCorrections(track.status)))) {
     try {
       const reviewFingerprint = createHash("sha256").update(JSON.stringify({
         corrections: direNoteCorrectionFingerprint(providerCorrections),
@@ -633,7 +644,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     (previousStatus === "live" && aggregateStatus.canonical !== "live") ||
     (previousStatus === "partially_live" && !["live", "partially_live"].includes(aggregateStatus.canonical ?? "")) ||
     (previousStatus === "rejected" && ["live", "partially_live"].includes(aggregateStatus.canonical ?? ""));
-  const providerAccepted = ["scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(aggregateStatus.provider) ||
+  const providerAccepted = retainedPendingReview || ["scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(aggregateStatus.provider) ||
     (hasVerifiedProviderListing && !providerCorrections.length && !explicitProviderStatus &&
       (String(remoteRelease.status ?? payload.status ?? '').trim().toLowerCase() === 'accepted' ||
         (remoteTracks.length > 0 && remoteTracks.every(track => /^(approved|accepted)$/i.test(String(track.status ?? '').trim())))));

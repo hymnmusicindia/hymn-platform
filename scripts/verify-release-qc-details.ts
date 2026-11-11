@@ -28,12 +28,12 @@ async function main(){
   const unscanned=buildReleaseQcReport({...raw,tracks:raw.tracks.map(t=>({...t,scanned:false}))},context);assert.equal(unscanned.tracks[1].matches.length,0);
   assert.equal(providerQcSourceUpc({remarks:'See https://dashboard.direnotemedia.com/release_detection_analysis.php?upc=036000291452.'}),'036000291452');
   assert.equal(providerQcSourceUpc({remarks:'https://evil.example/report?upc=036000291452'}),null);
-  const originalFetch=global.fetch;let qcCalls=0;let remark='Please provide rights clearance for this recording.';
+  const originalFetch=global.fetch;let trackStatus='Rejected';let qcCalls=0;let remark='Please provide rights clearance for this recording.';
   global.fetch=async(url,init)=>{
     const pathname=new URL(String(url)).pathname;
     const body=JSON.parse(String(init?.body??'{}'));
     if(pathname==='/check_qc_report'){qcCalls++;assert.deepEqual(Object.keys(body).sort(),['client_id','pin','upc']);return Response.json(raw);}
-    if(pathname==='/check_release_status')return Response.json({success:true,release:{upc_code:release.upc,album_name:release.title},tracks:tracks.map(t=>({track_name:t.title,isrc:t.isrc,status:'Rejected',remarks:remark}))});
+    if(pathname==='/check_release_status')return Response.json({success:true,release:{upc_code:release.upc,album_name:release.title},tracks:tracks.map(t=>({track_name:t.title,isrc:t.isrc,status:trackStatus,remarks:remark}))});
     return Response.json({success:false,error:'Fixture endpoint unavailable'},{status:404});
   };
   try{
@@ -53,6 +53,15 @@ async function main(){
     assert.match(JSON.stringify(artworkMail.payload),/Supplementary audio scan evidence/);
     assert.equal((artworkMail.payload as any).qcPolicyVersion,2);
     assert.equal((artworkMail.payload as any).qcReportFetchedAt,(await readReleaseQcReport(release.id))!.fetchedAt);
+    trackStatus='Pending';
+    await syncDireNoteRelease(release.id);
+    assert.equal((await prisma.release.findUniqueOrThrow({where:{id:release.id}})).status,'DISTRIBUTOR_PROCESSING','Verified Pending supersedes identical prior correction remarks.');
+    await syncDireNoteRelease(release.id);
+    assert.equal((await prisma.release.findUniqueOrThrow({where:{id:release.id}})).status,'DISTRIBUTOR_PROCESSING','Repeated sync must not restore retained remarks.');
+    remark='Please replace the incorrect audio file.';
+    await syncDireNoteRelease(release.id);
+    assert.equal((await prisma.release.findUniqueOrThrow({where:{id:release.id}})).status,'CHANGES_REQUESTED','New remarks on Pending must still require review.');
+
   }finally{global.fetch=originalFetch;}
   const current=await readReleaseQcReport(release.id);assert(current?.reviewFingerprint);
   const boundContext={...context,reviewFingerprint:current.reviewFingerprint};
