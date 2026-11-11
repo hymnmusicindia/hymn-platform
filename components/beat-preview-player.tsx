@@ -1,5 +1,7 @@
 "use client";
 import "./beat-licence-dialog.css";
+import "./beat-player.css";
+import { PlaybackWaveform } from "./playback-waveform";
 import {exclusiveBeatEligible} from "@/lib/beat-rights-policy";
 
 import { beatUsageSummary } from '@/lib/beat-licence-terms';
@@ -11,8 +13,8 @@ import { customerMessage } from "@/lib/customer-message";
 import Link from "next/link";
 import { CustomerOverlay } from "@/components/customer-overlay";
 import { LicenceWheel } from "@/components/licence-wheel";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShoppingBag, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Disc3, ExternalLink, ListMusic, Pause, Play, Share2, ShoppingBag, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { beatLicenseCatalog, beatLicensePrice, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 
 type LicenseChoice = BeatStoreLicenseType;
@@ -23,6 +25,7 @@ type BeatPreviewContextValue = {
   playing: boolean;
   currentTime: number;
   duration: number;
+  sourceUrl: string;
   loop: boolean;
   shuffle: boolean;
   volume: number;
@@ -213,6 +216,17 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
   const beat = value.activeBeat;
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [shareNotice, setShareNotice] = useState("");
+  const menuId = useId();
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") { setMenuOpen(false); menuRef.current?.querySelector<HTMLButtonElement>('[aria-haspopup="dialog"]')?.focus(); } };
+    const outside = (event: PointerEvent) => { if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setMenuOpen(false); };
+    window.addEventListener("keydown", key); window.addEventListener("pointerdown", outside);
+    return () => { window.removeEventListener("keydown", key); window.removeEventListener("pointerdown", outside); };
+  }, [menuOpen]);
+  useEffect(() => { if (!shareNotice || menuOpen) return; const timeout = setTimeout(() => setShareNotice(""), 4000); return () => clearTimeout(timeout); }, [shareNotice, menuOpen]);
   const lastScrollYRef = useRef(0);
   useEffect(() => {
     setCollapsed(licensingOpen);
@@ -244,50 +258,44 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
       window.removeEventListener("wheel", onWheel);
     };
   }, [licensingOpen]);
+  useEffect(() => { setShareNotice(""); setMenuOpen(false); }, [value.activeBeatId]);
   useEffect(() => {
     if (value.playing) setCollapsed(false);
   }, [value.activeBeatId, value.playing]);
   if (!beat) return null;
-  const progress = value.duration > 0 ? Math.min(100, Math.max(0, (value.currentTime / value.duration) * 100)) : 0;
-  const canUseQueue = true;
   const fromPrice = licensePrice(beat, "mp3");
   const addToCart = () => writeCartItem(beat, "mp3");
-  const buyNow = () => {
-    writeCartItem(beat, "mp3");
-    window.location.href = "/checkout?product=beatstore";
+  const buyNow = () => { writeCartItem(beat, "mp3"); window.location.href = "/checkout?product=beatstore"; };
+  const shareUrl = typeof window === "undefined" ? "" : new URL(`${beat.producer.slug ? `/beat-store/producers/${encodeURIComponent(beat.producer.slug)}` : "/beat-store"}#beat-${beat.id}`, window.location.origin).href;
+  const share = async () => {
+    try {
+      if (navigator.share) { await navigator.share({ title: beat.title, text: `${beat.title} by ${beat.producer.name} on HYMN Music`, url: shareUrl }); return; }
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(shareUrl); setShareNotice("Beat link copied.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setShareNotice("Copy the beat link from More actions."); setMenuOpen(true);
+    }
   };
-
-  return (
-    <aside className={`beat-player-surface fixed inset-x-0 bottom-0 z-[190] border-t border-[var(--border)] bg-[var(--card)] shadow-[0_-12px_40px_rgba(0,0,0,0.25)] backdrop-blur-2xl transition-transform duration-300 ${collapsed && !menuOpen ? "translate-y-[calc(100%-0.5rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onPointerLeave={() => { if (licensingOpen) setCollapsed(true); }} onFocus={() => setCollapsed(false)}>
-      <div className="mx-auto grid max-w-[1700px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 sm:grid-cols-[minmax(180px,.75fr)_minmax(360px,1.35fr)_auto] sm:px-5">
-        <button type="button" onClick={() => value.openLicensing(beat)} className="flex min-w-0 items-center gap-2.5 text-left" aria-label={`Open licence options for ${beat.title}`}>
-          <span className="scale-90"><PlayerArtwork beat={beat} /></span>
-          <span className="min-w-0"><span className="block truncate text-xs font-semibold text-[var(--text)] sm:text-sm">{beat.title}</span><span className="block truncate text-[10px] text-[var(--text-muted)] sm:text-xs">{beat.producer.name} · {beat.bpm} BPM</span></span>
-        </button>
-
-        <div className="order-3 col-span-2 flex min-w-0 flex-col sm:order-none sm:col-span-1">
-          <div className="flex h-9 items-center justify-center gap-1.5">
-            <button type="button" onClick={() => value.setShuffle(!value.shuffle)} className={`grid h-8 w-8 place-items-center rounded-full transition ${value.shuffle ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`} aria-label={value.shuffle ? "Disable shuffle" : "Shuffle beats"}><Shuffle className="h-3.5 w-3.5" /></button>
-            <button type="button" onClick={value.previous} className="grid h-8 w-8 place-items-center rounded-full text-[var(--text-muted)] transition hover:text-[var(--text)] disabled:opacity-30" aria-label="Previous beat" disabled={!canUseQueue}><SkipBack className="h-4 w-4" fill="currentColor" /></button>
-            <button type="button" onClick={value.togglePlay} className="mx-1 grid h-9 w-9 place-items-center rounded-full bg-transparent text-[var(--text)] shadow-none sm:bg-[var(--accent)] sm:text-[var(--accent-foreground)] transition hover:scale-105" aria-label={value.playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>{value.playing ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="ml-0.5 h-4 w-4" fill="currentColor" />}</button>
-            <button type="button" onClick={value.next} className="grid h-8 w-8 place-items-center rounded-full text-[var(--text-muted)] transition hover:text-[var(--text)] disabled:opacity-30" aria-label="Next beat" disabled={!canUseQueue}><SkipForward className="h-4 w-4" fill="currentColor" /></button>
-            <button type="button" onClick={() => value.setLoop(!value.loop)} className={`relative grid h-8 w-8 place-items-center rounded-full transition ${value.loop ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`} aria-label={value.loop ? "Disable repeat" : "Repeat beat"}><Repeat className="h-3.5 w-3.5" />{value.loop ? <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-[var(--accent)]" /> : null}</button>
-          </div>
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="w-9 text-right font-mono text-[9px] text-[var(--text-muted)]">{formatTime(value.currentTime)}</span>
-            <input type="range" min={0} max={Math.max(1, value.duration || 1)} step={0.1} value={Math.min(value.currentTime, value.duration || value.currentTime)} onChange={(event) => value.seek(Number(event.target.value))} className="beat-player-range h-4 min-w-0 flex-1" style={{ ["--beat-progress" as string]: `${progress}%` }} aria-label={`Seek ${beat.title}`} />
-            <span className="w-9 font-mono text-[9px] text-[var(--text-muted)]">{value.duration ? `-${formatTime(Math.max(0, value.duration - value.currentTime))}` : "0:00"}</span>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-1">
-            <BeatFreeDownload key={beat.id} id={beat.id} title={beat.title}/>
-            <button type="button" onClick={() => value.setMuted(!value.muted)} className="hidden h-9 w-9 place-items-center rounded-full text-[var(--text-muted)] transition hover:bg-[var(--hover)] hover:text-[var(--text)] md:grid" aria-label={value.muted ? "Unmute audio" : "Mute audio"}>{value.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>
-            <input type="range" min={0} max={1} step={0.01} value={value.volume} onChange={(event) => value.setVolume(Number(event.target.value))} style={{ ["--beat-volume" as string]: `${value.volume * 100}%` }} className="beat-volume-range hidden w-16 lg:block" aria-label="Preview volume" />
-            <div className="relative">
-              <button type="button" onClick={() => setMenuOpen((current) => !current)} className="grid h-9 w-9 place-items-center rounded-full text-[var(--text-muted)] transition hover:bg-[var(--hover)] hover:text-[var(--text)]" aria-label="More beat actions"><ListMusic className="h-4 w-4" /></button>
+  return <aside aria-label="Now playing" className="beat-player-surface hymn-player" data-collapsed={collapsed && !menuOpen} onPointerEnter={() => setCollapsed(false)} onPointerLeave={() => { if (licensingOpen) setCollapsed(true); }} onFocus={() => setCollapsed(false)}>
+    <div className="hymn-player-shell">
+      <button type="button" className="hymn-player-cover" onClick={value.togglePlay} aria-label={value.playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>
+        <PlayerArtwork key={beat.id} beat={beat}/><span>{value.playing ? <Pause fill="currentColor"/> : <Play fill="currentColor"/>}</span>
+      </button>
+      <button type="button" className="hymn-player-info" onClick={() => value.openLicensing(beat)} aria-label={`Open licence options for ${beat.title}`}>
+        <strong title={beat.title}>{beat.title}</strong><small>{beat.producer.name}<span className="hymn-player-bpm">{beat.bpm ? ` · ${beat.bpm} BPM` : ""}</span></small>
+      </button>
+      <div className="hymn-player-transport">
+        <button type="button" className="hymn-player-icon" onClick={value.previous} aria-label="Previous beat"><SkipBack size={17}/></button>
+        <button type="button" className="hymn-player-icon" onClick={value.next} aria-label="Next beat"><SkipForward size={17}/></button>
+      </div>
+      <div className="hymn-player-timeline"><PlaybackWaveform src={value.sourceUrl || safePreviewUrl(beat)} title={beat.title} currentTime={value.currentTime} duration={value.duration} seek={value.seek}/><div className="hymn-player-time"><span>{formatTime(value.currentTime)}</span><span>{formatTime(value.duration)}</span></div></div>
+      <div className="hymn-player-actions">
+        <div className="hymn-player-volume"><button type="button" className="hymn-player-icon" onClick={() => value.setMuted(!value.muted)} aria-label={value.muted ? "Unmute audio" : "Mute audio"}>{value.muted ? <VolumeX/> : <Volume2/>}</button><input className="hymn-player-volume-slider" style={{ background: `linear-gradient(to right, #fff ${value.volume * 100}%, #ffffff30 ${value.volume * 100}%)` }} type="range" min="0" max="1" step="0.01" value={value.volume} onChange={event => value.setVolume(Number(event.target.value))} aria-label="Preview volume"/></div>
+        <button type="button" className="hymn-player-icon" onClick={() => void share()} aria-label={`Share ${beat.title}`}><Share2/></button>
+        <div className="relative" ref={menuRef}><button type="button" className="hymn-player-icon" onClick={() => setMenuOpen(current => !current)} aria-label="More beat actions" aria-expanded={menuOpen} aria-controls={menuId} aria-haspopup="dialog"><ListMusic/></button>
               {menuOpen ? (
-                <div className="absolute bottom-12 right-0 w-[min(92vw,560px)] overflow-hidden rounded-[1.4rem] border border-white/10 bg-[var(--card)] shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                <div id={menuId} role="dialog" aria-label={`Beat actions for ${beat.title}`} className="hymn-player-menu absolute bottom-12 right-0 w-[min(92vw,560px)] overflow-hidden rounded-[1.4rem] border border-white/10 bg-[var(--card)] shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <PlayerArtwork beat={beat} />
@@ -309,6 +317,8 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
                       <button type="button" onClick={buyNow} className="btn-primary pressable min-h-11 text-xs">Buy</button>
                     </div>
                   </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-2"><div className="flex gap-1"><button type="button" className="hymn-player-icon" onClick={value.previous} aria-label="Previous beat"><SkipBack size={17}/></button><button type="button" className="hymn-player-icon" onClick={value.next} aria-label="Next beat"><SkipForward size={17}/></button><button type="button" className="hymn-player-icon" onClick={() => value.setShuffle(!value.shuffle)} aria-label="Shuffle beats" aria-pressed={value.shuffle}><Shuffle size={17}/></button></div><BeatFreeDownload key={beat.id} id={beat.id} title={beat.title}/><label className="flex items-center gap-2 text-xs"><Volume2 size={15}/><input className="hymn-player-volume-slider" style={{ background: `linear-gradient(to right, #fff ${value.volume * 100}%, #ffffff30 ${value.volume * 100}%)` }} aria-label="Preview volume" type="range" min="0" max="1" step="0.01" value={value.volume} onChange={event => value.setVolume(Number(event.target.value))}/></label></div>
+                  {shareNotice ? <div className="px-4 pb-3"><input className="hymn-player-share-link" aria-label="Share beat link" value={shareUrl} readOnly onFocus={event => event.target.select()}/></div> : null}
                   <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-2 text-xs font-semibold text-[var(--text)] sm:grid-cols-4">
                     <Link href={`/beat-store/producers/${beat.producer.slug}`} className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 hover:bg-white/8">Producer <ExternalLink className="h-3.5 w-3.5" /></Link>
                     <button type="button" onClick={() => value.setLoop(!value.loop)} className={`rounded-xl px-3 py-2 transition hover:bg-white/8 ${value.loop ? "text-[var(--accent)]" : ""}`}>{value.loop ? "Loop On" : "Loop"}</button>
@@ -317,14 +327,12 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
                   </div>
                 </div>
               ) : null}
-            </div>
-            <button type="button" onClick={addToCart} className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] text-[var(--text)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]" aria-label={`Add ${beat.title} to cart`}><ShoppingBag className="h-4 w-4" /></button>
-            <button type="button" onClick={() => value.openLicensing(beat, "wav")} className="hidden rounded-full bg-[var(--accent)] px-3.5 py-2 text-[10px] font-bold text-[var(--accent-foreground)] transition hover:scale-[1.02] sm:block">From {formatMoney(fromPrice)}</button>
         </div>
-        </div>
-        {value.error ? <p className="mt-2 text-xs font-semibold text-red-300">{customerMessage(value.error)}</p> : null}
-    </aside>
-  );
+        <button type="button" className="hymn-player-price" onClick={() => value.openLicensing(beat, "wav")}>From {formatMoney(fromPrice)}</button>
+      </div>
+    </div>
+    {value.error || shareNotice ? <p className="hymn-player-status" role={value.error ? "alert" : "status"}>{value.error ? customerMessage(value.error) : shareNotice}</p> : null}
+  </aside>;
 }
 
 export function BeatPreviewPlayerProvider({ children }: { children: ReactNode }) {
@@ -337,6 +345,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [sourceUrl, setSourceUrl] = useState("");
   const [loop, setLoopState] = useState(false);
   const [shuffle, setShuffleState] = useState(false);
   const [volume, setVolumeState] = useState(1);
@@ -435,6 +444,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
       audio.onerror = fail;
       const timeout = setTimeout(fail, 12000);
       audio.src = url;
+      setSourceUrl(url);
       // Start inside the original tap, without a fetch/await that loses iOS activation.
       void audio.play().catch(reason => {
         if (!current() || reason?.name === "AbortError") return;
@@ -466,6 +476,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     playing,
     currentTime,
     duration,
+    sourceUrl,
     loop,
     shuffle,
     volume,
@@ -494,11 +505,11 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
       setLicensingOpen(true);
     },
     closeLicensing: () => setLicensingOpen(false)
-  }), [activeBeat, currentTime, duration, ensureAudio, error, loop, muted, playBeat, playQueueOffset, playing, shuffle, volume]);
+  }), [activeBeat, currentTime, duration, sourceUrl, ensureAudio, error, loop, muted, playBeat, playQueueOffset, playing, shuffle, volume]);
 
   return (
     <BeatPreviewContext.Provider value={value}>
-      <div className={activeBeat ? "pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-[4.75rem]" : undefined}>
+      <div className={activeBeat ? "pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-[7rem]" : undefined}>
         {children}
       </div>
       <BottomPlayer value={value} licensingOpen={licensingOpen} />
