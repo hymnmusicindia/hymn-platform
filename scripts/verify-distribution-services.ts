@@ -1,3 +1,6 @@
+import {confirmDistributionPayment,receiveRazorpayEvent,processRazorpayEvent,claimDistributionOrderForSubmission} from '../lib/payment-webhooks';
+import {oacArtistState,prepareOacApplication,fulfillOacRetryPayment,requestOacChannelChange} from '../lib/youtube-oac';
+import {oacChannelUrl,OAC_RETRY_PLAN,oacOutcome} from '../lib/youtube-oac-contract';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -25,7 +28,7 @@ async function main(){
  const future=new Date(Date.now()+10*86400000).toISOString().slice(0,10);
  const fields:Record<string,any>={
  request_instagram_linking:{...spotify,instagram_url:'https://instagram.com/serviceartist',facebook_url:'https://facebook.com/serviceartist'},
- request_yt_oac:{channel_url:'https://youtube.com/channel/UC0123456789012345678901',channel_id:'UC0123456789012345678901'},
+ request_yt_oac:{channel_url:'https://www.youtube.com/channel/UC0123456789012345678901',channel_id:'UC0123456789012345678901'},
  request_yt_claim:{...spotify,url:'https://youtu.be/01234567890'},request_facebook_claim:{...spotify,url:'https://facebook.com/artist/videos/123456'},request_tiktok_claim:{...spotify,url:'https://tiktok.com/@artist/video/123456'},request_soundcloud_claim:{...spotify,url:'https://soundcloud.com/artist/track'},
  ingest_video:{video_title:'Official video',video_url:'https://cdn.example.com/video.mp4',thumbnail_url:'https://cdn.example.com/thumbnail.jpg',audio_url:'https://cdn.example.com/audio.mp3',metadata_language:'English',video_language:'English',genre:'Pop',subgenre:'Other',release_date:future,tags:'official,video',video_description:'The official video.',c_line:'2026 Service Artist',p_line:'2026 Service Artist'},
  register_master_work:{claim:'Authorized Collection Designee',claim_percent:50,coll_start_date:'2026-11-01',coll_end_date:'2027-11-01'},request_takedown:{confirmation:'REMOVE 012345678905'}};
@@ -93,6 +96,61 @@ async function main(){
    if(action!=='register_master_work')await reviewDistributionService(created.id,'complete','Verified the requested outcome on the actual store.');
    assert.equal((await prisma.release.findUniqueOrThrow({where:{id:release.id}})).status,'LIVE');
   }
+  // OAC is artist-scoped: reuse across releases, strict channel URLs, and paid rejected retries.
+  const canonicalChannel='https://www.youtube.com/channel/UC0123456789012345678901';
+  assert.equal(oacOutcome({status:'failed',events:[{metadata:{providerApproved:true}},{metadata:{providerFailed:true,providerNote:'Channel rejected'}}]}),'rejected','Current rejection outranks old approval and supports earlier rejection records.');
+  assert.equal(oacOutcome({status:'failed',events:[{metadata:{providerFailed:true}}]}),'needs_attention','Technical failures do not become paid rejections.');
+  for(const invalid of ['https://youtube.com/channel/UC0123456789012345678901','https://www.youtube.com/@artist','https://youtu.be/01234567890',canonicalChannel+'?x=1',canonicalChannel+'/',canonicalChannel.replace('youtube.com','youtube.com.evil.test'),'http://www.youtube.com/channel/UC0123456789012345678901'])assert.equal(oacChannelUrl.safeParse(invalid).success,false,invalid);
+  assert.equal((await oacArtistState(user.id,artist.id)).status,'approved');
+  const oacInput={artistId:artist.id,channelUrl:canonicalChannel,reason:'I own this artist channel and have corrected the rejection issue.',rightsConfirmed:true as const,requestKey:randomUUID()};
+  await assert.rejects(prepareOacApplication(user.id,oacInput),/approved or active/);
+  await assert.rejects(oacArtistState(stranger.id,artist.id));
+  const amendment={...oacInput,channelUrl:'https://www.youtube.com/channel/UC1123456789012345678901'};
+  const changes=await Promise.all([requestOacChannelChange(user.id,amendment),requestOacChannelChange(user.id,amendment)]);
+  assert.equal(changes[0].ticketId,changes[1].ticketId,'Channel-change submissions must reuse the active support case.');
+  await assert.rejects(requestOacChannelChange(user.id,oacInput),/different channel/);
+  const originalOac=await prisma.releaseChangeRequest.findFirstOrThrow({where:{releaseId:release.id,requestType:'distribution_service',requestedChanges:{path:['resource'],equals:`artist:${artist.id}`}}});
+  await prisma.releaseChangeRequestEvent.deleteMany({where:{requestId:originalOac.id,metadata:{path:['providerApproved'],equals:true}}});
+  await prisma.releaseChangeRequest.update({where:{id:originalOac.id},data:{status:'rejected',adminNote:'Channel ownership was not verified. Provide the correct channel-ID link.'}});
+  assert.equal((await oacArtistState(user.id,artist.id)).retryAmount,80);
+  const prepared=await prepareOacApplication(user.id,oacInput);
+  await assert.rejects(createDistributionService(prepared.releaseId,user.id,prepared.operation),/verified INR 80/);
+  const retryOrder=await prisma.distributionOrder.create({data:{userId:user.id,plan:OAC_RETRY_PLAN,amount:80,currency:'INR',razorpayOrderId:'order_oac_fixture',quoteSnapshot:{releaseId:prepared.releaseId,operation:prepared.operation,fingerprint:prepared.fingerprint,previousRequestId:originalOac.id,artistId:artist.id}}});
+  await assert.rejects(fulfillOacRetryPayment(retryOrder.razorpayOrderId),/not been verified/);
+  await prisma.distributionOrder.update({where:{id:retryOrder.id},data:{paymentStatus:'paid',razorpayPaymentId:'pay_oac_fixture'}});
+  const paidOperation={...prepared.operation,paymentOrderId:retryOrder.razorpayOrderId};
+  await assert.rejects(createDistributionService(prepared.releaseId,user.id,{...paidOperation,reason:'This payment must not fund a different application.'}),/does not match/);
+  await prisma.distributionOrder.update({where:{id:retryOrder.id},data:{amount:79}});
+  await assert.rejects(fulfillOacRetryPayment(retryOrder.razorpayOrderId),/not been verified/);
+  await prisma.distributionOrder.update({where:{id:retryOrder.id},data:{amount:80}});
+  const retries=await Promise.all([fulfillOacRetryPayment(retryOrder.razorpayOrderId),fulfillOacRetryPayment(retryOrder.razorpayOrderId)]);
+  assert.equal(retries[0].id,retries[1].id,'Payment replay must create a single application.');
+  await prisma.release.update({where:{id:prepared.releaseId},data:{archivedAt:new Date()}});
+  assert.equal((await fulfillOacRetryPayment(retryOrder.razorpayOrderId)).id,retries[0].id,'A fulfilled payment replay must remain idempotent after its source release is archived.');
+  await prisma.release.update({where:{id:prepared.releaseId},data:{archivedAt:null}});
+  assert((await prisma.distributionOrder.findUniqueOrThrow({where:{id:retryOrder.id}})).fulfilledAt);
+  assert.equal((await oacArtistState(user.id,artist.id)).status,'under_review');
+  await assert.rejects(prepareOacApplication(user.id,{...oacInput,requestKey:randomUUID()}),/approved or active/);
+  await reviewDistributionService(retries[0].id,'approve','The corrected channel and ownership documents were verified.');
+  await prisma.distributionOrder.update({where:{id:retryOrder.id},data:{paymentStatus:'refunded'}});
+  await assert.rejects(submitDistributionService(retries[0].id),/payment requires review/);
+  await reviewDistributionService(retries[0].id,'reject','Payment was reversed before partner submission; review with support.');
+  const secondPrepared=await prepareOacApplication(user.id,{...oacInput,requestKey:randomUUID()});
+  const capturedOrder=await prisma.distributionOrder.create({data:{userId:user.id,plan:OAC_RETRY_PLAN,amount:80,currency:'INR',razorpayOrderId:'order_oac_captured',quoteSnapshot:{releaseId:secondPrepared.releaseId,operation:secondPrepared.operation,fingerprint:secondPrepared.fingerprint,previousRequestId:retries[0].id,artistId:artist.id}}});
+  const subscription=await prisma.subscription.create({data:{userId:user.id,plan:'yearly_plus',status:'active',expiryDate:new Date(Date.now()+86400000)}});
+  await assert.rejects(confirmDistributionPayment({razorpayOrderId:capturedOrder.razorpayOrderId,paymentId:'pay_oac_captured',userId:stranger.id,amountMinor:8000,currency:'INR',source:'browser'}),/authenticated user/);
+  await assert.rejects(confirmDistributionPayment({razorpayOrderId:capturedOrder.razorpayOrderId,paymentId:'pay_oac_captured',userId:user.id,amountMinor:7900,currency:'INR',source:'browser'}));
+  const capturePayload={id:'evt_oac_capture',event:'payment.captured',payload:{payment:{entity:{id:'pay_oac_captured',order_id:capturedOrder.razorpayOrderId,amount:8000,currency:'INR',status:'captured'}}}};
+  const captureEvent=await receiveRazorpayEvent(Buffer.from(JSON.stringify(capturePayload)),capturePayload);
+  await processRazorpayEvent(captureEvent.id);
+  await confirmDistributionPayment({razorpayOrderId:capturedOrder.razorpayOrderId,paymentId:'pay_oac_captured',userId:user.id,amountMinor:8000,currency:'INR',source:'browser'});
+  assert.equal(await prisma.releaseChangeRequest.count({where:{requestedChanges:{path:['oacPaymentOrderId'],equals:capturedOrder.id}}}),1,'Webhook/browser replay must fulfill one paid OAC application.');
+  await assert.rejects(claimDistributionOrderForSubmission({razorpayOrderId:capturedOrder.razorpayOrderId,userId:user.id}),/already been used/);
+  const refundPayload={id:'evt_oac_refund',event:'refund.processed',payload:{refund:{entity:{id:'rfnd_oac',payment_id:'pay_oac_captured',amount:8000,currency:'INR',status:'processed'}}}};
+  await processRazorpayEvent((await receiveRazorpayEvent(Buffer.from(JSON.stringify(refundPayload)),refundPayload)).id);
+  assert.equal((await prisma.distributionOrder.findUniqueOrThrow({where:{id:capturedOrder.id}})).paymentStatus,'refunded');
+  assert.equal((await prisma.subscription.findUniqueOrThrow({where:{id:subscription.id}})).status,'active','An OAC fee refund must never cancel a distribution subscription.');
+
   assert.equal(await prisma.distributionSubmissionAttempt.count({where:{releaseId:release.id}}),0,'No audio ingestion from service requests.');
   assert((await prisma.emailLog.count({where:{userId:user.id,template:'release_amendment_update'}}))>0);
   for(const action of analyticsActions){
@@ -135,7 +193,7 @@ async function main(){
   // HTTP authorization and origin boundaries use the actual route handlers.
   const require=createRequire(import.meta.url);let actor=user.id,adminAllowed=false;
   const fakeAccess={requireUser:async()=>actor?{user:{id:actor,status:'active'}}:{error:NextResponse.json({error:'Unauthorized'},{status:401})},requireAdminPermission:async()=>adminAllowed?{sub:user.id}:{error:NextResponse.json({error:'Forbidden'},{status:403})},requireRecentAdminPermission:async()=>adminAllowed?{sub:user.id}:{error:NextResponse.json({error:'Forbidden'},{status:403})}};
-  function route(file:string){const exports:any={};const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;vm.runInNewContext(code,{exports,Request,Response,Headers,Buffer,process,require:(id:string)=>id==='@/lib/access'?fakeAccess:id==='next/server'?{NextResponse,after:()=>undefined}:id.startsWith('@/')?require('../'+id.slice(2)):require(id)});return exports;}
+  function route(file:string){const exports:any={};const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;vm.runInNewContext(code,{exports,URL,Request,Response,Headers,Buffer,process,require:(id:string)=>id==='@/lib/access'?fakeAccess:id==='next/server'?{NextResponse,after:()=>undefined}:id.startsWith('@/')?require('../'+id.slice(2)):require(id)});return exports;}
   const api=route('app/api/releases/[id]/services/route.ts'),context={params:Promise.resolve({id:String(release.id)})};
   process.env.APP_URL='https://hymn.fixture';process.env.NEXT_PUBLIC_APP_URL='https://hymn.fixture';
   const request=(body:any,origin='https://hymn.fixture')=>new Request('https://hymn.fixture/api/service',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -144,6 +202,12 @@ async function main(){
   actor=stranger.id;assert.equal((await api.GET(new Request('https://hymn.fixture'),context)).status,404);
   actor=user.id;assert.equal((await api.GET(new Request('https://hymn.fixture'),{params:Promise.resolve({id:'not-an-id'})})).status,404);const ownedResponse=await api.GET(new Request('https://hymn.fixture'),context);assert.equal(ownedResponse.status,200);assert.match(ownedResponse.headers.get('cache-control')!,/no-store/);
   const customerRows=(await ownedResponse.json()).requests;assert(customerRows.every((row:any)=>!row.providerReference&&!row.requestedChanges.payload&&!row.requestedChanges.locked));
+  const oacApi=route('app/api/distribution/oac/route.ts');
+  assert.equal((await oacApi.POST(request(oacInput,'https://evil.example'))).status,403);
+  actor=0;assert.equal((await oacApi.GET(new Request('https://hymn.fixture/api/distribution/oac'))).status,401);
+  actor=stranger.id;assert.equal((await oacApi.GET(new Request(`https://hymn.fixture/api/distribution/oac?artistId=${artist.id}`))).status,404);
+  actor=user.id;assert.equal((await oacApi.GET(new Request('https://hymn.fixture/api/distribution/oac?artistId=NaN'))).status,400);const oacResponse=await oacApi.GET(new Request(`https://hymn.fixture/api/distribution/oac?artistId=${artist.id}`));assert.equal(oacResponse.status,200);assert.match(oacResponse.headers.get('cache-control')!,/no-store/);assert(!JSON.stringify(await oacResponse.json()).includes('direNoteArtistId'));
+  assert.equal((await oacApi.POST(request({action:'verify-payment',orderId:'foreign',paymentId:'foreign',signature:'a'.repeat(64)}))).status,400);
   const adminApi=route('app/api/admin/distribution-services/route.ts');assert.equal((await adminApi.GET(new Request('https://hymn.fixture'))).status,403);
   assert.equal((await adminApi.POST(request({id:unknown.id,action:'sync'}))).status,403);
   adminAllowed=true;assert.equal((await adminApi.POST(request({id:unknown.id,action:'submit',confirmation:'WRONG'}))).status,400);adminAllowed=false;
@@ -176,7 +240,7 @@ async function main(){
   const delayed=await deliverEvent('release.rejected',{upc_code:release.upc,status:'rejected'});
   assert.equal((await prisma.release.findUniqueOrThrow({where:{id:release.id}})).status,'LIVE','Delayed rejected event must read current state, not overwrite it.');
   assert.equal((await prisma.auditLog.findFirstOrThrow({where:{entityId:delayed.id,entity:'distribution_webhook'}})).action,'DISTRIBUTION_WEBHOOK_DONE');
-  await deliverEvent('payout.completed',{payout_id:233});assert.equal(await prisma.paymentWebhookEvent.count(),0,'Distribution events do not enter payment credit handlers.');
+  const financialEventsBefore=await prisma.paymentWebhookEvent.count();await deliverEvent('payout.completed',{payout_id:233});assert.equal(await prisma.paymentWebhookEvent.count(),financialEventsBefore,'Distribution events do not enter payment credit handlers.');
   assert(await prisma.adminTask.count({where:{type:'Distribution settlement'}})>0);
   // Takedown consumes verified live age, changes lifecycle only on receipt and verified completion.
   await prisma.releaseChangeRequest.update({where:{id:unknown.id},data:{status:'failed'}});

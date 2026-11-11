@@ -21,6 +21,7 @@ import { ReleaseStageCarousel } from "./release-stage-carousel";
 import { ReleaseNavigationSlot } from "./release-navigation-slot";
 import { loadBioRazorpay as loadRazorpayCheckout } from "@/lib/client-razorpay";
 
+import { YoutubeOacCard } from "./youtube-oac-card";
 import { customerMessage } from "@/lib/customer-message";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { distributionSubmittedUrl, isCompletedDistributionSubmission } from "@/lib/distribution-return";
@@ -4996,12 +4997,7 @@ export function ReleaseForm({
                     ))}
                   </div>
                 </div>
-                <section className="mt-5 rounded-xl border p-5" aria-labelledby="youtube-oac-title" style={{ borderColor: "var(--border)" }}>
-                  <h3 id="youtube-oac-title" className="font-semibold">YouTube OAC</h3>
-                  <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Request a YouTube Official Artist Channel to bring your artist channel and music together. Your verified artist profile needs at least five live releases before HYMN can submit the request.</p>
-                  <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>After distribution, open the release Requests tab and choose YouTube OAC. OAC is separate from Content ID and does not enable audio fingerprinting or monetisation claims.</p>
-                  <a className="btn-outline mt-4 inline-flex" target="_blank" rel="noopener noreferrer" href={initialRelease && ["live", "partially_live", "scheduled", "distributor_processing"].includes(initialRelease.status) ? `/dashboard/releases/${initialRelease.id}?tab=requests&service=request_yt_oac` : "/dashboard/releases"}>Open OAC requests<span className="sr-only"> (opens in a new tab)</span></a>
-                </section>
+                <YoutubeOacCard initialArtistId={tracks[0]?.primaryArtistIds?.[0]} />
                 </div><div className={layoutStyles.deliveryTerritories}><div>
                   <div
                     ref={

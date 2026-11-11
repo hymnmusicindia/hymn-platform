@@ -1,4 +1,5 @@
 import 'server-only';
+import { OAC_RETRY_PLAN, OAC_RETRY_AMOUNT, oacOutcome } from './youtube-oac-contract';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
@@ -27,7 +28,7 @@ export async function callDistributionEndpoint(action: string, payload: Record<s
   return result;
 }
 
-async function buildService(releaseId: number, userId: number, input: ReturnType<typeof serviceRequest.parse>) {
+export async function buildService(releaseId: number, userId: number, input: ReturnType<typeof serviceRequest.parse>) {
   const release = await prisma.release.findFirstOrThrow({where:{id:releaseId,userId,archivedAt:null},include:{tracks:true,user:true,artistProfile:true}});
   if (release.user.status !== 'ACTIVE') throw Error('Your account must be active.');
   if (!['LIVE','PARTIALLY_LIVE','SCHEDULED','DISTRIBUTOR_PROCESSING'].includes(release.status)) throw Error('This service requires a delivered release.');
@@ -45,6 +46,9 @@ async function buildService(releaseId: number, userId: number, input: ReturnType
     if (!artist || artist.userId !== userId || artist.archivedAt || (!/^\d+$/.test(artist.direNoteArtistId || '') || !Number.isSafeInteger(Number(artist.direNoteArtistId)) || Number(artist.direNoteArtistId)<1)) throw Error('HYMN must verify the artist profile identity first.');
     const legacy=await prisma.managedServiceRequest.findFirst({where:{userId,serviceType:'YOUTUBE_OAC',release:{artistProfileId:artist.id},status:{notIn:['completed','failed','rejected','cancelled']}}});
     if(legacy)throw Error(`Existing OAC request #${legacy.id} is still active in Managed services. Track it before submitting another.`);
+    if(await prisma.managedServiceRequest.count({where:{userId,serviceType:'YOUTUBE_OAC',release:{artistProfileId:artist.id},status:'completed'}}))throw Error('This artist already has an approved OAC. Request a channel change through HYMN support.');
+    const unresolvedLegacy=await prisma.managedServiceRequest.count({where:{userId,serviceType:'YOUTUBE_OAC',release:{artistProfileId:artist.id},status:{in:['failed','rejected','cancelled']}}});
+    if(unresolvedLegacy&&!await prisma.releaseChangeRequest.count({where:{requestedByUserId:userId,requestType:'distribution_service',requestedChanges:{path:['resource'],equals:`artist:${artist.id}`}}}))throw Error('HYMN must reconcile the earlier OAC application before another application or payment. Contact support.');
     const live = await prisma.release.count({where:{userId,artistProfileId:artist.id,status:'LIVE',archivedAt:null}});
     if (live < 5) throw Error('An Official Artist Channel requires at least five live releases for this verified artist profile.');
     payload = {artist_id:Number(artist.direNoteArtistId),...fields}; resource = `artist:${artist.id}`;
@@ -86,7 +90,7 @@ async function buildService(releaseId: number, userId: number, input: ReturnType
 
 export async function createDistributionService(releaseId:number,userId:number,raw:unknown) {
   const input=serviceRequest.parse(raw), built=await buildService(releaseId,userId,input);
-  const fingerprint=hash({action:input.action,locked:built.locked,fields:built.input.fields,reason:input.reason});
+  const fingerprint=serviceFingerprint(input,built);
   const result=await prisma.$transaction(async tx=>{
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${releaseId}::integer)`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${built.resource}, 7211))`;
@@ -96,7 +100,20 @@ export async function createDistributionService(releaseId:number,userId:number,r
     if (replay) {if(object(replay.requestedChanges).fingerprint!==fingerprint)throw Error('Submission key was already used for different details.');return replay;}
     const active=await tx.releaseChangeRequest.findFirst({where:{requestType:'distribution_service',status:{in:activeServiceStates},requestedChanges:{path:['resource'],equals:built.resource}}});
     if (active) {if(object(active.requestedChanges).fingerprint===fingerprint)return active;throw Error(`Request #${active.id} is still active for this recording or artist. Track it before submitting another.`);}
-    const request=await tx.releaseChangeRequest.create({data:{releaseId,requestedByUserId:userId,requestType:'distribution_service',reason:input.reason,requestedChanges:json({serviceOperation:built.input,locked:built.locked,payload:built.payload,resource:built.resource,fingerprint,requestKey:input.requestKey,summary:[{label:distributionServices[input.action].label,before:`${built.track.title} · ${built.track.isrc}`,after:input.reason}]})}});
+    let paidOrderId:number|undefined;
+    if(input.action==='request_yt_oac'){
+      const history=await tx.releaseChangeRequest.findMany({where:{requestType:'distribution_service',requestedByUserId:userId,requestedChanges:{path:['resource'],equals:built.resource}},orderBy:{id:'desc'},include:{events:true}});
+      if(history.some(row=>oacOutcome(row)==='approved'))throw Error('This artist already has an approved OAC. Use the channel-change support process.');
+      if(history[0]&&oacOutcome(history[0])==='rejected'){
+        if(!input.paymentOrderId)throw Error('A rejected OAC application requires a verified INR 80 resubmission payment. Open the OAC popup to continue.');
+        const payment=await tx.distributionOrder.findUnique({where:{razorpayOrderId:input.paymentOrderId}});
+        const snapshot=object(payment?.quoteSnapshot);
+        if(!payment||payment.userId!==userId||payment.plan!==OAC_RETRY_PLAN||payment.amount!==OAC_RETRY_AMOUNT||payment.currency!=='INR'||payment.paymentStatus!=='paid'||!payment.razorpayPaymentId||payment.fulfilledAt||snapshot.previousRequestId!==history[0].id||snapshot.fingerprint!==fingerprint)throw Error('The OAC payment is missing, already used or does not match this application.');
+        await tx.distributionOrder.update({where:{id:payment.id},data:{fulfilledAt:new Date()}});
+        paidOrderId=payment.id;
+      }else if(input.paymentOrderId)throw Error('No paid resubmission is needed for this application.');
+    }
+    const request=await tx.releaseChangeRequest.create({data:{releaseId,requestedByUserId:userId,requestType:'distribution_service',reason:input.reason,requestedChanges:json({...(paidOrderId?{oacPaymentOrderId:paidOrderId}:{}),serviceOperation:built.input,locked:built.locked,payload:built.payload,resource:built.resource,fingerprint,requestKey:input.requestKey,summary:[{label:distributionServices[input.action].label,before:`${built.track.title} · ${built.track.isrc}`,after:input.reason}]})}});
     const event=await tx.releaseChangeRequestEvent.create({data:{requestId:request.id,actorType:'user',actorId:userId,newStatus:'submitted',note:`${distributionServices[input.action].label}: submitted for HYMN review.`}});
     await enqueueAmendmentUpdate(tx,request.id,event.id);
     return request;
@@ -174,6 +191,10 @@ export async function submitDistributionService(id:number,actorId?:number|null) 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${built.resource}, 7211))`;
     const fresh=await tx.releaseChangeRequest.findUniqueOrThrow({where:{id}});
     if(fresh.status!=='approved'||fresh.updatedAt.getTime()!==request.updatedAt.getTime())throw Error('Request is no longer approved for this send.');
+    if(changes.oacPaymentOrderId){
+      const payment=await tx.distributionOrder.findUnique({where:{id:Number(changes.oacPaymentOrderId)}});
+      if(!payment||payment.paymentStatus!=='paid'||payment.userId!==request.requestedByUserId)throw Error('OAC resubmission payment requires review before sending.');
+    }
     const write=await tx.releaseChangeRequestEvent.findFirst({where:{requestId:id,metadata:{path:['serviceWrite'],equals:true}}});
     if(write)throw Error('A send is already recorded. Reconcile its outcome instead of resending.');
     const other=await tx.releaseChangeRequestEvent.findFirst({where:{requestId:{not:id},request:{releaseId:request.releaseId,status:{in:activeServiceStates}},AND:[{metadata:{path:['supportWrite'],equals:true}},{metadata:{path:['isrc'],equals:built.track.isrc!}}]}});
@@ -242,7 +263,7 @@ export async function syncDistributionService(id:number) {
     const expectedTypes:Partial<Record<DistributionServiceAction,string>>={request_takedown:'takedown',request_yt_oac:'YT OAC',request_instagram_linking:'Instagram Profile Linking',request_yt_claim:'YT Claim Release',request_facebook_claim:'Facebook Claim Release',request_tiktok_claim:'TikTok Claim Release',request_soundcloud_claim:'SoundCloud Claim Release'};
     if(!row || String(row.request_type||'').toLowerCase()!==expectedTypes[action]?.toLowerCase() || (action==='request_takedown'?String(row.upc||row.upc_code)!==locked.upc:action==='request_yt_oac'?row.artist_id!==undefined && Number(row.artist_id)!==Number(object(changes.payload).artist_id):String(row.isrc)!==locked.isrc))throw Error('Partner request identity mismatch.');
     if(action.endsWith('_claim') && (!row.url || normalizeClaimLink(action,String(row.url))!==object(changes.payload).url))throw Error('Claim URL does not match the submitted request.');
-    if(row.status==='rejected')return recordState(id,'failed',`The request was declined. ${customerBrandText(String(row.notes||row.remarks||'HYMN will review the recorded outcome.').slice(0,1500))}`,{providerFailed:true,providerNote:String(row.notes||row.remarks||'').slice(0,2000)});
+    if(row.status==='rejected')return recordState(id,'failed',`The request was declined. ${customerBrandText(String(row.notes||row.remarks||'HYMN will review the recorded outcome.').slice(0,1500))}`,{providerFailed:true,providerRejected:true,providerNote:String(row.notes||row.remarks||'').slice(0,2000)});
     if(row.status==='approved')return recordState(id,'processing_manually','The partner approved the request. HYMN is verifying the actual result before marking it complete.',{providerApproved:true});
   }
   return request;
@@ -278,3 +299,5 @@ export async function processDistributionServiceQueue(limit=2) {
   for(const row of rows){try{await syncDistributionService(row.id);}catch{await createAdminTaskOnce({eventKey:`distribution-service:${row.id}:sync`,type:'Distribution service',priority:'high',title:'Service status needs verification',body:'The status read could not be matched or completed. Inspect the recorded receipt; do not repeat the write.',href:'/admin/distribution-services',entityType:'release',entityId:row.releaseId});}finally{await prisma.releaseChangeRequest.updateMany({where:{id:row.id,status:{in:['submitted_to_partner','processing_manually']}},data:{updatedAt:new Date()}});}}
   return rows.length;
 }
+
+export function serviceFingerprint(input:ReturnType<typeof serviceRequest.parse>,built:Awaited<ReturnType<typeof buildService>>){return hash({action:input.action,locked:built.locked,fields:built.input.fields,reason:input.reason});}

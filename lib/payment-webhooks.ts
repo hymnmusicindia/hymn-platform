@@ -13,6 +13,7 @@ import { applyStudioDispute, recordStudioRefund } from "@/lib/studio-refunds";
 import { syncSettlement } from "@/lib/gateway-settlements";
 import { refreshRouteSettlement, refreshRouteTransfer } from "@/lib/razorpay-route";
 import { paymentRefundState, paymentDisputeState } from "@/lib/payment-refund-state";
+import { OAC_RETRY_PLAN } from './youtube-oac-contract';
 
 type RazorpayEntity = { id?: string; order_id?: string; payment_id?: string; subscription_id?: string; invoice_id?: string; plan_id?: string; amount?: number; currency?: string; status?: string; error_code?: string; error_description?: string; current_start?: number | null; current_end?: number | null; start_at?: number | null; ended_at?: number | null; charge_at?: number | null; created_at?: number; notes?: Record<string, unknown> };
 type RazorpayPayload = { event?: string; id?: string; payload?: { dispute?: { entity?: RazorpayEntity }; settlement?: { entity?: RazorpayEntity }; transfer?: { entity?: RazorpayEntity }; payment?: { entity?: RazorpayEntity }; order?: { entity?: RazorpayEntity }; refund?: { entity?: RazorpayEntity }; subscription?: { entity?: RazorpayEntity } } };
@@ -145,12 +146,13 @@ export async function confirmDistributionPayment(input: { razorpayOrderId: strin
     }
     const updated = alreadyPaid ? order : await tx.distributionOrder.update({ where: { id: order.id }, data: { paymentStatus: "paid", razorpayPaymentId: input.paymentId } });
     if (!alreadyPaid) await tx.auditLog.create({ data: { actorId: input.userId ?? null, action: "DISTRIBUTION_PAYMENT_CONFIRMED", entity: "distribution_order", entityId: String(order.id), metadata: { source: input.source, paymentId: input.paymentId } } });
-    await accrueReferralCommission(tx, "distribution_order", order.id);
-    const qualification = !alreadyPaid ? await qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "distribution_order", transactionId: order.id, paymentId: input.paymentId, paidAmountInr: order.amount, source: input.source }) : { qualified: false as const, reason: "already_paid" as const };
+    if(order.plan!==OAC_RETRY_PLAN)await accrueReferralCommission(tx, "distribution_order", order.id);
+    const qualification = !alreadyPaid && order.plan!==OAC_RETRY_PLAN ? await qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "distribution_order", transactionId: order.id, paymentId: input.paymentId, paidAmountInr: order.amount, source: input.source }) : { qualified: false as const, reason: "already_paid" as const };
     return { updated, qualification };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });
   await recordVerifiedAcquisitionRevenue({ sourceType: "distribution_order", sourceId: String(result.updated.id), customerId: result.updated.userId, paymentId: input.paymentId, currency: result.updated.currency, recognisedRevenueMinor: result.updated.amount * 100 });
   if (result.qualification.qualified) await sendReferralRewardEmails(result.qualification.referralId).catch(() => undefined);
+  if(result.updated.plan===OAC_RETRY_PLAN)await (await import('./youtube-oac')).fulfillOacRetryPayment(input.razorpayOrderId);
   return result.updated;
 }
 
@@ -165,7 +167,7 @@ export async function confirmDistributionEntitlement(input: { razorpayOrderId: s
 }
 
 export async function claimDistributionOrderForSubmission(input: { razorpayOrderId: string; userId: number }) {
-  const claimed = await prisma.distributionOrder.updateMany({ where: { razorpayOrderId: input.razorpayOrderId, userId: input.userId, paymentStatus: "paid", fulfilledAt: null }, data: { fulfilledAt: new Date() } });
+  const claimed = await prisma.distributionOrder.updateMany({ where: { razorpayOrderId: input.razorpayOrderId, userId: input.userId, plan:{not:OAC_RETRY_PLAN}, paymentStatus: "paid", fulfilledAt: null }, data: { fulfilledAt: new Date() } });
   if (claimed.count !== 1) throw new Error("This payment or entitlement has already been used for a release.");
 }
 
@@ -278,7 +280,7 @@ async function applyPaymentState(input: { razorpayOrderId: string; paymentId: st
       const fullReversal = refund?.full ?? (["refunded", "charged_back"].includes(input.state) && input.amountMinor === distribution.amount * 100);
       const state = refund?.state ?? (["refunded", "charged_back"].includes(input.state) && !fullReversal ? "partial_refund_review" : input.state);
       await tx.distributionOrder.update({ where: { id: distribution.id }, data: { paymentStatus: state } });
-      if (fullReversal && distribution.plan !== "one_time") await tx.subscription.updateMany({ where: { userId: distribution.userId, status: "active" }, data: { status: "cancelled" } });
+      if (fullReversal && !["one_time",OAC_RETRY_PLAN].includes(distribution.plan)) await tx.subscription.updateMany({ where: { userId: distribution.userId, status: "active" }, data: { status: "cancelled" } });
       if (fullReversal) await reverseReferralForTransactionInTransaction(tx, { transactionType: "distribution_order", transactionId: distribution.id, reason: state as "refunded" | "charged_back" });
       await tx.auditLog.create({ data: { action: `RAZORPAY_${input.state.toUpperCase()}`, entity: "distribution_order", entityId: String(distribution.id), metadata: { eventId: input.eventId, paymentId: input.paymentId } } });
       return;

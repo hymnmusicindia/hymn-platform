@@ -40,6 +40,11 @@ export async function reconcilePayments() {
   }
   const distributionOrders = await prisma.distributionOrder.findMany({ where: { paymentStatus: "paid" } });
   for (const order of distributionOrders) {
+    if(order.plan==='youtube_oac_retry'){
+      try{if(!order.razorpayPaymentId)throw Error('Captured payment reference missing.');await confirmDistributionPayment({razorpayOrderId:order.razorpayOrderId,paymentId:order.razorpayPaymentId,source:'reconciliation'});await resolveAdminTask(`payment:oac:${order.id}`,'OAC payment reconciled.');}
+      catch{issues.push({key:`payment:oac:${order.id}`,type:'distribution',message:`Paid OAC resubmission #${order.id} needs manual recovery. Do not charge again.`,autoRepaired:false});await createAdminTaskOnce({eventKey:`payment:oac:${order.id}`,type:'OAC payment recovery',priority:'high',title:'Paid OAC application needs recovery',body:issues.at(-1)!.message,href:'/admin/distribution-services',entityType:'distribution_order',entityId:order.id});}
+      continue;
+    }
     if (order.razorpayPaymentId) await confirmDistributionPayment({ razorpayOrderId: order.razorpayOrderId, paymentId: order.razorpayPaymentId, source: "reconciliation" });
     const key = `payment:distribution:${order.id}`;
     // A ₹0 order with no credits spent was covered by the customer's plan: no

@@ -1,3 +1,4 @@
+import { oacChannelUrl } from './youtube-oac-contract';
 import { z } from 'zod';
 import { videoGenres,videoLanguages } from './distribution-video-values';
 
@@ -41,7 +42,7 @@ const tiktokVideo=hostLink(['tiktok.com','vm.tiktok.com','vt.tiktok.com','m.tikt
 const soundcloudTrack=hostLink(['soundcloud.com','m.soundcloud.com','on.soundcloud.com']).refine(value=>{const url=new URL(value);return url.hostname==='on.soundcloud.com'?/^\/[\w-]+\/?$/.test(url.pathname):/^\/[^/]+\/[^/]+\/?$/.test(url.pathname);},'Use a SoundCloud track link.');
 const fields = {
   request_instagram_linking: z.object({ instagram_url: instagramProfile, facebook_url: facebookProfile, spotifyTrackUrl: spotify, spotifyLiveConfirmed: z.literal(true) }).strict(),
-  request_yt_oac: z.object({ channel_url: hostLink(['youtube.com']).refine(value=>/^\/(?:channel\/UC[\w-]{22}|@[^/]+|c\/[^/]+|user\/[^/]+)\/?$/.test(new URL(value).pathname),'Use your YouTube channel link.'), channel_id: z.string().regex(/^UC[\w-]{22}$/) }).strict().refine(v => !new URL(v.channel_url).pathname.startsWith('/channel/') || new URL(v.channel_url).pathname.replace(/\/$/,'') === `/channel/${v.channel_id}`, 'Channel URL and ID must agree.'),
+  request_yt_oac: z.object({ channel_url:oacChannelUrl, channel_id:z.string().regex(/^UC[\w-]{22}$/) }).strict().refine(v=>v.channel_url.split('/').at(-1)===v.channel_id,'Channel URL and ID must agree.'),
   request_yt_claim: z.object({ url: youtube, spotifyTrackUrl: spotify, spotifyLiveConfirmed: z.literal(true) }).strict(),
   request_facebook_claim: z.object({ url: facebookVideo, spotifyTrackUrl: spotify, spotifyLiveConfirmed: z.literal(true) }).strict(),
   request_tiktok_claim: z.object({ url: tiktokVideo, spotifyTrackUrl: spotify, spotifyLiveConfirmed: z.literal(true) }).strict(),
@@ -50,7 +51,7 @@ const fields = {
   ingest_video: z.object({ video_title: text, video_url: publicHttps, thumbnail_url: publicHttps, audio_url: publicHttps, metadata_language: text.refine(v=>(videoLanguages as readonly string[]).includes(v),'Choose a supported video language.'), video_language: text.refine(v=>(videoLanguages as readonly string[]).includes(v),'Choose a supported video language.'), genre: text.refine(v=>Boolean(videoGenres[v]),'Choose a supported video genre.'), subgenre: text, release_date: day, tags: z.string().trim().min(1).max(500), video_description: z.string().trim().min(1).max(5000), c_line: text, p_line: text, director: text.optional(), explicit: z.boolean().default(false) }).strict().refine(v=>videoGenres[v.genre]?.includes(v.subgenre),'Choose a subgenre belonging to this video genre.'),
   register_master_work: z.object({ claim: text, claim_percent: z.number().positive().max(100), coll_start_date: day, coll_end_date: day, duration: z.string().regex(/^\d{2,3}:[0-5]\d$/).optional() }).strict().refine(v => v.coll_end_date > v.coll_start_date, 'Collection end must follow collection start.')
 };
-export const serviceRequest = z.object({ action: z.enum(serviceActions as [DistributionServiceAction,...DistributionServiceAction[]]), trackId: z.number().int().positive(), reason: z.string().trim().min(10).max(2000), rightsConfirmed: z.literal(true), fields: z.record(z.string(),z.unknown()), requestKey: z.string().uuid() }).strict();
+export const serviceRequest = z.object({ action: z.enum(serviceActions as [DistributionServiceAction,...DistributionServiceAction[]]), trackId: z.number().int().positive(), reason: z.string().trim().min(10).max(2000), rightsConfirmed: z.literal(true), fields: z.record(z.string(),z.unknown()), requestKey: z.string().uuid(), paymentOrderId:z.string().max(100).optional() }).strict();
 export function parseServiceFields(action: DistributionServiceAction, input: unknown) { return fields[action].parse(input) as Record<string, any>; }
 export const activeServiceStates = ['submitted','under_review','approved','processing_manually','submitted_to_partner','information_required'];
 export const distributionServiceStatusLabel=(status:string)=>({submitted:'Awaiting HYMN review',under_review:'HYMN review in progress',approved:'Approved for submission',processing_manually:'HYMN verification needed',submitted_to_partner:'Partner processing',completed:'Completed',failed:'Needs attention',rejected:'Not approved',information_required:'More information needed'}[status]||'Service update');

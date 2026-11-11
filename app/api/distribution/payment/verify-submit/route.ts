@@ -55,6 +55,7 @@ export async function POST(request: Request) {
     }
     const persistedOrder = await prisma.distributionOrder.findUnique({ where: { razorpayOrderId: parsed.razorpay_order_id } });
     if (!persistedOrder || persistedOrder.userId !== session.sub) return NextResponse.json({ error: "Distribution order not found." }, { status: 404 });
+    if(persistedOrder.plan==='youtube_oac_retry')return NextResponse.json({error:'This payment is for an OAC resubmission, not release distribution.'},{status:400});
     const contentIdAccess = await prisma.contentIdAccess.findUnique({ where: { userId: session.sub }, select: { status: true, channelUrl: true, distributionOrderId: true } });
     const contentIdAccessStatus = normalizeContentIdAccessStatus(contentIdAccess?.status);
     const storedQuote = persistedOrder.quoteSnapshot && typeof persistedOrder.quoteSnapshot === "object" && !Array.isArray(persistedOrder.quoteSnapshot)
