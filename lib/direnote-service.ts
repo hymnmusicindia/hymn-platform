@@ -21,7 +21,7 @@ import { ensureDireNoteArtistMapping, flagArtistMappingReview } from "@/lib/dire
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 import { confirmsDireNoteWithdrawal } from "@/lib/direnote/v24-reconciliation";
 import { fetchBoundReleaseQcReport } from "@/lib/direnote-qc-store";
-import { qcMatchCorrectionNotes, providerQcSourceUpc } from "@/lib/direnote-qc-details";
+import { providerQcSourceUpc } from "@/lib/direnote-qc-details";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { direNoteQcCorrectionPayload } from "@/lib/direnote-qc-report";
 
@@ -455,7 +455,8 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       const sourceBinding=record(record(release.metadata).direNote);
       const sourceUpc = (sourceBinding.qcSourceAttemptId===attempt.id ? normalizeDireNoteUpc(sourceBinding.qcSourceUpc) : null) ?? providerQcSourceUpc(currentPayload) ?? lookupUpc;
       const { raw: qc, report } = await fetchBoundReleaseQcReport({ releaseId, attemptId: attempt.id, upc: lookupUpc, sourceUpc, tracks: mappingTracks, reviewFingerprint, actorId, timeoutMs: requestTimeout(15000) });
-      if (qc) {
+      if (!report) throw new Error("Current QC report unavailable; historical evidence was withheld.");
+      if (qc && !providerCorrections.length) {
         // Bind source report rows to verified local ISRCs before extracting explicit failures.
         const verifiedTracks = Array.isArray(qc.tracks) ? qc.tracks.map((row, index) => {
           const remote = record(row);
@@ -465,17 +466,12 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         const detailed = extractDireNoteCorrections(direNoteQcCorrectionPayload({ ...qc, tracks: verifiedTracks }), mappingTracks, releaseId, attempt.id, true);
         for (const issue of detailed) if (!providerCorrections.some(existing => existing.fingerprint === issue.fingerprint)) providerCorrections.push(issue);
       }
-      if (report?.verified) {
-        const reportFingerprint = createHash('sha256').update(JSON.stringify(report.tracks.map(track=>({localTrackId:track.localTrackId,sourceIsrc:track.sourceIsrc,matches:track.matches})))).digest('hex');
-        for (const note of qcMatchCorrectionNotes(report)) {
-          const detailTrack = report.tracks[Number(note.field.split('.')[1])];
-          const localIndex = mappingTracks.findIndex(track => track.id === detailTrack.localTrackId);
-          if (localIndex < 0) continue;
-          const fingerprint = createHash('sha256').update(`${attempt.id}:${detailTrack.localTrackId}:${reportFingerprint}`).digest('hex');
-          providerCorrections.push({ ...note, field: `tracks.${localIndex}.providerQc`, fingerprint });
-        }
-      }
-    } catch (error) { console.warn("Track QC enrichment deferred; review remarks remain available", { releaseId, error: String(redactDireNoteDiagnostic(error instanceof Error ? error.message : "QC unavailable")) }); }
+
+    } catch (error) {
+      const message=String(redactDireNoteDiagnostic(error instanceof Error ? error.message : "QC unavailable"));
+      console.warn("Track QC enrichment deferred; review remarks remain available", {releaseId,error:message});
+      await createAdminTaskOnce({eventKey:`qc-report-integrity:${releaseId}:${attempt.id}`,type:"QC report integrity",priority:"high",title:"Current QC report needs verification",body:message,href:`/admin/releases/${releaseId}`,entityType:"release",entityId:releaseId});
+    }
   }
   // DireNote uses Rejected for fixable review requests too. Actionable remarks
   // must enter the correction workflow; a bare rejection remains a rejection.

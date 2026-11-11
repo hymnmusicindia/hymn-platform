@@ -4,7 +4,7 @@ import { matchDireNoteTrack } from '@/lib/direnote-corrections';
 export type QcLocalTrack = {id:number; title:string; isrc:string|null; trackNumber:number|null;providerTrackId?:string|null};
 export type QcMatch = {title:string;artists:string[];isrc:string;label:string;score:number|null;startMs:number|null;endMs:number|null;referenceStartMs:number|null;referenceEndMs:number|null;durationSeconds:number|null;rightsOwners:string[];distributors:string[];policies:string[];spotifyUrl:string|null;youtubeUrl:string|null};
 export type QcTrackDetail = {localTrackId:number|null;title:string;isrc:string;sourceIsrc:string;trackNumber:number;scanned:boolean;analysisAvailable:boolean;matches:QcMatch[];isrcLookup:string;upcLookup:string;aiPrediction:string;notes:string[]};
-export type ReleaseQcReport = {version:1;releaseId:number;attemptId:number;currentUpc:string;sourceUpc:string;fetchedAt:string;provenance:'provider_api'|'partner_supplied';verified:boolean;tracks:QcTrackDetail[]};
+export type ReleaseQcReport = {version:1;reviewFingerprint?:string;releaseId:number;attemptId:number;currentUpc:string;sourceUpc:string;fetchedAt:string;provenance:'provider_api'|'partner_supplied';verified:boolean;tracks:QcTrackDetail[]};
 export const qcObject=(v:unknown):Record<string,unknown>=>{if(typeof v==='string'){try{return qcObject(JSON.parse(v));}catch{return {};}}return v && typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{};};
 const text=(v:unknown)=>typeof v==='string'?v.replace(/[\u0000-\u001f]/g,' ').trim().slice(0,1000):'';
 const number=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0?v:null;
@@ -14,7 +14,7 @@ const unique=(v:string[])=>[...new Set(v)].sort();
 const titleKey=(v:string)=>v.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
 const isrcKey=(v:unknown)=>text(v).replace(/[\s-]/g,'').toUpperCase();
 
-export function buildReleaseQcReport(raw:unknown, context:{releaseId:number;attemptId:number;currentUpc:string;sourceUpc:string;tracks:QcLocalTrack[];provenance?:ReleaseQcReport['provenance'];now?:string;verifiedAliases?:Record<string,number>}):ReleaseQcReport {
+export function buildReleaseQcReport(raw:unknown, context:{releaseId:number;attemptId:number;currentUpc:string;sourceUpc:string;tracks:QcLocalTrack[];reviewFingerprint?:string;provenance?:ReleaseQcReport['provenance'];now?:string;verifiedAliases?:Record<string,number>}):ReleaseQcReport {
   const report=qcObject(raw); const receivedUpc=normalizeDireNoteUpc(report.upc_code ?? report.upc);
   if(report.success!==true || receivedUpc!==context.sourceUpc)throw Error('QC report does not confirm the requested source UPC.');
   const remote=rows(report.tracks);if(!remote.length || remote.length!==context.tracks.length || (typeof report.track_count==='number'&&report.track_count!==remote.length))throw Error('QC report track count does not match this submission.');
@@ -42,7 +42,7 @@ export function buildReleaseQcReport(raw:unknown, context:{releaseId:number;atte
     const lookup=qcObject(t.isrc_lookup),upcLookup=qcObject(t.upc_lookup);
     return {localTrackId:local?.id ?? null,title:local?.title ?? (text(t.track_name)||`Track ${index+1}`),isrc:local?.isrc ?? '',sourceIsrc:text(t.isrc),trackNumber:local?.trackNumber ?? index+1,scanned:t.scanned===true,analysisAvailable:Object.keys(acr).length>0,matches,isrcLookup:[text(lookup.status),text(lookup.isrc)].filter(Boolean).join(' · '),upcLookup:[text(upcLookup.status),text(upcLookup.upc)].filter(Boolean).join(' · '),aiPrediction:text(rows(results.ai_detection)[0]?.prediction),notes:[]};
   });
-  return {version:1,releaseId:context.releaseId,attemptId:context.attemptId,currentUpc:context.currentUpc,sourceUpc:context.sourceUpc,fetchedAt:context.now ?? new Date().toISOString(),provenance:context.provenance ?? 'provider_api',verified:used.size===context.tracks.length,tracks:tracks.sort((a,b)=>a.trackNumber-b.trackNumber)};
+  return {version:1,reviewFingerprint:context.reviewFingerprint,releaseId:context.releaseId,attemptId:context.attemptId,currentUpc:context.currentUpc,sourceUpc:context.sourceUpc,fetchedAt:context.now ?? new Date().toISOString(),provenance:context.provenance ?? 'provider_api',verified:used.size===context.tracks.length,tracks:tracks.sort((a,b)=>a.trackNumber-b.trackNumber)};
 }
 
 export function qcReportSummary(report:ReleaseQcReport){return report.tracks.map(t=>{
