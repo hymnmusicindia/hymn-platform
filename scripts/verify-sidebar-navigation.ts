@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { studioDestinations, usesHymnStudioShell } from "../lib/studio-navigation";
+import { showsStudioLibrary, studioDestinations, usesHymnStudioShell } from "../lib/studio-navigation";
 import { workspaceGroupDestination, workspaceGroupForPath } from "../lib/workspace-navigation";
 import { consistentWorkspaceNavigation, workspaceGroups } from "../lib/workspace-navigation";
 const producer = [
@@ -29,3 +29,6 @@ assert.ok(!legacy.some(item => ['files', 'purchases'].includes(item.key)));
 const admin = [{ key: "overview", label: "Operations Overview", group: "Command Center" }];
 assert.deepEqual(consistentWorkspaceNavigation(admin), admin);
 console.log("Shared creator menus, producer callbacks, unique keys and admin permissions preserved.");
+
+for(const path of ["/", "/home", "/beat-store", "/promotion", "/promotion/youtube-oac", "/analytics", "/payout", "/distribution/start", "/dashboard/releases", "/admin"]){assert.equal(showsStudioLibrary(path),false,`Library must not appear on ${path}`);}
+for(const path of ["/studio", "/studio/engineer", "/dashboard", "/dashboard/customer", "/producer/dashboard", "/library", "/dashboard/purchases"]){assert.equal(showsStudioLibrary(path),true,`Studio library remains accessible on ${path}`);}

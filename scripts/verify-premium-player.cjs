@@ -20,7 +20,7 @@ function audioFixture() {
   const css = await require('postcss')([require('tailwindcss')({ content: ['./components/**/*.{ts,tsx}'], theme: { extend: {} }, plugins: [] })]).process(globalStyles.join('\n'), { from: 'app/globals.css' });
   const browser = await chromium.launch();
   try {
-    for (const width of [1440, 768, 390, 320]) {
+    for (const width of (process.env.PLAYER_WIDTH?[Number(process.env.PLAYER_WIDTH)]:[1440, 768, 390, 320])) {
       const page = await browser.newPage({ viewport: { width, height: 860 }, hasTouch: width <= 900, isMobile: width <= 600 });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       const waveformRequests = [], audioFetches = [];
@@ -81,10 +81,10 @@ function audioFixture() {
       await page.getByRole('button', { name: 'Share Midnight Motion', exact: true }).click(); await expect.poll(() => page.evaluate(() => window.copiedLink)).toBe('https://hymn.test/beat-store/producers/hymn-sessions#beat-1');
       await page.getByRole('button', { name: 'More beat actions', exact: true }).click();
       const actions = page.getByRole('dialog', { name: 'Beat actions for Midnight Motion', exact: true }); await expect(actions).toBeVisible();
-      const box = await actions.boundingBox(); assert(box.x >= -1 && box.x + box.width <= width + 1, 'Actions panel must remain inside the viewport');
+      const box = await actions.boundingBox(); assert(box.x >= -1 && box.x + box.width <= width + 1, 'Actions panel must remain inside the viewport '+JSON.stringify({width,box,viewport:await page.evaluate(()=>({innerWidth,client:document.documentElement.clientWidth}))}));
       await expect(actions.getByRole('button', { name: /Download free personal-use/ })).toBeVisible(); await expect(actions.getByRole('slider', { name: 'Preview volume' })).toBeVisible();
       const volume = actions.getByRole('slider', { name: 'Preview volume' });
-      await expect(volume).toHaveCSS('accent-color', 'rgb(255, 255, 255)');
+      await expect(volume).toHaveCSS('accent-color', await actions.evaluate(el=>getComputedStyle(el).color));const playerBounds=await player.boundingBox();assert(playerBounds.y-box.y-box.height>=15,'Actions popup keeps a clear gap above playback');assert((await actions.evaluate(el=>getComputedStyle(el).backdropFilter)).includes('blur(24px)'));assert(await actions.evaluate(el=>!el.closest('.hymn-player')),'Popup blur escapes the player backdrop root');
       await expect(volume).toHaveCSS('background-size', '100% 2px');
       await expect(volume).toHaveCSS('height', '24px');
       await volume.focus(); await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight');

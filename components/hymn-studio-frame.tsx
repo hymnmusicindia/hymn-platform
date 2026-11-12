@@ -1,9 +1,10 @@
 "use client";
 
 import Link from 'next/link';
+import {usePathname} from 'next/navigation';
 import { useContext, useLayoutEffect, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowUpRight, Bell, ChartNoAxesCombined, CircleHelp, CreditCard, Disc3, Folder, Gift, Headphones, House, Menu, Megaphone, Music2, Plus, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Users, Wallet, X } from 'lucide-react';
-import { studioDestinations, studioTools } from '@/lib/studio-navigation';
+import { showsStudioLibrary, studioDestinations, studioTools } from '@/lib/studio-navigation';
 import s from './hymn-studio.module.css';
 import { StudioFrameContext, type StudioFrameConfiguration } from './persistent-workspace-context';
 import { SlidingMenu } from './sliding-menu';
@@ -22,10 +23,12 @@ export function StudioFrameView<T extends string>({ children, workspaceKind, act
   const [finder, setFinder] = useState('');
   const finderInput = useRef<HTMLInputElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const pathname = usePathname();
   const producer = workspaceKind === 'producer';
   const canProduce = user?.role === 'producer' || user?.role === 'admin';
   const items: NavItem[] = producer ? [...navItems.map(item => ({ ...item, group: item.group === 'Home' ? 'Workspace' : item.group || 'Producer tools' })), {key:'library',label:'My library',group:'Workspace',href:'/library'},{key:'deliveries',label:'Requested buyer files',group:'Beatstore',href:'/producer/deliveries'},{key:'engineer-tools',label:'Engineer workspace',group:'Mixing / Mastering',href:'/studio/engineer'}] : [...studioDestinations];
-  const groups = Array.from(new Set(items.map(item => item.group)));
+  const visibleItems = items.filter(item => item.key !== 'library' || showsStudioLibrary(pathname));
+  const groups = Array.from(new Set(visibleItems.map(item => item.group)));
   const current = items.find(item => item.key === activeKey);
   useEffect(() => { if (finderOpen) finderInput.current?.focus(); }, [finderOpen]);
   useEffect(() => {
@@ -36,14 +39,14 @@ export function StudioFrameView<T extends string>({ children, workspaceKind, act
     document.addEventListener('keydown', key); return () => document.removeEventListener('keydown', key);
   }, []);
   const closeFinder = () => { setFinderOpen(false); setFinder(''); trigger.current?.focus(); };
-  const toolLinks = [...items.map(item => ({ title: item.label, href: item.href, key: item.key })), ...studioTools.map(tool => ({ ...tool, key: undefined }))];
+  const toolLinks = [...visibleItems.map(item => ({ title: item.label, href: item.href, key: item.key })), ...studioTools.map(tool => ({ ...tool, key: undefined }))];
   return <div className={s.studio} data-hymn-studio="true" data-mode={producer ? 'producer' : 'artist'}>
     <a className={s.skip} href="#hymn-studio-content">Skip to Studio content</a>
     <div className={s.mobileBar}><button type="button" aria-label="Toggle Studio navigation" aria-expanded={mobileOpen} onClick={() => setMobileOpen(value => !value)}><Menu size={20}/></button><Link prefetch={false} href="/studio" aria-label="HYMN Studio home"><span>Workspace</span></Link><button type="button" aria-label="Find a Studio tool" onClick={() => setFinderOpen(true)}><Search size={19}/></button></div>
     {mobileOpen && <button className={s.scrim} aria-label="Close Studio navigation" onClick={() => setMobileOpen(false)}/>}
     <aside className={s.rail} data-open={mobileOpen} aria-label="Studio navigation">
       <button ref={trigger} className={s.finderButton} onClick={() => setFinderOpen(true)}><Search size={16}/>Find a tool<kbd>⌘ K</kbd></button>
-      <nav className={s.navigation}><SlidingMenu menuKey={items.map(item => item.key).join('|')}>{groups.map(group => <div key={group}><p>{group}</p>{items.filter(item => item.group === group).map(item => {
+      <nav className={s.navigation}><SlidingMenu menuKey={visibleItems.map(item => item.key).join('|')}>{groups.map(group => <div key={group}><p>{group}</p>{visibleItems.filter(item => item.group === group).map(item => {
         const inside = !producer && ['analytics','promotions','content-id','collaborators','subscription','referral','messages','settings','support','account','overview'].includes(item.key);
         const content = <><StudioIcon name={studioDestinations.find(dest => dest.key === item.key)?.icon || (item.key === 'upload' ? 'disc' : 'music')}/><span>{item.label}</span>{item.key === 'messages' && notificationCount > 0 ? <b>{notificationCount}</b> : null}</>;
         return item.href && !inside ? <Link prefetch={false} key={item.key} href={item.href} aria-current={activeKey === item.key ? 'page' : undefined} onClick={() => setMobileOpen(false)}>{content}</Link> : <button type="button" key={item.key} aria-current={activeKey === item.key ? 'page' : undefined} onClick={() => { onSelect(item.key as T); setMobileOpen(false); }}>{content}</button>;

@@ -7,6 +7,8 @@ import { WorkspaceFooter } from "@/components/workspace-footer";
 import { WorkspaceDestinations } from "@/components/workspace-destinations";
 import { consistentWorkspaceNavigation, workspaceNavigation, workspaceGroupDestination } from "@/lib/workspace-navigation";
 import Link from "next/link";
+import {usePathname} from "next/navigation";
+import {showsStudioLibrary} from "@/lib/studio-navigation";
 import { ModuleTabs } from "./module-tabs";
 import { SubscriptionButton, openSubscriptions } from "@/components/subscription-options";
 import { useSubscriptionLabel } from "@/components/subscription-label-context";
@@ -124,15 +126,16 @@ export function DashboardFrame<T extends string>({
     navigation.scrollBy({ top: direction * step, behavior: "smooth" });
   }
 
+  const libraryVisible = showsStudioLibrary(usePathname());
   const groups = useMemo<DashboardNavGroup<T>[]>(() => {
-    if (navGroups?.length) return navGroups;
+    if (navGroups?.length) return navGroups.map(group=>({...group,items:group.items.filter(item=>libraryVisible || item.href!=='/library')})).filter(group=>group.items.length);
     const byGroup = new Map<string, DashboardNavItem<T>[]>();
-    consistentWorkspaceNavigation(navItems).forEach((item) => {
+    consistentWorkspaceNavigation(navItems).filter(item=>libraryVisible || item.href!=='/library').forEach((item) => {
       const label = item.group ?? "Workspace";
       byGroup.set(label, [...(byGroup.get(label) ?? []), item]);
     });
     return Array.from(byGroup.entries()).map(([label, items]) => ({ label, items }));
-  }, [navGroups, navItems]);
+  }, [navGroups, navItems, libraryVisible]);
 
   const flatItems = useMemo(() => groups.flatMap((group) => group.items), [groups]);
   const [workspaceSearch, setWorkspaceSearch] = useState("");
@@ -237,7 +240,7 @@ export function DashboardFrame<T extends string>({
 
         <WorkspaceDestinations overviewActive={isOverview} overviewHref={overviewItem?.href} onOverview={overviewItem && !overviewItem.href ? () => handleSelect(overviewItem.key) : undefined} onNavigate={() => setMobileOpen(false)} />
         </div>
-        {!adminWorkspace && <Link prefetch={false} href="/library" className="dashboard-os-nav-item workspace-library-link" aria-current={navigationKey === 'library' ? 'page' : undefined} onClick={() => setMobileOpen(false)}><Folder size={17}/><span className={collapsed ? 'lg:hidden' : ''}>My library</span></Link>}
+        {!adminWorkspace && libraryVisible && <Link prefetch={false} href="/library" className="dashboard-os-nav-item workspace-library-link" aria-current={navigationKey === 'library' ? 'page' : undefined} onClick={() => setMobileOpen(false)}><Folder size={17}/><span className={collapsed ? 'lg:hidden' : ''}>My library</span></Link>}
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
           {visibleGroups.map(group => {
             const destination = workspaceGroupDestination(group.label);

@@ -1,3 +1,8 @@
+/** Library is a Studio destination, not a global service shortcut. Legacy Studio aliases remain valid. */
+export function showsStudioLibrary(pathname: string) {
+  return ['/studio','/dashboard','/dashboard/customer','/producer/dashboard','/producer-dashboard','/library','/audio-library','/dashboard/purchases'].some(path => pathname === path || ['/studio','/library','/dashboard/purchases'].includes(path) && pathname.startsWith(path + '/'));
+}
+
 export function usesHymnStudioShell(pathname: string) {
   return ['/studio','/dashboard','/dashboard/customer','/producer/dashboard','/producer-dashboard','/promotion','/library','/audio-library','/analytics','/payout'].includes(pathname)
     || ['/promotion/','/studio/','/dashboard/purchases'].some(path => pathname.startsWith(path));

@@ -11,9 +11,10 @@ import { BeatFreeDownload } from "@/components/beat-free-download";
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import {createPortal} from "react-dom";
 import { CustomerOverlay } from "@/components/customer-overlay";
 import { LicenceWheel } from "@/components/licence-wheel";
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Disc3, ExternalLink, ListMusic, Pause, Play, Share2, ShoppingBag, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { beatLicenseCatalog, beatLicensePrice, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 
@@ -219,10 +220,22 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
   const [shareNotice, setShareNotice] = useState("");
   const menuId = useId();
   const menuRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<HTMLElement>(null);
+  const [menuPosition,setMenuPosition]=useState({bottom:110,right:12,maxHeight:520});
+  useLayoutEffect(()=>{
+    if(!menuOpen)return;
+    const measure=()=>{const bounds=playerRef.current?.getBoundingClientRect();if(bounds)setMenuPosition({bottom:Math.max(16,window.innerHeight-bounds.top+16),right:Math.min(Math.max(12,window.innerWidth-Math.min(560,window.innerWidth-24)-12),Math.max(12,window.innerWidth-bounds.right)),maxHeight:Math.max(100,bounds.top-32)});};
+    measure();popupRef.current?.querySelector<HTMLButtonElement>('button[aria-label="Close beat menu"]')?.focus();
+    const observer=new ResizeObserver(measure);if(playerRef.current)observer.observe(playerRef.current);
+    window.addEventListener('resize',measure);window.visualViewport?.addEventListener('resize',measure);
+    return()=>{observer.disconnect();window.removeEventListener('resize',measure);window.visualViewport?.removeEventListener('resize',measure);};
+  },[menuOpen,beat?.id]);
+
   useEffect(() => {
     if (!menuOpen) return;
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") { setMenuOpen(false); menuRef.current?.querySelector<HTMLButtonElement>('[aria-haspopup="dialog"]')?.focus(); } };
-    const outside = (event: PointerEvent) => { if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setMenuOpen(false); };
+    const outside = (event: PointerEvent) => { if (event.target instanceof Node && !menuRef.current?.contains(event.target) && !popupRef.current?.contains(event.target)) setMenuOpen(false); };
     window.addEventListener("keydown", key); window.addEventListener("pointerdown", outside);
     return () => { window.removeEventListener("keydown", key); window.removeEventListener("pointerdown", outside); };
   }, [menuOpen]);
@@ -277,7 +290,7 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
       setShareNotice("Copy the beat link from More actions."); setMenuOpen(true);
     }
   };
-  return <aside aria-label="Now playing" className="beat-player-surface hymn-player" data-collapsed={collapsed && !menuOpen} onPointerEnter={() => setCollapsed(false)} onPointerLeave={() => { if (licensingOpen) setCollapsed(true); }} onFocus={() => setCollapsed(false)}>
+  return <aside ref={playerRef} aria-label="Now playing" className="beat-player-surface hymn-player" data-collapsed={collapsed && !menuOpen} onPointerEnter={() => setCollapsed(false)} onPointerLeave={() => { if (licensingOpen) setCollapsed(true); }} onFocus={() => setCollapsed(false)}>
     <div className="hymn-player-shell">
       <button type="button" className="hymn-player-cover" onClick={value.togglePlay} aria-label={value.playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>
         <PlayerArtwork key={beat.id} beat={beat}/><span>{value.playing ? <Pause fill="currentColor"/> : <Play fill="currentColor"/>}</span>
@@ -294,8 +307,8 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
         <div className="hymn-player-volume"><button type="button" className="hymn-player-icon" onClick={() => value.setMuted(!value.muted)} aria-label={value.muted ? "Unmute audio" : "Mute audio"}>{value.muted ? <VolumeX/> : <Volume2/>}</button><input className="hymn-player-volume-slider" style={{ backgroundImage: `linear-gradient(to right, #fff ${value.volume * 100}%, #ffffff30 ${value.volume * 100}%)` }} type="range" min="0" max="1" step="0.01" value={value.volume} onChange={event => value.setVolume(Number(event.target.value))} aria-label="Preview volume"/></div>
         <button type="button" className="hymn-player-icon" onClick={() => void share()} aria-label={`Share ${beat.title}`}><Share2/></button>
         <div className="relative" ref={menuRef}><button type="button" className="hymn-player-icon" onClick={() => setMenuOpen(current => !current)} aria-label="More beat actions" aria-expanded={menuOpen} aria-controls={menuId} aria-haspopup="dialog"><ListMusic/></button>
-              {menuOpen ? (
-                <div id={menuId} role="dialog" aria-label={`Beat actions for ${beat.title}`} className="hymn-player-menu absolute bottom-12 right-0 w-[min(92vw,560px)] overflow-hidden rounded-[1.4rem] border border-white/10 bg-[var(--card)] shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+              {menuOpen && typeof document!=="undefined" ? createPortal(
+                <div ref={popupRef} style={{position:"fixed",bottom:menuPosition.bottom,right:menuPosition.right,maxHeight:menuPosition.maxHeight}} id={menuId} role="dialog" aria-label={`Beat actions for ${beat.title}`} className="hymn-player-menu absolute bottom-12 right-0 w-[min(92vw,560px)] overflow-hidden rounded-[1.4rem] border border-white/10 bg-[var(--card)] shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <PlayerArtwork beat={beat} />
@@ -317,7 +330,7 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
                       <button type="button" onClick={buyNow} className="btn-primary pressable min-h-11 text-xs">Buy</button>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-2"><div className="flex gap-1"><button type="button" className="hymn-player-icon" onClick={value.previous} aria-label="Previous beat"><SkipBack size={17}/></button><button type="button" className="hymn-player-icon" onClick={value.next} aria-label="Next beat"><SkipForward size={17}/></button><button type="button" className="hymn-player-icon" onClick={() => value.setShuffle(!value.shuffle)} aria-label="Shuffle beats" aria-pressed={value.shuffle}><Shuffle size={17}/></button></div><BeatFreeDownload key={beat.id} id={beat.id} title={beat.title}/><label className="flex items-center gap-2 text-xs"><Volume2 size={15}/><input className="hymn-player-volume-slider" style={{ backgroundImage: `linear-gradient(to right, #fff ${value.volume * 100}%, #ffffff30 ${value.volume * 100}%)` }} aria-label="Preview volume" type="range" min="0" max="1" step="0.01" value={value.volume} onChange={event => value.setVolume(Number(event.target.value))}/></label></div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-2"><div className="flex gap-1"><button type="button" className="hymn-player-icon" onClick={value.previous} aria-label="Previous beat"><SkipBack size={17}/></button><button type="button" className="hymn-player-icon" onClick={value.next} aria-label="Next beat"><SkipForward size={17}/></button><button type="button" className="hymn-player-icon" onClick={() => value.setShuffle(!value.shuffle)} aria-label="Shuffle beats" aria-pressed={value.shuffle}><Shuffle size={17}/></button></div><BeatFreeDownload key={beat.id} id={beat.id} title={beat.title}/><label className="flex items-center gap-2 text-xs"><Volume2 size={15}/><input className="hymn-player-volume-slider" style={{ backgroundImage: `linear-gradient(to right, var(--text) ${value.volume * 100}%, var(--border) ${value.volume * 100}%)` }} aria-label="Preview volume" type="range" min="0" max="1" step="0.01" value={value.volume} onChange={event => value.setVolume(Number(event.target.value))}/></label></div>
                   {shareNotice ? <div className="px-4 pb-3"><input className="hymn-player-share-link" aria-label="Share beat link" value={shareUrl} readOnly onFocus={event => event.target.select()}/></div> : null}
                   <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-2 text-xs font-semibold text-[var(--text)] sm:grid-cols-4">
                     <Link href={`/beat-store/producers/${beat.producer.slug}`} className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 hover:bg-white/8">Producer <ExternalLink className="h-3.5 w-3.5" /></Link>
@@ -326,7 +339,7 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
                     <button type="button" onClick={() => { value.openLicensing(beat); setMenuOpen(false); }} className="rounded-xl px-3 py-2 text-[var(--accent)] transition hover:bg-white/8">Terms</button>
                   </div>
                 </div>
-              ) : null}
+              , document.body) : null}
         </div>
         <button type="button" className="hymn-player-price" onClick={() => value.openLicensing(beat, "wav")}>From {formatMoney(fromPrice)}</button>
       </div>

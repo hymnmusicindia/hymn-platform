@@ -57,3 +57,10 @@
 .hymn-player-loading-waveform rect { animation:hymn-wave-loading 1.4s ease-in-out infinite alternate;transform-box:view-box; }
 .hymn-player-waveform:not([data-waveform-state=loading]) .hymn-player-loading-waveform rect { animation-play-state:paused; }
 @keyframes hymn-wave-loading { from { transform:scaleY(.4);opacity:.35; } to { transform:scaleY(1);opacity:.9; } }
+
+/* Portal the menu above the player: its blur must not be trapped in the player's backdrop root. */
+.hymn-player-menu{position:fixed!important;z-index:195;width:min(560px,calc(100vw - 24px));overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;background:var(--card);background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--text);border:1px solid var(--border-strong,var(--border));border-radius:20px;box-shadow:var(--shadow-soft);-webkit-backdrop-filter:blur(24px) saturate(120%);backdrop-filter:blur(24px) saturate(120%);font-family:"HYMN Inter",Inter,system-ui,sans-serif;font-size:13px}.hymn-player-menu .hymn-player-icon{color:var(--text)}.hymn-player-menu .btn-primary{background:var(--accent);color:var(--accent-foreground);border:1px solid transparent}.hymn-player-menu .btn-outline{background:var(--bg-soft);color:var(--text);border:1px solid var(--border)}.hymn-player-menu :is(button,a):focus-visible{outline:2px solid var(--focus,var(--accent));outline-offset:3px}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.hymn-player-menu{background:var(--card)}}
+
+.hymn-player-menu input.hymn-player-volume-slider{appearance:none;-webkit-appearance:none;width:90px;height:24px;min-height:0;padding:0;border:0;border-radius:999px;background-color:transparent;background-size:100% 2px;background-repeat:no-repeat;background-position:center;accent-color:var(--text);cursor:pointer;outline-offset:6px}.hymn-player-menu .hymn-player-volume-slider::-webkit-slider-thumb{background:var(--text)}.hymn-player-menu .hymn-player-volume-slider::-moz-range-thumb{background:var(--text)}
+
+.hymn-player-menu{box-sizing:border-box;min-width:0!important;max-width:calc(100vw - 24px)!important}

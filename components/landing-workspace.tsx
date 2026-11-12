@@ -40,7 +40,7 @@ export function LandingWorkspace({ children, workspaceHref, releaseNavigation = 
       <Link prefetch={false} href="/distribution/start" className="landing-new" aria-label="New release"><Plus size={17}/><span>New</span></Link>
       <WorkspaceDestinations homeActive={pathname === "/" || pathname === "/home"} overviewHref={workspaceHref} onNavigate={()=>setOpen(false)} />
       </div>
-      <Link prefetch={false} href="/library" className="landing-nav-link workspace-library-link" aria-current={pathname === '/library' ? 'page' : undefined} onClick={()=>setOpen(false)}><Folder size={16}/><span>My library</span></Link>
+
       <nav aria-label="HYMN services"><SlidingMenu menuKey={openGroup || "all"}>{groups.map(group => {
         const destination = workspaceGroupDestination(group.title);
         const items = group.links.filter(item => item.key !== destination?.key);
