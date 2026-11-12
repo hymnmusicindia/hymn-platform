@@ -1,0 +1,7 @@
+/* Shared frame for contributor, legal, monetisation and channel settings. */
+.release-dialog-layer [role=dialog]{min-width:0;outline:none}
+.release-dialog-layer [role=dialog]>div{max-height:calc(100dvh - 48px);border-radius:20px}
+.release-dialog-layer [role=dialog]>div>div:first-child,.release-dialog-layer [role=dialog]>div>div:last-child{flex-shrink:0}
+.release-dialog-layer [role=dialog]>div>div:not(:first-child):not(:last-child){min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.release-dialog-layer [role=dialog] h3{font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-.04em}
+@media(max-width:600px){.release-dialog-layer{padding:12px}.release-dialog-layer [role=dialog]>div{max-height:calc(100dvh - 24px);border-radius:16px}.release-dialog-layer [role=dialog] h3{font-size:20px}}

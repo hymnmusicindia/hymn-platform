@@ -2,6 +2,7 @@
 
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import "./contributor-editor.css";
+import "./release-dialogs.css";
 import clsx from "clsx";
 import { CustomerOverlay } from "@/components/customer-overlay";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
@@ -41,7 +42,7 @@ function ModalShell({
 
   return (
     <CustomerOverlay><div
-      className="release-dialog-layer fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[var(--overlay)] px-4 py-6 backdrop-blur-md"
+      className="release-dialog-layer fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[var(--overlay)] px-4 py-6 backdrop-blur-md"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

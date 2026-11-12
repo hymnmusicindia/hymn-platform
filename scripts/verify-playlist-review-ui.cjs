@@ -6,7 +6,7 @@ const { build } = require('esbuild');
 const { chromium, expect } = require('@playwright/test');
 (async () => {
   const output = await fs.mkdtemp(path.join(os.tmpdir(), 'hymn-playlist-ui-'));
-  await build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {PlaylistReviewMarketplace} from './components/playlist-review-marketplace';function Fixture(){const [page,setPage]=React.useState(false);window.renderPlaylistPage=setPage;return <PlaylistReviewMarketplace page={page}/>;}createRoot(document.getElementById('root')).render(<Fixture/>);`, loader: 'tsx', resolveDir: process.cwd() }, bundle: true, outfile: path.join(output, 'marketplace.js'), jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
+  await build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {PlaylistReviewMarketplace} from './components/playlist-review-marketplace';function Fixture(){const [page,setPage]=React.useState(false);window.renderPlaylistPage=setPage;return <PlaylistReviewMarketplace page={page}/>;}createRoot(document.getElementById('root')).render(<Fixture/>);`, loader: 'tsx', resolveDir: process.cwd() }, bundle: true, external:['/fonts/*'], outfile: path.join(output, 'marketplace.js'), jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
   const hymn = { id: 1, name: 'Dusk Till Dawn', playlistUrl: 'https://open.spotify.com/playlist/2soKoURWSXnWJ48ygivet8', description: 'Listen to the playlist, check the fit, and send your track for a thoughtful HYMN review.', genres: 'Explore playlist', feeMinor: 5000, isHymn: true, capacity: 20, status: 'APPROVED' };
   const independent = { ...hymn, id: 2, name: 'Independent Stories', isHymn: false, feeMinor: 12500 };
   const review = { id: 1, listing: hymn, trackTitle: 'Keep creating', artistName: 'Fixture artist', trackUrl: 'https://open.spotify.com/track/1234567890123456789012', pitch: 'A thoughtful recording for reflective listeners.', amountMinor: 5000, status: 'NOT_A_FIT', remark: 'The soft vocal works well, but this playlist focuses on upbeat dance recordings.', nextStep: 'Try reflective Hindi-pop curators who feature acoustic recordings.', payoutStatus: 'HELD' };
@@ -19,6 +19,7 @@ const { chromium, expect } = require('@playwright/test');
     await page.route('https://hymn.fixture/api/image-preview?**', async route => { const src = new URL(route.request().url()).searchParams.get('src'); return route.fulfill({ body: await fs.readFile(path.join('public', src)), contentType: 'image/webp' }); });
     await page.goto('https://hymn.fixture/');
     await page.addStyleTag({ content: '*{box-sizing:border-box}body{margin:0;padding:20px;background:#1d2025;font-family:Arial;--bg:#1d2025;--bg-soft:#25292f;--card:#21252a;--border:#383d46;--text:#f4f4f4;--text-muted:#bac0ca;--text-soft:#919ba8}#root{max-width:1200px;margin:auto}a{color:inherit;text-decoration:none}button{cursor:pointer}input,textarea,select{font-family:inherit}' });
+    await page.addStyleTag({path:'app/styles/theme-tokens.css'});
     await page.addStyleTag({ path: path.join(output, 'marketplace.css') });
     await page.addStyleTag({ path: 'app/styles/heading-hierarchy.css' });
     await page.addScriptTag({ path: path.join(output, 'marketplace.js') });

@@ -34,3 +34,7 @@
 .curation-invitation-footer > small { color:var(--text-muted); text-align:center; font-size:10px; line-height:1.55; }
 .curation-invitation :is(button,a):focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
 @media(max-width:600px) { .curation-invitation { padding:22px; border-radius:18px; max-height:calc(100dvh - 20px); } .curation-picks-grid { gap:8px; } .curation-pick { grid-template-columns:1fr; } .curation-pick-art { width:100%; max-width:96px; } .curation-picks-heading { align-items:flex-start; flex-direction:column; gap:4px; } }
+
+/* The shared dialog owns the frame, scroll area and persistent actions. */
+.curation-invitation-footer{width:100%;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}.curation-invitation-footer>div{grid-column:1/-1;flex-wrap:wrap}.curation-invitation-footer>small{grid-column:1/-1;text-align:left}.curation-invitation-footer .btn-outline{grid-column:2;grid-row:2}.curation-invitation-footer .btn-primary{grid-column:1;grid-row:2}.curation-pick[aria-pressed=true]{border-color:var(--accent);background:var(--bg-soft);box-shadow:none}.curation-picks-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.curation-pick{overflow-wrap:anywhere}.curation-invitation-steps{margin-bottom:0}
+@media(max-width:380px){.curation-invitation-footer{grid-template-columns:1fr}.curation-invitation-footer .btn-outline{grid-column:1;grid-row:3}.curation-invitation-footer .btn-primary{grid-row:2}}

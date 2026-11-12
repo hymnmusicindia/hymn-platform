@@ -5,7 +5,7 @@ const path = require('node:path');
 const os = require('node:os');
 (async () => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'hymn-curation-invite-'));
-  await build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {ReleaseCurationInvitation} from './components/release-curation-invitation';const root=createRoot(document.getElementById('root'));window.showInvite=()=>root.render(<ReleaseCurationInvitation releaseId={83} context={{genre:"Indie Pop",mood:"Romantic",releaseType:"Single"}}/>);window.hideInvite=()=>root.render(null);window.showInvite();`, resolveDir: process.cwd(), loader: 'tsx' }, bundle: true, outfile: path.join(temp,'invite.js'), jsx: 'automatic', plugins: [{ name: 'link-fixture', setup(b) { b.onResolve({ filter: /^next\/link$/ }, () => ({ path: 'link', namespace: 'fixture' })); b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `import React from 'react';export default function Link(props){return React.createElement('a',props)}`, resolveDir: process.cwd() })); } }] });
+  await build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {ReleaseCurationInvitation} from './components/release-curation-invitation';const root=createRoot(document.getElementById('root'));window.showInvite=()=>root.render(<ReleaseCurationInvitation releaseId={83} context={{genre:"Indie Pop",mood:"Romantic",releaseType:"Single"}}/>);window.hideInvite=()=>root.render(null);window.showInvite();`, resolveDir: process.cwd(), loader: 'tsx' }, bundle: true, external:['/fonts/*'], outfile: path.join(temp,'invite.js'), jsx: 'automatic', plugins: [{ name: 'link-fixture', setup(b) { b.onResolve({ filter: /^next\/link$/ }, () => ({ path: 'link', namespace: 'fixture' })); b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `import React from 'react';export default function Link(props){return React.createElement('a',props)}`, resolveDir: process.cwd() })); } }] });
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
@@ -17,6 +17,7 @@ const os = require('node:os');
       return route.fulfill({ body: '<style>body{margin:0;background:#11151b;font-family:Arial}*{box-sizing:border-box}button,a,input{font-family:inherit}#root{min-height:100vh}</style><div id="root"></div>', contentType: 'text/html' });
     });
     await page.goto('https://hymn.fixture/');
+    await page.addStyleTag({path:'app/styles/theme-tokens.css'});
     await page.addStyleTag({ path: path.join(temp,'invite.css') });
     await page.addScriptTag({ path: path.join(temp,'invite.js') });
     await expect(page.getByRole('dialog')).toHaveCount(0);

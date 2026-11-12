@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 (async () => {
   const output = await fs.mkdtemp(path.join(os.tmpdir(),'hymn-review-ui-'));
-  await build({ stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {PostPurchaseReviewPrompt} from './components/post-purchase-review-prompt';import {markReviewConfirmationEntered,markReviewConfirmationLeft} from './lib/purchase-review-timing';markReviewConfirmationEntered();createRoot(document.getElementById('root')).render(<PostPurchaseReviewPrompt/>);window.leaveConfirmation=(destination='/dashboard')=>{document.getElementById('confirmation').remove();history.pushState({},'', destination);requestAnimationFrame(markReviewConfirmationLeft);};`,loader:'tsx',resolveDir:process.cwd()},bundle:true,outfile:path.join(output,'review.js'),jsx:'automatic' });
+  await build({ stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {PostPurchaseReviewPrompt} from './components/post-purchase-review-prompt';import {markReviewConfirmationEntered,markReviewConfirmationLeft} from './lib/purchase-review-timing';markReviewConfirmationEntered();createRoot(document.getElementById('root')).render(<PostPurchaseReviewPrompt/>);window.leaveConfirmation=(destination='/dashboard')=>{document.getElementById('confirmation').remove();history.pushState({},'', destination);requestAnimationFrame(markReviewConfirmationLeft);};`,loader:'tsx',resolveDir:process.cwd()},bundle:true,external:['/fonts/*'],outfile:path.join(output,'review.js'),jsx:'automatic' });
   const browser = await chromium.launch();
   try {
     for (const width of [1100,390]) {
@@ -20,6 +20,7 @@ const path = require('node:path');
         return route.fulfill({body:'<style>*{box-sizing:border-box}body{margin:0;font-family:Arial;background:#11151c;color:white}button,textarea,input{font-family:inherit}</style><button id="confirmation" data-release-review-confirmation>Track my release</button><div aria-hidden="true" inert><section role="dialog" aria-modal="true"></section></div><div id="root"></div>',contentType:'text/html'});
       });
       await page.goto('https://hymn.fixture/distribution/start');
+    await page.addStyleTag({path:'app/styles/theme-tokens.css'});
       await page.addStyleTag({path:path.join(output,'review.css')});await page.addScriptTag({path:path.join(output,'review.js')});
       await page.waitForTimeout(250); await expect(page.getByRole('dialog')).toHaveCount(0);
       await page.evaluate(()=>window.dispatchEvent(new CustomEvent('hymn:purchase-review-eligible',{detail:{purchaseType:'service',purchaseId:7,label:'half_yearly · apke master'}})));
