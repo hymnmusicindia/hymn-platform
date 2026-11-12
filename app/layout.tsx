@@ -1,3 +1,8 @@
+import { getSession } from '@/lib/session';
+import { getSubscriptionMenuLabel } from '@/lib/subscription-helpers';
+import { SubscriptionLabelProvider } from '@/components/subscription-label-context';
+import { SiteHeader } from '@/components/site-header';
+import { PersistentSiteWorkspace } from '@/components/persistent-site-workspace';
 import { businessStructuredData } from "@/lib/public-business";
 import { PublicNoScriptInformation } from "@/components/public-noscript-information";
 import { jsonLd } from "@/lib/seo";
@@ -41,7 +46,6 @@ import "./styles/dashboard-design-system.css";
 import "./styles/release-navigation-header.css";
 import "./styles/theme-tokens.css";
 import "./styles/theme-accessibility.css";
-import { WorkspacePageTransition } from "@/components/workspace-page-transition";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {
@@ -75,6 +79,8 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const session = await getSession();
+  const subscriptionLabel = await getSubscriptionMenuLabel(session?.sub);
   const origin = getPublicAppUrl();
   const structuredData = businessStructuredData(origin);
   return (
@@ -102,7 +108,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning><PublicNoScriptInformation/>{children}<CustomerServiceInterestTracker /><WorkspacePageTransition /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
+      <body suppressHydrationWarning><PublicNoScriptInformation/><SubscriptionLabelProvider label={subscriptionLabel}><PersistentSiteWorkspace user={session} header={<SiteHeader user={session}/>}>{children}</PersistentSiteWorkspace></SubscriptionLabelProvider><CustomerServiceInterestTracker /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
     </html>
   );
 }

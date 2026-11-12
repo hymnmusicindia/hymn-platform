@@ -1,3 +1,4 @@
+import { purchaseOacAccess } from '@/lib/youtube-oac-access';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser } from '@/lib/access';
@@ -7,7 +8,7 @@ import { consumeRateLimit } from '@/lib/rate-limit';
 import { applyForOac,oacArtistState,requestOacChannelChange,resumeOacPayment } from '@/lib/youtube-oac';
 import { verifyRazorpaySignature,verifyCapturedRazorpayPayment } from '@/lib/razorpay';
 import { confirmDistributionPayment } from '@/lib/payment-webhooks';
-import { OAC_RETRY_AMOUNT,OAC_RETRY_PLAN } from '@/lib/youtube-oac-contract';
+import { OAC_ACCESS_PLAN,OAC_RETRY_AMOUNT,OAC_RETRY_PLAN } from '@/lib/youtube-oac-contract';
 import { customerBrandText } from '@/lib/customer-message';
 export const runtime='nodejs';
 const headers={'Cache-Control':'private, no-store'};
@@ -30,15 +31,16 @@ export async function POST(request:Request){
   if(!rate.allowed)return NextResponse.json({error:'Too many attempts. Please try later.'},{status:429,headers});
   try{
     const body=await request.json();
+    if(body.action==='purchase-access'){const input=z.object({artistId:z.number().int().positive().max(2147483647)}).parse(body);return NextResponse.json(await purchaseOacAccess(auth.user.id,input.artistId),{headers});}
     if(body.action==='resume-payment'){const input=z.object({artistId:z.number().int().positive()}).parse(body);return NextResponse.json(await resumeOacPayment(auth.user.id,input.artistId),{headers});}
     if(body.action==='change-channel'){const {action,...input}=body;return NextResponse.json(await requestOacChannelChange(auth.user.id,input),{headers});}
     if(body.action==='verify-payment'){
       const payment=z.object({orderId:z.string().min(1).max(100),paymentId:z.string().min(1).max(100),signature:z.string().regex(/^[a-f0-9]{64}$/i)}).parse(body);
       const order=await prisma.distributionOrder.findUnique({where:{razorpayOrderId:payment.orderId}});
-      if(!order||order.userId!==auth.user.id||order.plan!==OAC_RETRY_PLAN||order.amount!==OAC_RETRY_AMOUNT||order.currency!=='INR')throw Error('OAC payment order not found.');
+      if(!order||order.userId!==auth.user.id||!((order.plan===OAC_RETRY_PLAN&&order.amount===OAC_RETRY_AMOUNT)||(order.plan===OAC_ACCESS_PLAN&&[150,200].includes(order.amount)))||order.currency!=='INR')throw Error('OAC payment order not found.');
       if(!verifyRazorpaySignature(payment.orderId,payment.paymentId,payment.signature))throw Error('Invalid payment signature.');
-      await verifyCapturedRazorpayPayment({orderId:payment.orderId,paymentId:payment.paymentId,amountMinor:OAC_RETRY_AMOUNT*100,currency:'INR'});
-      await confirmDistributionPayment({razorpayOrderId:payment.orderId,paymentId:payment.paymentId,userId:auth.user.id,amountMinor:8000,currency:'INR',source:'browser'});
+      await verifyCapturedRazorpayPayment({orderId:payment.orderId,paymentId:payment.paymentId,amountMinor:order.amount*100,currency:'INR'});
+      await confirmDistributionPayment({razorpayOrderId:payment.orderId,paymentId:payment.paymentId,userId:auth.user.id,amountMinor:order.amount*100,currency:'INR',source:'browser'});
       return NextResponse.json({success:true},{headers});
     }
     return NextResponse.json(await applyForOac(auth.user.id,body),{headers});

@@ -1,3 +1,4 @@
+import { oacAccessState, requireOacAccess, notifyOacEligibility } from './youtube-oac-access';
 import 'server-only';
 import { prisma } from './prisma';
 import { randomUUID } from 'node:crypto';
@@ -8,16 +9,17 @@ import { razorpay } from './razorpay';
 import { customerBrandText } from './customer-message';
 import { createAdminTaskOnce } from './task-queue';
 import { oacChannelUrl } from './youtube-oac-contract';
-import { oacArtistLiveReleases,oacArtistReleaseWhere } from './oac-artist-releases';
+import { oacArtistLiveSongCount,oacArtistLiveReleases,oacArtistReleaseWhere } from './oac-artist-releases';
 
 export async function oacArtistState(userId:number,artistId:number){
   const artist=await prisma.artistCard.findFirstOrThrow({where:{id:artistId,userId,archivedAt:null,user:{status:'ACTIVE'}}});
-  const [liveReleases,history,legacy]=await Promise.all([
-    oacArtistLiveReleases(userId,artistId),
+  const [history,legacy]=await Promise.all([
     prisma.releaseChangeRequest.findMany({where:{requestedByUserId:userId,requestType:'distribution_service',requestedChanges:{path:['resource'],equals:`artist:${artistId}`}},orderBy:{id:'desc'},include:{events:{orderBy:{id:'desc'}}}}),
     prisma.managedServiceRequest.findMany({where:{userId,serviceType:'YOUTUBE_OAC',release:oacArtistReleaseWhere(userId,artistId)},orderBy:{id:'desc'},take:30})
   ]);
-  const liveCount=liveReleases.length;
+  const liveCount=await oacArtistLiveSongCount(userId,artistId);
+  const access=await oacAccessState(userId,artistId);
+  await notifyOacEligibility(userId,artistId);
   const current=history.find(row=>oacOutcome(row)==='approved')||history[0];
   const old=legacy.find(row=>row.status==='completed')||legacy.find(row=>!['failed','rejected','cancelled'].includes(row.status))||legacy[0];
   const legacyWins=old&&(!current||old.status==='completed');
@@ -27,7 +29,7 @@ export async function oacArtistState(userId:number,artistId:number){
   const channelUrl=typeof candidate==='string'&&/^https:\/\/(www\.)?youtube\.com\//.test(candidate)?candidate:null;
   const verified=Boolean(artist.direNoteArtistId&&/^\d+$/.test(artist.direNoteArtistId)&&Number.isSafeInteger(Number(artist.direNoteArtistId))&&Number(artist.direNoteArtistId)>0);
   const pendingPayment=await prisma.distributionOrder.findFirst({where:{userId,plan:OAC_RETRY_PLAN,paymentStatus:'paid',fulfilledAt:null,quoteSnapshot:{path:['artistId'],equals:artistId}},select:{id:true}});
-  return {artist:{id:artist.id,name:artist.artistName},status,liveCount,requiredLiveCount:5,verified,eligible:verified&&liveCount>=5,
+  return {access,artist:{id:artist.id,name:artist.artistName},status,liveCount,requiredLiveCount:5,verified,eligible:verified&&liveCount>=5,
     requestId:legacyWins?null:current?.id??null,channelUrl,
     reason:customerBrandText(legacyWins?old.rejectionReason||old.userVisibleUpdate||'':current?.adminNote||''),
     retryAmount:status==='rejected'?OAC_RETRY_AMOUNT:0,legacy:Boolean(legacyWins),paymentPending:Boolean(pendingPayment)};
@@ -37,7 +39,8 @@ export async function prepareOacApplication(userId:number,raw:unknown){
   const input=oacApplication.parse(raw),state=await oacArtistState(userId,input.artistId);
   if(['approved','under_review'].includes(state.status))throw Error('This artist already has an approved or active OAC application.');
   if(state.legacy)throw Error('Contact HYMN support to reconcile the earlier OAC application before applying again.');
-  if(!state.eligible)throw Error(`A verified artist profile and five fully live releases are required. Current live releases: ${state.liveCount}.`);
+  if(!state.eligible)throw Error(`A verified artist profile and five live songs distributed by HYMN are required. Current qualifying songs: ${state.liveCount}.`);
+  await requireOacAccess(userId,input.artistId);
   const release=(await oacArtistLiveReleases(userId,input.artistId)).find(row=>row.upc&&row.tracks.some(track=>track.isrc));
   if(!release)throw Error('A live release with confirmed identifiers is required. Contact HYMN support.');
   const operation={action:'request_yt_oac' as const,artistProfileId:input.artistId,trackId:release.tracks.find(track=>track.isrc)!.id,reason:input.reason,rightsConfirmed:true as const,fields:{channel_url:input.channelUrl,channel_id:oacChannelId(input.channelUrl)},requestKey:input.requestKey};

@@ -1,1 +1,2 @@
-export default function Loading() { return <main aria-busy="true" aria-label="Loading Team Workspace" style={{ padding: 40 }}>Loading HYMN Team OS…</main>; }
+import { WorkspaceLoading } from "@/components/workspace-loading";
+export default function Loading(){return <WorkspaceLoading label="Loading team workspace"/>}

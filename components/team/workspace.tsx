@@ -2,6 +2,7 @@
 import { LeadershipActivity } from "./leadership-activity";
 import { TeamWorkbench } from "./workbench";
 import { WorkStation } from "./work-station";
+import {WorkspaceLoading} from "@/components/workspace-loading";
 import dynamic from "next/dynamic";
 import { workStationModule } from "@/lib/team/work-station-policy";
 import { TeamCreatorApplications } from "./creator-applications";
@@ -19,7 +20,7 @@ import { InternalWorkspaceSwitcher } from "../internal-workspace-switcher";
 import { TeamPushControl } from "./push-control";
 import { TeamAppLinks } from "./app-download-links";
 import { TeamRichText } from "./rich-text";
-const ModuleLoading = () => <div className={styles.skeleton} aria-busy="true">Opening workspace…</div>;
+const ModuleLoading = () => <WorkspaceLoading/>;
 const TeamQueue = dynamic(() => import("./team-queue").then(module => module.TeamQueue), { loading: ModuleLoading });
 const TeamContacts = dynamic(() => import("./contacts").then(module => module.TeamContacts), { loading: ModuleLoading });
 const TeamEmailWorkspace = dynamic(() => import("./email-workspace").then(module => module.TeamEmailWorkspace), { loading: ModuleLoading });
@@ -233,7 +234,7 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
       <div data-dashboard-content className={styles.content}>{error ? <div role="alert" className={styles.error}>{error}<button onClick={refresh}>Retry</button></div> : null}{notice ? <div role="status" className={styles.notice}>{notice}<button aria-label="Dismiss confirmation" onClick={() => setNotice("")}><X size={14} /></button></div> : null}
       {inviteLink ? <section className={styles.panel} data-ui="panel"><h2>Invitation ready</h2><p>Share this single-use link privately. It expires after 72 hours. Check delivery status above if email was requested.</p><input aria-label="Invitation link" readOnly value={inviteLink} onFocus={e => e.target.select()} /><button onClick={() => setInviteLink("")}>Dismiss</button></section> : null}
       {module!=="work-station"&&<div className={styles.pageHeading}><div><p className={styles.eyebrow}>{actor.owner ? "Founder workspace" : actor.jobTitle}</p><h1>{module === "overview" ? `Good to see you, ${actor.name.split(" ")[0]}.` : heading}</h1><p>{module === "overview" ? "See what needs attention. Keep the next action clear." : "Connected to your authorised HYMN workspace records."}</p></div>{module === "directory" && allowed("team.members.invite") ? <button className={styles.primary} onClick={() => setModal({ type: "invite" })}><Plus size={16} />Invite member</button> : null}{module === "projects" && allowed("projects.create") ? <button onClick={() => setModal({ type: "project" })}>New project</button> : null}{module === "crm" && allowed("crm.prospects.create") ? <button onClick={() => openContacts()}>Add prospect</button> : null}{module === "reports" && allowed("reports.team.view") ? <button onClick={() => setModal({ type: "report" })}>Submit this week’s report</button> : null}</div>}
-      {loading ? <div className={styles.skeleton} aria-busy="true">Loading workspace records…</div> : null}
+      {loading ? <WorkspaceLoading label="Loading workspace records"/> : null}
       {["work", "acquisition", "crm"].includes(module) && allowed("crm.prospects.view") ? <DailyGuide api={api} revision={tasks} name={actor.name} navigate={navigate} onAdd={() => openContacts()} onTask={async id => { try { const current = await api<Task>(`task?id=${encodeURIComponent(id)}`); setTasks(rows => [...rows.filter(row => row.id !== id), current]); navigate("work"); history.replaceState(null, "", `/team?workspace=${encodeURIComponent(actor.workspaceId)}&module=work&task=${encodeURIComponent(id)}`); setSelected(id); } catch (cause) { setError(cause instanceof Error ? cause.message : "Task unavailable."); } }}/> : null}
       {module === "overview" && actor.owner ? <section className={styles.panel}><header><div><h2>Team updates</h2><p>Review call reports, new contacts and work updates from every teammate.</p></div><button onClick={() => navigate("leadership")}>Open leadership updates <ArrowUpRight size={15}/></button></header></section> : null}
       {module === "leadership" ? actor.owner ? <LeadershipActivity api={api}/> : <p role="alert">Leadership updates are available to workspace owners only.</p> : null}

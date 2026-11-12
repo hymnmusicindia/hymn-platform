@@ -16,3 +16,11 @@ export async function oacArtistLiveReleases(userId:number,artistId:number){
 export function oacArtistReleaseWhere(userId:number,artistId:number):Prisma.ReleaseWhereInput{
   return {userId,OR:[{artistProfileId:artistId},{tracks:{some:{OR:[{metadata:{path:['artistProfileIds'],array_contains:[artistId]}},{metadata:{path:['metadata','artistProfileIds'],array_contains:[artistId]}}]}}}]};
 }
+
+/** A song counts once even when reissued on several releases. Only HYMN-delivered catalogue qualifies. */
+export async function oacArtistLiveSongCount(userId:number,artistId:number) {
+  const releases=await oacArtistLiveReleases(userId,artistId);
+  const delivered=await prisma.release.findMany({where:{id:{in:releases.map(r=>r.id)},distributionSubmissions:{some:{provider:'direnote',state:'submitted',isCurrent:true}}},select:{id:true}});
+  const ids=new Set(delivered.map(r=>r.id));
+  return new Set(releases.filter(r=>ids.has(r.id)).flatMap(r=>r.tracks.map(t=>t.isrc?.trim().toUpperCase()).filter((isrc):isrc is string=>Boolean(isrc&&/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrc))))).size;
+}

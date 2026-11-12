@@ -1,12 +1,16 @@
 "use client";
+import { useContext } from 'react';
+import { PersistentWorkspaceContext } from './persistent-workspace-context';
 import { usePathname } from "next/navigation";
 import { LandingWorkspace } from "@/components/landing-workspace";
 import { HymnStudioRouteFrame } from "@/components/hymn-studio-route-frame";
 
 export function PortalLayout({ children, user }: { children: React.ReactNode; user?: { name: string; role: string } | null }) {
   const pathname = usePathname();
+  const managed = useContext(PersistentWorkspaceContext);
   const studioFrame = ["/studio", "/dashboard", "/dashboard/customer", "/producer/dashboard", "/producer-dashboard"].includes(pathname);
   const studioTool = pathname.startsWith('/studio/') || !!user && ['/promotion','/library','/audio-library','/dashboard/purchases','/analytics','/payout'].some(path => pathname === path || pathname.startsWith(path + '/'));
+  if (managed) return studioTool ? <HymnStudioRouteFrame user={user || {name:'',role:'guest'}}>{children}</HymnStudioRouteFrame> : <>{children}</>;
   const hasOwnFrame = studioFrame || pathname === "/dashboard/admin";
   return <div className="hymn-portal">{hasOwnFrame ? children : studioTool ? <HymnStudioRouteFrame user={user || {name:'',role:'guest'}}>{children}</HymnStudioRouteFrame> : <div className="hymn-landing hymn-service-pages"><LandingWorkspace workspaceHref="/studio" releaseNavigation={pathname === "/distribution/start"}>{children}</LandingWorkspace></div>}</div>;
 }

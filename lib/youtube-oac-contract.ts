@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const OAC_ACCESS_PLAN = 'youtube_oac_access';
+export function oacAccessPrice(plan: string | null, active: boolean) { return active && ['yearly_plus','elite'].includes(plan || '') ? 0 : active && ['yearly','pro'].includes(plan || '') ? 150 : 200; }
 export const OAC_RETRY_PLAN = 'youtube_oac_retry';
 export const OAC_RETRY_AMOUNT = 80;
 export const oacChannelUrl = z.string().trim().regex(

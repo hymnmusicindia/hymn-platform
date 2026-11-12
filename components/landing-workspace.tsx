@@ -1,5 +1,6 @@
 "use client";
 
+import { SlidingMenu } from "./sliding-menu";
 import Link from "next/link";
 import { WorkspaceFooter } from "@/components/workspace-footer";
 import { WorkspaceDestinations } from "@/components/workspace-destinations";
@@ -40,7 +41,7 @@ export function LandingWorkspace({ children, workspaceHref, releaseNavigation = 
       <WorkspaceDestinations homeActive={pathname === "/" || pathname === "/home"} overviewHref={workspaceHref} onNavigate={()=>setOpen(false)} />
       </div>
       <Link prefetch={false} href="/library" className="landing-nav-link workspace-library-link" aria-current={pathname === '/library' ? 'page' : undefined} onClick={()=>setOpen(false)}><Folder size={16}/><span>My library</span></Link>
-      <nav aria-label="HYMN services">{groups.map(group => {
+      <nav aria-label="HYMN services"><SlidingMenu menuKey={openGroup || "all"}>{groups.map(group => {
         const destination = workspaceGroupDestination(group.title);
         const items = group.links.filter(item => item.key !== destination?.key);
         const menuId = `landing-group-${group.title.replaceAll(/[^a-z]/gi, "-")}`;
@@ -48,7 +49,7 @@ export function LandingWorkspace({ children, workspaceHref, releaseNavigation = 
           {destination ? <div className="workspace-service-heading"><Link prefetch={false} href={destination.href} aria-label={group.title} title={group.title} aria-expanded={openGroup===group.title} aria-controls={menuId} data-guide-route={destination.href} className="landing-group-title" onClick={()=>{setOpenGroup(group.title);setOpen(false);}}><span>{group.title}</span></Link></div> : <button type="button" className="landing-group-title" aria-expanded={openGroup===group.title} aria-controls={menuId} onClick={()=>setOpenGroup(current=>current===group.title?null:group.title)}><span>{group.title}</span></button>}
           <div id={menuId} hidden={openGroup!==group.title}>{items.map(item=><Link prefetch={false} href={item.href} data-guide-route={item.href} key={item.label} aria-label={item.label} className={`landing-nav-link ${item.label === "Promotion" ? "landing-service-divider" : ""}`} onClick={()=>setOpen(false)}><item.icon size={16}/><span>{item.label}</span></Link>)}</div>
         </div>;
-      })}</nav>
+      })}</SlidingMenu></nav>
       <div className="landing-rail-bottom"><Link prefetch={false} href={workspaceHref}>Your workspace <ArrowUpRight size={15}/></Link><Link prefetch={false} href="/contact">Talk to HYMN <ArrowUpRight size={15}/></Link><span>Independent music. Shared ambition.</span></div>
       <WorkspaceFooter collapsed={collapsed} onNavigate={()=>setOpen(false)}/>
     </aside>

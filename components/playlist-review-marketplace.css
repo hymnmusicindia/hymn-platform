@@ -122,3 +122,5 @@
 .playlist-identifiers .playlist-genre{margin:0}
 .playlist-listing .playlist-audience{min-height:0;margin-bottom:12px;font-size:11px;color:var(--text-muted)}
 @media(max-width:640px){.curator-profile-layout{grid-template-columns:minmax(0,1fr)}.curator-cover-upload{max-width:190px;width:100%}}
+
+.playlist-invitation{font-family:"HYMN Inter",Inter,system-ui,sans-serif;font-synthesis:none;color:var(--text);background:linear-gradient(120deg,var(--card),var(--bg));border-radius:18px}.playlist-invitation-main{padding:clamp(24px,4vw,42px);gap:34px}.playlist-invitation-copy h2{color:var(--text)!important;font-weight:600;letter-spacing:-.05em;line-height:1.12;text-wrap:balance}.playlist-invitation-copy h2 span{color:var(--text-muted)!important}.playlist-invitation-copy p{color:var(--text-muted);font-size:14px;line-height:1.7}.playlist-invitation-copy a{background:var(--accent);color:var(--accent-foreground)!important;border-radius:9px;padding:13px 18px}.playlist-invitation-gallery{min-width:0}@media(max-width:650px){.playlist-invitation-main{padding:24px;gap:26px}}

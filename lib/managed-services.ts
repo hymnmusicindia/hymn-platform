@@ -33,7 +33,7 @@ export function validateManagedServiceAnswers(serviceType: ManagedServiceType, a
 }
 
 export async function createManagedServiceRequest(input: { userId: number; releaseId: number; trackId?: number; serviceType: ManagedServiceType; provider?: string; answers: Record<string, unknown>; declarations?: Record<string, unknown>; publicLinks?: string[]; documentAssetIds?: number[]; requestKey: string }) {
-  if(input.serviceType==='YOUTUBE_OAC')throw new Error('Use the YouTube OAC popup in the distribution wizard or release Requests. Earlier applications remain in your history.');
+  if(input.serviceType==='YOUTUBE_OAC')throw new Error('Use Promotion > YouTube Official Artist Channel to reserve artist access and submit. Earlier applications remain in your history.');
   const release = await prisma.release.findFirst({ where: { id: input.releaseId, userId: input.userId }, include: { tracks: true } });
   if (!release || (input.trackId && !release.tracks.some(track => track.id === input.trackId))) throw new Error("Release or track not found.");
   const answers = validateManagedServiceAnswers(input.serviceType, input.answers, input.trackId);

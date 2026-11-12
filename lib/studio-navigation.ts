@@ -1,5 +1,5 @@
 export function usesHymnStudioShell(pathname: string) {
-  return ['/studio','/dashboard','/dashboard/customer','/producer/dashboard','/producer-dashboard','/library','/audio-library','/analytics','/payout'].includes(pathname)
+  return ['/studio','/dashboard','/dashboard/customer','/producer/dashboard','/producer-dashboard','/promotion','/library','/audio-library','/analytics','/payout'].includes(pathname)
     || ['/promotion/','/studio/','/dashboard/purchases'].some(path => pathname.startsWith(path));
 }
 

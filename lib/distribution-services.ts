@@ -13,7 +13,7 @@ import { enqueueAmendmentUpdate, amendmentTransactionOptions } from './release-a
 import { createAdminTaskOnce, resolveAdminTask } from './task-queue';
 import { attachedArtistProfileIds,savedArtistStoreLinks,verifiedArtistStoreLinks } from './artist-store-links';
 import { normalizeInstagramUrl } from './validation';
-import { oacArtistLiveReleases,oacArtistReleaseWhere } from './oac-artist-releases';
+import { oacArtistLiveSongCount,oacArtistLiveReleases,oacArtistReleaseWhere } from './oac-artist-releases';
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)])):value;
@@ -54,8 +54,9 @@ export async function buildService(releaseId: number, userId: number, input: Ret
     if(await prisma.managedServiceRequest.count({where:{userId,serviceType:'YOUTUBE_OAC',release:oacArtistReleaseWhere(userId,artist.id),status:'completed'}}))throw Error('This artist already has an approved OAC. Request a channel change through HYMN support.');
     const unresolvedLegacy=await prisma.managedServiceRequest.count({where:{userId,serviceType:'YOUTUBE_OAC',release:oacArtistReleaseWhere(userId,artist.id),status:{in:['failed','rejected','cancelled']}}});
     if(unresolvedLegacy&&!await prisma.releaseChangeRequest.count({where:{requestedByUserId:userId,requestType:'distribution_service',requestedChanges:{path:['resource'],equals:`artist:${artist.id}`}}}))throw Error('HYMN must reconcile the earlier OAC application before another application or payment. Contact support.');
-    const live = (await oacArtistLiveReleases(userId,artist.id)).length;
-    if (live < 5) throw Error('An Official Artist Channel requires at least five live releases for this verified artist profile.');
+    await (await import('./youtube-oac-access')).requireOacAccess(userId,artist.id);
+    const live = await oacArtistLiveSongCount(userId,artist.id);
+    if (live < 5) throw Error('An Official Artist Channel requires at least five live songs distributed by HYMN for this verified artist profile.');
     payload = {artist_id:Number(artist.direNoteArtistId),...fields}; resource = `artist:${artist.id}`;
   }
   if (input.action === 'request_takedown') {

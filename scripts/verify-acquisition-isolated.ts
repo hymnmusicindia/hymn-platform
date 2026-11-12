@@ -163,6 +163,7 @@ async function main() {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-distribution-services.ts']);
       if(process.argv.includes('--build')) await run(['node_modules/next/dist/bin/next','build','--webpack'],process.execPath,{...env,NODE_ENV:'production',NODE_OPTIONS:'--max-old-space-size=8192',NEXT_DIST_DIR:'.next-distribution-services-check',HYMN_BUILD_DISABLE_CACHE:'true',DIRENOTE_CLIENT_ID:'build-fixture',DIRENOTE_API_PIN:'build-fixture',DIRENOTE_INGEST_ENDPOINT:'http://127.0.0.1:1/ingest_content',DIRENOTE_RELEASE_INFORMATION_ENDPOINT:'http://127.0.0.1:1/check_release_status',DIRENOTE_REVENUE_REPORT_ENDPOINT:'http://127.0.0.1:1/check_revenue_report'});
+      if(process.argv.includes('--workspace-browser'))await run(['scripts/verify-workspace-navigation-live.cjs'],process.execPath,{...env,NODE_ENV:'production',NEXT_DIST_DIR:'.next-distribution-services-check',JWT_SECRET:'workspace-fixture-signing-secret-2026',HYMN_CRON_WORKER_ENABLED:'false'});
       return;
     }
     if (process.argv.includes('--release-corrections-only')) {

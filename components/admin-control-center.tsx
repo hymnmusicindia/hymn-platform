@@ -7,6 +7,7 @@ import { DistributionOperationsHeader } from "./distribution-operations-header";
 import { DistributionAutomationInsight } from "./distribution-automation-insight";
 import { isReleaseInHymnQcQueue, newestReleaseFirst } from "@/lib/distribution-workspace";
 
+import {WorkspaceLoading} from "@/components/workspace-loading";
 import dynamic from "next/dynamic";
 import Link from 'next/link';
 import { WorkspacePanel as SurfaceSection, WorkspaceMetric as StatCard } from "@/components/workspace-panel";
@@ -17,7 +18,7 @@ import { AdminCenteredDialog } from "./admin-centered-dialog";
 import { ProducerStorefrontPreview } from "./admin-catalog-grid";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { AdminSubscriptionRevenue } from "@/components/admin-subscription-revenue";
-const AdminRevenueWorkspace = dynamic(() => import("@/components/admin-revenue-workspace").then(m => m.AdminRevenueWorkspace), { loading: () => <p role="status">Loading workspace...</p> });
+const AdminRevenueWorkspace = dynamic(() => import("@/components/admin-revenue-workspace").then(m => m.AdminRevenueWorkspace), { loading: () => <WorkspaceLoading/> });
 import { summarizeRevenue, type RevenueEntry } from "@/lib/revenue-report";
 import type { SubscriptionRevenueRow } from "@/lib/subscription-revenue";
 
@@ -31,8 +32,8 @@ import { AdminReviewManager } from "@/components/admin-review-manager";
 import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-manager";
 import { AdminActivityAndLogs } from "@/components/admin-activity-and-logs";
 import { WorkspaceRecords } from "@/components/workspace-records";
-const AdminUserManagement = dynamic(() => import("@/components/admin-user-management").then(m => m.AdminUserManagement), { loading: () => <p role="status">Loading workspace...</p> });
-const AdminTeamAccessManager = dynamic(() => import("@/components/admin-team-access-manager").then(m => m.AdminTeamAccessManager), { loading: () => <p role="status">Loading workspace...</p> });
+const AdminUserManagement = dynamic(() => import("@/components/admin-user-management").then(m => m.AdminUserManagement), { loading: () => <WorkspaceLoading/> });
+const AdminTeamAccessManager = dynamic(() => import("@/components/admin-team-access-manager").then(m => m.AdminTeamAccessManager), { loading: () => <WorkspaceLoading/> });
 import overviewStyles from "./dashboard-overview.module.css";
 import { AdminManualCron } from "./admin-manual-cron";
 import { OverviewPanel, OverviewPipeline } from "./simplified-dashboard-home";

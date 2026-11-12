@@ -16,3 +16,8 @@ Typography: original Inter variable font from https://github.com/rsms/inter, loc
 - `youtube-music-transparent.png`: original transparent dark-background Music mark from YouTube for Artists, https://www.gstatic.com/marketing-cms/assets/images/fa/46/39b7e6e54863a5a9c68c8671db2b/logo.webp. Converted to PNG as requested, preserving colour and alpha.
 
 The OAC analytics preview now uses a code-rendered sample dashboard, clearly labelled sample data. It contains no provider tutorial annotations and represents no artist or customer account. The previous tutorial screenshots remain source assets only.
+
+- `community-concert.jpg`: Jonathan Ikemura, https://unsplash.com/photos/crowd-with-hands-up-at-a-bright-concert-stage-z0R4XB25ozI, Unsplash License. Local 1600px rendition; concert audience used for community artwork.
+- `record-rights.jpg`: Vincent Chan, https://unsplash.com/photos/vinyl-record-on-turntable--ja1xVOENMo, Unsplash License. Local 1400px rendition; recorded music / release preparation artwork.
+
+Navigation motion references: https://m3.material.io/styles/motion. Shared chrome remains in the root layout; menu motion is brief and disabled for reduced motion.

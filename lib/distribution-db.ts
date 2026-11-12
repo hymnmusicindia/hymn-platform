@@ -992,6 +992,8 @@ export async function listAllDistributionOrders(): Promise<DistributionOrder[]> 
   return rows as DistributionOrder[];
 }
 
+// Service fees, including artist OAC access, are not distribution plan entitlements.
+const isDistributionPlan = (plan: string) => ['one_time','pay_per_release','half_yearly','yearly','yearly_plus','basic','pro','elite'].includes(plan);
 export async function listPaidDistributionPlansByUser(userId: number): Promise<string[]> {
   if (isPostgresPrisma()) {
     const [orders, releases] = await Promise.all([
@@ -1002,17 +1004,17 @@ export async function listPaidDistributionPlansByUser(userId: number): Promise<s
       const metadata = release.metadata && typeof release.metadata === "object" ? release.metadata as Record<string, any> : {};
       return String(metadata.distributionPlan ?? metadata.plan ?? metadata.paymentModel ?? "");
     });
-    return [...orders.map((order) => order.plan), ...releasePlans].filter(Boolean);
+    return [...orders.map((order) => order.plan), ...releasePlans].filter(isDistributionPlan);
   }
   const pool = getPool();
   if (!pool) {
     return [
       ...memory.orders.filter((order) => order.userId === userId && order.paymentStatus === "paid").map((order) => order.plan),
       ...memory.releases.filter((release) => release.userId === userId && release.paymentStatus === "paid").map((release) => release.distributionPlan ?? release.paymentModel ?? "")
-    ].filter(Boolean);
+    ].filter(isDistributionPlan);
   }
   const [rows] = await pool.query("SELECT plan FROM distribution_orders WHERE user_id = ? AND payment_status = 'paid'", [userId]);
-  return (rows as Array<{ plan: string }>).map((row) => row.plan);
+  return (rows as Array<{ plan: string }>).map((row) => row.plan).filter(isDistributionPlan);
 }
 
 export async function markDistributionOrderPaid(orderId: string, paymentId: string) {

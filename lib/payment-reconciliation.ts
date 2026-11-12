@@ -38,9 +38,11 @@ export async function reconcilePayments() {
     issues.push({ key, type: "duplicate", message: `Payment ${paymentId} appears on orders ${ids.join(", ")}.`, autoRepaired: false });
     await createAdminTaskOnce({ eventKey: key, type: "Payment Mismatch", priority: "critical", title: "Duplicate payment ID", body: issues.at(-1)!.message, href: "/admin?tab=orders", entityType: "payment", entityId: paymentId });
   }
+  await (await import('./youtube-oac-access')).refreshOacEligibility();
   const distributionOrders = await prisma.distributionOrder.findMany({ where: { paymentStatus: "paid" } });
   for (const order of distributionOrders) {
-    if(order.plan==='youtube_oac_retry'){
+    if(['youtube_oac_retry','youtube_oac_access'].includes(order.plan)){
+      if(order.amount===0&&order.fulfilledAt)continue;
       try{if(!order.razorpayPaymentId)throw Error('Captured payment reference missing.');await confirmDistributionPayment({razorpayOrderId:order.razorpayOrderId,paymentId:order.razorpayPaymentId,source:'reconciliation'});await resolveAdminTask(`payment:oac:${order.id}`,'OAC payment reconciled.');}
       catch{issues.push({key:`payment:oac:${order.id}`,type:'distribution',message:`Paid OAC resubmission #${order.id} needs manual recovery. Do not charge again.`,autoRepaired:false});await createAdminTaskOnce({eventKey:`payment:oac:${order.id}`,type:'OAC payment recovery',priority:'high',title:'Paid OAC application needs recovery',body:issues.at(-1)!.message,href:'/admin/distribution-services',entityType:'distribution_order',entityId:order.id});}
       continue;

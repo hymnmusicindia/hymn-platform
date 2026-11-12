@@ -10,6 +10,7 @@ import Link from "next/link";
 import { WorkspacePanel as Panel, WorkspaceMetric as StatCard } from "@/components/workspace-panel";
 import { WorkspaceGuidance, type GuideStep } from "@/components/workspace-guidance";
 import { useRouter, useSearchParams } from "next/navigation";
+import {WorkspaceLoading} from "@/components/workspace-loading";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { WorkspaceRecords } from "@/components/workspace-records";
@@ -20,13 +21,13 @@ import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
-const PromotionCommunityPage = dynamic(() => import("@/components/community-plans").then(module => module.PromotionCommunityPage));
-const PlaylistReviewMarketplace = dynamic(() => import("@/components/playlist-review-marketplace").then(module => module.PlaylistReviewMarketplace));
+const PromotionCommunityPage = dynamic(() => import("@/components/community-plans").then(module => module.PromotionCommunityPage), {loading:()=> <WorkspaceLoading/>});
+const PlaylistReviewMarketplace = dynamic(() => import("@/components/playlist-review-marketplace").then(module => module.PlaylistReviewMarketplace), {loading:()=> <WorkspaceLoading/>});
 
-const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
-const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel));
-const SplitsDashboard = dynamic(() => import("@/components/splits-dashboard").then((module) => module.SplitsDashboard));
-const ProfilePreferencesForm = dynamic(() => import("@/components/profile-preferences-form").then((module) => module.ProfilePreferencesForm));
+const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard), {loading:()=> <WorkspaceLoading/>});
+const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel), {loading:()=> <WorkspaceLoading/>});
+const SplitsDashboard = dynamic(() => import("@/components/splits-dashboard").then((module) => module.SplitsDashboard), {loading:()=> <WorkspaceLoading/>});
+const ProfilePreferencesForm = dynamic(() => import("@/components/profile-preferences-form").then((module) => module.ProfilePreferencesForm), {loading:()=> <WorkspaceLoading/>});
 
 type CustomerPayoutSummary = {
   totalEarnings: number;

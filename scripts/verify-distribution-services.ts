@@ -1,3 +1,7 @@
+import {getUserEntitlements} from '../lib/entitlements';
+import {purchaseOacAccess,fulfillOacAccess,oacAccessState,notifyOacEligibility} from '../lib/youtube-oac-access';
+import {oacAccessPrice,OAC_ACCESS_PLAN} from '../lib/youtube-oac-contract';
+import {oacArtistLiveSongCount} from '../lib/oac-artist-releases';
 import {confirmDistributionPayment,receiveRazorpayEvent,processRazorpayEvent,claimDistributionOrderForSubmission} from '../lib/payment-webhooks';
 import {oacArtistState,prepareOacApplication,fulfillOacRetryPayment,requestOacChannelChange} from '../lib/youtube-oac';
 import {oacChannelUrl,OAC_RETRY_PLAN,oacOutcome} from '../lib/youtube-oac-contract';
@@ -22,21 +26,61 @@ async function main(){
  const artist=await prisma.artistCard.create({data:{userId:user.id,artistName:'Service Artist',direNoteArtistId:'909',instagramUrl:'https://instagram.com/serviceartist'}});
  const release=await prisma.release.create({data:{userId:user.id,artistProfileId:artist.id,title:'Services release',artistName:'Service Artist',genre:'Pop',releaseDate:new Date('2025-01-01'),status:'LIVE',upc:'012345678905',tracks:{create:{trackNumber:1,title:'Service track',primaryArtist:'Service Artist',isrc:'USAAA2600001',audioUrl:'/original.wav'}}},include:{tracks:true}});
  const trackId=release.tracks[0].id;
- for(let i=0;i<4;i++)await prisma.release.create({data:{userId:user.id,artistProfileId:artist.id,title:`Other live ${i}`,artistName:'Service Artist',genre:'Pop',releaseDate:new Date('2025-01-01'),status:'LIVE'}});
+ const delivered={provider:'direnote',state:'submitted',isCurrent:true,payloadHash:'fixture'};
+ await prisma.distributionSubmissionAttempt.create({data:{...delivered,releaseId:release.id,idempotencyKey:randomUUID()}});
+ const access=async(artistId:number,amount=200)=>prisma.distributionOrder.create({data:{userId:user.id,plan:OAC_ACCESS_PLAN,amount,currency:'INR',paymentStatus:'paid',razorpayPaymentId:`pay_${randomUUID()}`,razorpayOrderId:`order_${randomUUID()}`,fulfilledAt:new Date(),quoteSnapshot:{artistId,amount}}});
+ await access(artist.id);
+ for(let i=0;i<4;i++)await prisma.release.create({data:{userId:user.id,artistProfileId:artist.id,title:`Other live ${i}`,artistName:'Service Artist',genre:'Pop',releaseDate:new Date('2025-01-01'),status:'LIVE',upc:'012345678905',tracks:{create:{trackNumber:1,title:`Song ${i}`,primaryArtist:'Service Artist',isrc:`USAAA260000${i+2}`}},distributionSubmissions:{create:{provider:'direnote',state:'submitted',isCurrent:true,payloadHash:'fixture',idempotencyKey:randomUUID()}}}});
 
  // Older wizard releases store primary artist associations in track metadata, not release.artistProfileId.
  const linkedArtist=await prisma.artistCard.create({data:{userId:user.id,artistName:'Metadata Artist',direNoteArtistId:'910'}});
- const makeLinked=(title:string,status:any='LIVE',owner=user.id,meta:any={metadata:{artistProfileIds:[linkedArtist.id]}})=>prisma.release.create({data:{userId:owner,title,artistName:'Metadata Artist',genre:'Pop',releaseDate:new Date('2025-01-01'),status,upc:'012345678906',tracks:{create:[{trackNumber:1,title:'Metadata recording',primaryArtist:'Metadata Artist',isrc:'USAAA2600010',metadata:meta},{trackNumber:2,title:'Second recording',primaryArtist:'Metadata Artist',isrc:'USAAA2600011',metadata:meta}]}},include:{tracks:true}});
+ let linkedSequence=10;
+ const makeLinked=(title:string,status:any='LIVE',owner=user.id,meta:any={metadata:{artistProfileIds:[linkedArtist.id]}})=>prisma.release.create({data:{userId:owner,title,artistName:'Metadata Artist',genre:'Pop',releaseDate:new Date('2025-01-01'),status,upc:'012345678906',tracks:{create:[{trackNumber:1,title:'Metadata recording',primaryArtist:'Metadata Artist',isrc:`USAAA26${String(linkedSequence++).padStart(5,'0')}`,metadata:meta},{trackNumber:2,title:'Second recording',primaryArtist:'Metadata Artist',isrc:`USAAA26${String(linkedSequence-1).padStart(5,'0')}`,metadata:meta}]},distributionSubmissions:{create:{provider:'direnote',state:'submitted',isCurrent:true,payloadHash:'fixture',idempotencyKey:randomUUID()}}},include:{tracks:true}});
  for(let i=0;i<4;i++)await makeLinked(`Metadata live ${i}`,'LIVE',user.id,i%2?{artistProfileIds:[linkedArtist.id]}:{metadata:{artistProfileIds:[linkedArtist.id]}});
  await makeLinked('Draft does not count','DRAFT');await makeLinked('Partially live does not count','PARTIALLY_LIVE');await makeLinked('Foreign owner does not count','LIVE',stranger.id);await makeLinked('Featured credit does not count','LIVE',user.id,{featuredArtistProfileIds:[linkedArtist.id]});
  const archivedLinked=await makeLinked('Archived does not count');await prisma.release.update({where:{id:archivedLinked.id},data:{archivedAt:new Date()}});
- assert.equal((await oacArtistState(user.id,linkedArtist.id)).liveCount,4,'Count canonical track links once per release, excluding non-live, archived, foreign and featured-only releases.');
+ assert.equal((await oacArtistState(user.id,linkedArtist.id)).liveCount,4,'Count distinct HYMN-delivered songs, excluding reissues, non-live, archived, foreign and featured-only recordings.');
  assert.equal((await oacArtistState(user.id,linkedArtist.id)).eligible,false);
  const fifthLinked=await makeLinked('Fifth metadata-linked release');
  assert.equal((await oacArtistState(user.id,linkedArtist.id)).eligible,true);
+ await assert.rejects(prepareOacApplication(user.id,{artistId:linkedArtist.id,channelUrl:'https://www.youtube.com/channel/UC0123456789012345678901',reason:'I own this artist channel and authorize its application.',rightsConfirmed:true,requestKey:randomUUID()}),/Obtain YouTube OAC access/);
+ await access(linkedArtist.id);
  const metadataApplication=await prepareOacApplication(user.id,{artistId:linkedArtist.id,channelUrl:'https://www.youtube.com/channel/UC0123456789012345678901',reason:'I own this artist channel and authorize its application.',rightsConfirmed:true,requestKey:randomUUID()});
  assert.equal(metadataApplication.releaseId,fifthLinked.id);assert.equal(metadataApplication.operation.artistProfileId,linkedArtist.id);
  await assert.rejects(buildService(fifthLinked.id,user.id,{...metadataApplication.operation,artistProfileId:artist.id}),/primary artist linked/);
+
+ // Artist-specific access, tier pricing, notification idempotency, refund isolation and gateway recovery.
+ assert.equal(oacAccessPrice(null,false),200);assert.equal(oacAccessPrice('yearly',true),150);assert.equal(oacAccessPrice('pro',true),150);assert.equal(oacAccessPrice('yearly_plus',true),0);assert.equal(oacAccessPrice('elite',true),0);assert.equal(oacAccessPrice('yearly_plus',false),200);
+ await assert.rejects(purchaseOacAccess(stranger.id,artist.id));
+ await Promise.all([notifyOacEligibility(user.id,linkedArtist.id),notifyOacEligibility(user.id,linkedArtist.id)]);
+ assert.equal(await prisma.notification.count({where:{eventKey:`oac-access:${user.id}:${linkedArtist.id}:eligible`}}),1);
+ const reserveArtist=await prisma.artistCard.create({data:{userId:user.id,artistName:'Reserved before five songs',direNoteArtistId:'911'}});
+ assert.equal((await oacArtistState(user.id,reserveArtist.id)).eligible,false);
+ assert.equal((await oacAccessState(user.id,reserveArtist.id)).owned,false);
+
+ const yearlyPlus=await prisma.subscription.create({data:{userId:stranger.id,plan:'yearly_plus',status:'active',expiryDate:new Date(Date.now()+86400000)}});
+ const includedArtist=await prisma.artistCard.create({data:{userId:stranger.id,artistName:'Included artist',direNoteArtistId:'912'}});
+ const [freeOne,freeTwo]=await Promise.all([purchaseOacAccess(stranger.id,includedArtist.id),purchaseOacAccess(stranger.id,includedArtist.id)]);
+ assert.equal(freeOne.requiresPayment,false);assert.equal(freeTwo.requiresPayment,false);
+ assert.equal(await prisma.distributionOrder.count({where:{userId:stranger.id,plan:OAC_ACCESS_PLAN}}),1,'Concurrent included grants create one artist entitlement.');
+ assert.equal((await oacAccessState(stranger.id,includedArtist.id)).owned,true);
+ await prisma.subscription.update({where:{id:yearlyPlus.id},data:{expiryDate:new Date(Date.now()-86400000)}});
+ assert.equal((await oacAccessState(stranger.id,includedArtist.id)).owned,true,'A reserved slot survives plan expiry.');
+ const nextArtist=await prisma.artistCard.create({data:{userId:stranger.id,artistName:'Not included after expiry'}});
+ assert.equal((await oacAccessState(stranger.id,nextArtist.id)).amount,200);
+ const pendingAccess=await prisma.distributionOrder.create({data:{userId:user.id,plan:OAC_ACCESS_PLAN,amount:150,currency:'INR',razorpayOrderId:'order_access_fixture',quoteSnapshot:{artistId:reserveArtist.id,amount:150}}});
+ await assert.rejects(fulfillOacAccess(pendingAccess.razorpayOrderId),/not verified/);
+ await assert.rejects(confirmDistributionPayment({razorpayOrderId:pendingAccess.razorpayOrderId,paymentId:'pay_access_fixture',userId:user.id,amountMinor:20000,currency:'INR',source:'webhook'}),/amount/i);
+ await confirmDistributionPayment({razorpayOrderId:pendingAccess.razorpayOrderId,paymentId:'pay_access_fixture',userId:user.id,amountMinor:15000,currency:'INR',source:'webhook'});
+ await fulfillOacAccess(pendingAccess.razorpayOrderId);
+ assert.equal((await oacAccessState(user.id,reserveArtist.id)).owned,true);
+ assert.equal((await getUserEntitlements(user.id)).releaseAccess,false,'OAC fees must not grant a distribution subscription or release access.');
+ assert.equal((await oacAccessState(stranger.id,reserveArtist.id)).owned,false);
+ await assert.rejects(claimDistributionOrderForSubmission({razorpayOrderId:pendingAccess.razorpayOrderId,userId:user.id}),/already/);
+ assert.equal(await prisma.notification.count({where:{eventKey:`oac-access:${user.id}:${reserveArtist.id}:eligible`}}),0,'No eligibility reminder before five songs');
+ await prisma.distributionOrder.update({where:{id:pendingAccess.id},data:{paymentStatus:'refunded'}});
+ assert.equal((await oacAccessState(user.id,reserveArtist.id)).owned,false);
+
  await prisma.releaseStatusTransition.create({data:{releaseId:release.id,previousStatus:'DISTRIBUTOR_PROCESSING',newStatus:'LIVE',actorType:'system',createdAt:new Date(Date.now()-100*86400000)}});
  const spotify={spotifyTrackUrl:'https://open.spotify.com/track/0123456789012345678901',spotifyLiveConfirmed:true};
  const future=new Date(Date.now()+10*86400000).toISOString().slice(0,10);
@@ -165,7 +209,7 @@ async function main(){
   assert.equal((await prisma.distributionOrder.findUniqueOrThrow({where:{id:capturedOrder.id}})).paymentStatus,'refunded');
   assert.equal((await prisma.subscription.findUniqueOrThrow({where:{id:subscription.id}})).status,'active','An OAC fee refund must never cancel a distribution subscription.');
 
-  assert.equal(await prisma.distributionSubmissionAttempt.count({where:{releaseId:release.id}}),0,'No audio ingestion from service requests.');
+  assert.equal(await prisma.distributionSubmissionAttempt.count({where:{releaseId:release.id,payloadHash:{not:"fixture"}}}),0,'No audio ingestion from service requests.');
   assert((await prisma.emailLog.count({where:{userId:user.id,template:'release_amendment_update'}}))>0);
   for(const action of analyticsActions){
    const query={action,from:'2026-01',to:'2026-10',currency:'USD'};
