@@ -159,6 +159,16 @@ async function main() {
       await run(['--conditions=react-server','--import','tsx','scripts/verify-team-lead-stages.ts']);
       return;
     }
+    if (process.argv.includes('--producer-follows-only')) {
+      const baseline=path.join(fixture,'before-producer-follows.prisma');
+      writeFileSync(baseline,readFileSync('prisma/schema.prisma','utf8').replace(/^.*producerFollows\s+ProducerFollow\[\].*$/gm,'').replace(/^.*followers\s+ProducerFollow\[\].*$/gm,'').replace(/model ProducerFollow \{[\s\S]*?\n\}/,''));
+      await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate']);
+      await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261112090000_producer_follows/migration.sql','--schema','prisma/schema.prisma']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-producer-follows.ts']);
+      if(process.argv.includes('--build')) await run(['node_modules/next/dist/bin/next','build','--webpack'],process.execPath,{...env,NODE_ENV:'production',NODE_OPTIONS:'--max-old-space-size=8192',NEXT_DIST_DIR:'.next-distribution-services-check',HYMN_BUILD_DISABLE_CACHE:'true',DIRENOTE_CLIENT_ID:'build-fixture',DIRENOTE_API_PIN:'build-fixture',DIRENOTE_INGEST_CONTENT_ENDPOINT:'http://127.0.0.1:1/ingest_content',DIRENOTE_RELEASE_INFORMATION_ENDPOINT:'http://127.0.0.1:1/check_release_status',DIRENOTE_REVENUE_REPORT_ENDPOINT:'http://127.0.0.1:1/check_revenue_report'});
+      if(process.argv.includes('--api-browser'))await run(['scripts/verify-producer-follows-live.cjs'],process.execPath,{...env,NODE_ENV:'production',NEXT_DIST_DIR:'.next-distribution-services-check',JWT_SECRET:'producer-follow-fixture-secret-2026'});
+      return;
+    }
     if (process.argv.includes('--distribution-services-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-distribution-services.ts']);

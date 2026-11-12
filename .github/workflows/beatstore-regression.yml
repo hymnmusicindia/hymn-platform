@@ -4,6 +4,17 @@ on:
     paths:
       - 'components/beat-*'
       - 'components/producer-beat-grid.tsx'
+      - 'components/producer-suggestions*'
+      - 'components/home-beat-carousel*'
+      - 'components/home-path-banners.tsx'
+      - 'components/home-goal-workspace.tsx'
+      - 'lib/home-goals.ts'
+      - 'app/layout.tsx'
+      - 'app/(public)/page.tsx'
+      - 'scripts/verify-homepage-compact.cjs'
+      - 'lib/producer-follows.ts'
+      - 'app/api/producer-follows/**'
+      - 'scripts/verify-producer-*'
       - 'components/marketplace-*'
       - 'components/operations-panels.tsx'
       - 'components/studio-project-records.tsx'
@@ -44,6 +55,17 @@ on:
     paths:
       - 'components/beat-*'
       - 'components/producer-beat-grid.tsx'
+      - 'components/producer-suggestions*'
+      - 'components/home-beat-carousel*'
+      - 'components/home-path-banners.tsx'
+      - 'components/home-goal-workspace.tsx'
+      - 'lib/home-goals.ts'
+      - 'app/layout.tsx'
+      - 'app/(public)/page.tsx'
+      - 'scripts/verify-homepage-compact.cjs'
+      - 'lib/producer-follows.ts'
+      - 'app/api/producer-follows/**'
+      - 'scripts/verify-producer-*'
       - 'components/marketplace-*'
       - 'components/operations-panels.tsx'
       - 'components/studio-project-records.tsx'
@@ -97,6 +119,7 @@ jobs:
       - run: npm ci --fetch-retries=5 --fetch-timeout=120000
       - run: npx prisma generate
       - run: npm run test:beatstore
+      - run: node --conditions=react-server --import tsx scripts/verify-acquisition-isolated.ts --producer-follows-only
       - run: node --import tsx scripts/verify-direnote-virtual.ts --beat-delivery-only
       - run: node --import tsx scripts/verify-direnote-virtual.ts --beat-licensing-only
       - run: node --import tsx scripts/verify-payment-flows-isolated.ts --webhooks-only
@@ -106,6 +129,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: node scripts/verify-beat-requested-file-browser.cjs
       - run: npm run test:beatstore:browser
+      - run: node scripts/verify-producer-suggestions.cjs
+      - run: node scripts/verify-homepage-compact.cjs
+      - run: node scripts/verify-beat-preview-playback.cjs
+      - run: node scripts/verify-premium-player.cjs
       - run: node scripts/verify-beat-purchase-browser.cjs
       - run: node scripts/verify-beat-buyer-checkout.cjs
       - run: node scripts/verify-marketplace-browser.cjs

@@ -41,3 +41,18 @@ export function homeFeedSections(goalId: string | undefined, visit: number): Hom
   const offset = Math.abs(visit) % rotating.length;
   return [...pinned, ...rotating.slice(offset), ...rotating.slice(0,offset)];
 }
+
+
+/** Keep the listening row in the platform-to-studio gap on every home visit. */
+export function homeDiscoverySections(goalId:string|undefined,visit:number):HomeBannerId[]{
+  const sections:HomeBannerId[]=homeFeedSections(goalId,visit).filter(id=>id!=="releases"&&id!=="beats");
+  const platform=sections.indexOf("platforms");
+  if(platform>=0){
+    const rest:HomeBannerId[]=sections.filter(id=>id!=="studio");
+    rest.splice(rest.indexOf("platforms")+1,0,"beats","studio");
+    return rest;
+  }
+  const studio=sections.indexOf("studio");
+  sections.splice(studio>=0?studio:0,0,"beats");
+  return sections;
+}

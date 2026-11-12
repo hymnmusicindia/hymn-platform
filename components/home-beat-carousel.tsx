@@ -1,63 +1,42 @@
-'use client';
-import { useEffect, useRef, useState } from 'react';
+"use client";
+import { useRef,useState,useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Loader2, Pause, Play } from 'lucide-react';
+import { ArrowLeft,ArrowRight,Pause,Play } from 'lucide-react';
+import { useBeatPreviewPlayer } from './beat-preview-player';
+import { artworkPreviewUrl } from '@/lib/artwork-preview';
+import { exclusiveBeatEligible } from '@/lib/beat-rights-policy';
+import type { StorefrontBeat } from '@/lib/beat-store';
 import styles from './home-beat-carousel.module.css';
-type Preview = { id: number; title: string; genre: string; bpm: number; artwork: string; price: number; src: string; fallbackSrc?: string };
-export function HomeBeatCarousel({ beats }: { beats: Preview[] }) {
-  const viewport = useRef<HTMLDivElement>(null), audio = useRef<HTMLAudioElement>(null), request = useRef(0);
-  const [active, setActive] = useState<number | null>(null), [playing, setPlaying] = useState(false), [busy, setBusy] = useState(false);
-  const [paused, setPaused] = useState(false), [interacting, setInteracting] = useState(false), [message, setMessage] = useState('');
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (paused || interacting || playing || busy || media.matches || beats.length < 2) return;
-    let frame = 0, previous = 0, offset = viewport.current?.scrollLeft || 0;
-    function move(time: number) {
-      const node = viewport.current;
-      if (node && previous && !document.hidden) {
-        offset += Math.min(time - previous, 50) * .018;
-        const end = node.scrollWidth - node.clientWidth;
-        if (end > 0) { if (offset >= end) offset = 0; node.scrollLeft = offset; }
-      }
-      previous = time; frame = requestAnimationFrame(move);
-    }
-    frame = requestAnimationFrame(move); return () => cancelAnimationFrame(frame);
-  }, [paused, interacting, playing, busy, beats.length]);
-  useEffect(() => () => { request.current++; audio.current?.pause(); }, []);
-  async function toggle(beat: Preview) {
-    const player = audio.current; if (!player) return;
-    const ticket = ++request.current; setMessage('');
-    if (active === beat.id && !player.paused) { player.pause(); setBusy(false); return; }
-    player.pause(); setActive(beat.id); setBusy(true);
-    const sources = active === beat.id && player.src && !player.error
-      ? [...new Set([player.src, beat.src, beat.fallbackSrc].filter(Boolean))]
-      : [...new Set([beat.src, beat.fallbackSrc].filter(Boolean))];
-    for (const source of sources) {
-      if (ticket !== request.current) return;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        if (player.getAttribute('src') !== source || player.error) { player.src = source!; player.load(); }
-        await Promise.race([player.play(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Preview timed out')), 12000); })]);
-        if (ticket === request.current) { setBusy(false); setPlaying(true); } return;
-      } catch (error) {
-        if (ticket !== request.current) return;
-        player.pause();
-        if (error instanceof Error && error.name === 'NotAllowedError') { setBusy(false); setMessage('Tap play again to start the preview.'); return; }
-      } finally { clearTimeout(timer); }
-    }
-    if (ticket === request.current) { setBusy(false); setPlaying(false); setMessage('Preview unavailable. Open the Beat Store to try again.'); }
-  }
-  if (!beats.length) return <p className={styles.empty}>New beats are on their way. <Link href="/beat-store">Explore the Beat Store <ArrowRight size={14}/></Link></p>;
+
+export function HomeBeatCarousel({ beats }: { beats: StorefrontBeat[] }) {
+  const viewport=useRef<HTMLDivElement>(null),player=useBeatPreviewPlayer();
+  const [edges,setEdges]=useState({start:true,end:true});
+  useEffect(()=>{
+    const node=viewport.current;if(!node)return;
+    const update=()=>setEdges({start:node.scrollLeft<=2,end:node.scrollLeft+node.clientWidth>=node.scrollWidth-2});
+    const observer=new ResizeObserver(update);observer.observe(node);node.addEventListener('scroll',update,{passive:true});update();
+    return ()=>{observer.disconnect();node.removeEventListener('scroll',update);};
+  },[beats.length]);
+  function move(direction:number){const node=viewport.current;if(node)node.scrollBy({left:direction*Math.max(180,node.clientWidth*.8),behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
+  if(!beats.length)return <p className={styles.empty}>New beats are on their way. <Link href="/beat-store">Explore the Beatstore <ArrowRight size={14}/></Link></p>;
   return <div className={styles.root}>
-    <div className={styles.toolbar}><span>Listen here. Make it yours in the store.</span><button type="button" aria-pressed={paused} onClick={() => setPaused(value => !value)}>{paused ? <Play size={12}/> : <Pause size={12}/>} {paused ? 'Resume carousel' : 'Pause carousel'}</button></div>
-    <div className={styles.viewport} ref={viewport} tabIndex={0} role="region" aria-label="Beat previews. Swipe to explore." onMouseEnter={() => setInteracting(true)} onMouseLeave={() => setInteracting(false)} onFocusCapture={() => setInteracting(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) setInteracting(false); }} onPointerDown={() => setPaused(true)} onWheel={() => setPaused(true)}>
-      {beats.map(beat => <article key={beat.id} className={styles.card}>
-        <button type="button" className={styles.cover} onClick={() => void toggle(beat)} aria-label={`${active === beat.id && playing ? 'Pause' : 'Play'} ${beat.title}`} aria-busy={active === beat.id && busy}>
-          <img src={beat.artwork} alt={`${beat.title} cover`} loading="lazy" width={200} height={200}/><span>{active === beat.id && busy ? <Loader2 size={17} className={styles.loading}/> : active === beat.id && playing ? <Pause size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}</span>
-        </button><div className={styles.copy}><small>{beat.genre} · {beat.bpm} BPM</small><h3 title={beat.title}>{beat.title}</h3><div><strong>₹{beat.price.toLocaleString('en-IN')}</strong><Link href="/beat-store#beat-catalog" aria-label={`View ${beat.title} in Beat Store`}>View beat <ArrowRight size={13}/></Link></div></div>
-      </article>)}
+    <div className={styles.viewport} ref={viewport} tabIndex={0} role="region" aria-label="Beat previews. Swipe to explore.">
+      {beats.map(beat=>{
+        const active=player.activeBeatId===beat.id,playing=active&&player.playing;
+        const exclusive=beat.availableLicenses?.includes('exclusive')&&exclusiveBeatEligible(beat)&&beat.exclusiveRemaining!==0&&beat.status!=='EXCLUSIVE_RESERVED';
+        return <article key={beat.id} className={styles.card}>
+          <button type="button" className={styles.cover} onClick={()=>player.playBeat(beat,beats)} aria-label={`${playing?'Pause':'Play'} ${beat.title}`} aria-pressed={playing}>
+            <img src={artworkPreviewUrl(beat.coverImage,320)} alt={`${beat.title} cover`} loading="lazy" width={200} height={200}/>
+            {exclusive?<small className={styles.badge} title="Exclusive licence available">Exclusive</small>:null}
+            <span className={styles.play} data-playing={playing||undefined}>{playing?<Pause size={20} fill="currentColor"/>:<Play size={20} fill="currentColor"/>}</span>
+          </button>
+          <h3 title={beat.title}>{beat.title}</h3>
+          <Link href={beat.producer.slug?`/beat-store/producers/${encodeURIComponent(beat.producer.slug)}`:"/beat-store#beat-catalog"} className={styles.producer} title={beat.producer.name}>{beat.producer.name}</Link>
+        </article>;
+      })}
     </div>
-    <audio ref={audio} preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setBusy(false); }}/>
-    {message && <p role="status" className={styles.message}>{message}</p>}
+    <button type="button" className={`${styles.arrow} ${styles.previous}`} aria-label="Previous beats" disabled={edges.start} onClick={()=>move(-1)}><ArrowLeft size={19}/></button>
+    <button type="button" className={`${styles.arrow} ${styles.next}`} aria-label="Next beats" disabled={edges.end} onClick={()=>move(1)}><ArrowRight size={19}/></button>
+    {player.error&&beats.some(beat=>beat.id===player.activeBeatId)?<p role="status" className={styles.message}>{player.error}</p>:null}
   </div>;
 }

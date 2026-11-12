@@ -36,6 +36,7 @@ function audioFixture() {
       await page.goto('https://hymn.test/');
       await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; document.getElementById('root').className = 'hymn-portal-root hymn-landing'; });
       await page.evaluate(() => { Object.defineProperty(navigator, 'share', { configurable: true, value: undefined }); Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.copiedLink = text; } } }); });
+      await page.evaluate(()=>{const rail=document.createElement('aside');rail.id='fixture-rail';rail.style.cssText='position:fixed;left:0;bottom:0;width:280px;height:140px;z-index:1200;background:#171d25';rail.textContent='Navigation';document.body.append(rail);});
       await page.addStyleTag({ content: css.css }); await page.addStyleTag({ path: path.join(out, 'ui.css') }); await page.addScriptTag({ path: path.join(out, 'ui.js') });
       assert.equal(waveformRequests.length, 0, 'Catalogue must not fetch waveforms before playback');
       await page.getByRole('button', { name: 'Listen to Midnight Motion', exact: true }).click();

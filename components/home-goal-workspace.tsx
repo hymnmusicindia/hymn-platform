@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowRight, AudioLines, Check, X, Compass, Disc3, Headphones, LoaderCircle, Music2, RotateCcw, Mic2, SlidersHorizontal, Users } from "lucide-react";
 import type { OnboardingAgentState } from "@/lib/onboarding-agent";
-import { beginHomeGuide, homeGoal, homeGoals, onboardingTarget, homeFeedSections, type HomeBannerId } from "@/lib/home-goals";
+import { beginHomeGuide, homeGoal, homeGoals, onboardingTarget, homeDiscoverySections, type HomeBannerId } from "@/lib/home-goals";
 
 type Payload = { state: OnboardingAgentState | null; goalOptions: Array<{ id: string; label: string }>; goalLimit: number; knownGoalId?: string };
 const icons = { release: Disc3, "finish-release": RotateCcw, "buy-beat": Headphones, "sell-beats": Music2, studio: AudioLines };
@@ -98,6 +98,8 @@ export function HomeGoalWorkspace({ userId, name, banners = {} }: { userId: numb
   const activeHref = onboardingTarget(next?.action_target || goal.href, state?.goalId);
   const guide = (href: string, title: string, description: string) => { setPopupOpen(false); beginHomeGuide({ userId, goalId: state?.goalId || goal.id, href, title, description }); };
 
+  const feedSections = homeDiscoverySections(state?.goalId,visit);
+
   return <section className="home-goal-workspace" data-home-goal={state?.goalId || "choose"} data-mode={state && !chooser ? "home" : "onboarding"} aria-labelledby="home-goal-title">
     <div className="home-goal-backdrop" aria-hidden="true"><Image src="/home-hero-crowd.jpg" alt="" fill priority sizes="100vw" /></div>
     <div className="home-welcome-intro"><div className="home-welcome-inner">
@@ -123,7 +125,7 @@ export function HomeGoalWorkspace({ userId, name, banners = {} }: { userId: numb
       </details>
       </div></aside>, document.body) : null}
       {banners.releases ? <div className="home-goal-hero-showcase" data-home-banner="releases">{banners.releases}</div> : null}
-      <div className="home-personalized-feed" aria-label="Selected for your path">{homeFeedSections(state.goalId,visit).filter(id => id !== "releases").map(id => banners[id] ? <div key={id} data-home-banner={id}>{banners[id]}</div> : null)}</div>
+      <div className="home-personalized-feed" aria-label="Selected for your path">{feedSections.map(id => banners[id] ? <div key={id} data-home-banner={id}>{banners[id]}</div> : null)}</div>
     </> : null}
   </section>;
 }

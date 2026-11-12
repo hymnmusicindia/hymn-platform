@@ -7,6 +7,7 @@ const browser=await chromium.launch();try{for(const width of [1440,390]){
 const page=await browser.newPage({viewport:{width,height:900}});await page.setContent('<div id="root"></div>');
 // localStorage requires a real origin for the provider's volume preference.
 await page.route('https://hymn.test/',r=>r.fulfill({body:'<div id="root"></div>',contentType:'text/html'}));await page.goto('https://hymn.test/');
+if(width===390)await page.evaluate(()=>{Storage.prototype.getItem=()=>{throw new DOMException('Storage blocked','SecurityError')};Storage.prototype.setItem=()=>{throw new DOMException('Storage blocked','SecurityError')};});
 await page.evaluate(()=>{window.audios=[];window.Audio=class{constructor(){Object.assign(this,{paused:true,volume:1,muted:false,loop:false,src:'',duration:12,currentTime:0});window.audios.push(this)}play(){this.paused=false;return new Promise((resolve,reject)=>{this.resolve=()=>{this.onplaying?.();resolve()};this.reject=reject})}pause(){this.paused=true;this.onpause?.()}load(){}removeAttribute(){this.src=''}}});
 await page.addScriptTag({path:path.join(out,'test.js')});await page.waitForFunction(()=>window.player);
 const result=await page.evaluate(async()=>{const beat=id=>({id,title:'Beat '+id,previewUrl:'/preview'+id+'.mp3',fileUrl:'/master'+id+'.wav',producer:{name:'Producer',slug:'p'},availableLicenses:['mp3'],price:120});const tick=()=>new Promise(r=>setTimeout(r,80));

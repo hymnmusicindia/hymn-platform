@@ -14,6 +14,7 @@ import { BeatEngagementProvider } from "@/components/beat-engagement-provider";
 import cardStyles from "./beat-store-card.module.css";
 import storeStyles from "./beat-store.module.css";
 import { BeatLicenceGuide } from "@/components/beat-licence-guide";
+import { ProducerSuggestions } from "@/components/producer-suggestions";
 import { BeatStoreHero } from "@/components/beat-store-hero";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { useBeatPreviewPlayer } from "@/components/beat-preview-player";
@@ -641,6 +642,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
             setBpmMin(Math.max(40, beat.bpm - 15)); setBpmMax(Math.min(300, beat.bpm + 15));
           }}
         />
+        <ProducerSuggestions profiles={displayProducerProfiles} beats={catalog}/>
         <div id="beat-catalog" className="scroll-mt-24">
           <div className="space-y-5">
             <div className={storeStyles.catalogueToolbar}>

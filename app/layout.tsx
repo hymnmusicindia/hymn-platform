@@ -1,3 +1,4 @@
+import { BeatPreviewPlayerProvider } from '@/components/beat-preview-player';
 import { getSession } from '@/lib/session';
 import { getSubscriptionMenuLabel } from '@/lib/subscription-helpers';
 import { SubscriptionLabelProvider } from '@/components/subscription-label-context';
@@ -108,7 +109,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning><PublicNoScriptInformation/><SubscriptionLabelProvider label={subscriptionLabel}><PersistentSiteWorkspace user={session} header={<SiteHeader user={session}/>}>{children}</PersistentSiteWorkspace></SubscriptionLabelProvider><CustomerServiceInterestTracker /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
+      <body suppressHydrationWarning><PublicNoScriptInformation/><BeatPreviewPlayerProvider><SubscriptionLabelProvider label={subscriptionLabel}><PersistentSiteWorkspace user={session} header={<SiteHeader user={session}/>}>{children}</PersistentSiteWorkspace></SubscriptionLabelProvider></BeatPreviewPlayerProvider><CustomerServiceInterestTracker /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
     </html>
   );
 }

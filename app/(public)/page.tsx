@@ -71,7 +71,7 @@ export default async function HomePage() {
    {href:'/beat-store',title:'Find your sound',tag:'Beat Store',icon:Disc3,copy:'Discover and license your next beat.'},
    {href:'/studio',title:'Finish your record',tag:'Mixing & mastering',icon:Headphones,copy:'Work with an engineer on your sound.'}
   ].map(({icon:Icon,...item})=><Link key={item.href} href={item.href} className="visitor-service"><span className="visitor-service-icon"><Icon size={21}/></span><span><small>{item.tag}</small><strong>{item.title}</strong><span>{item.copy}</span></span><ArrowRight size={17}/></Link>)}</div></section>
-  {banners.journey}{banners.beats}{banners.platforms}
+  {banners.journey}{banners.platforms}{banners.beats}{banners.studio}
   <HomeReviewsCarousel reviews={featuredReviews} compact/>
   <section className="landing-newsletter" aria-labelledby="visitor-newsletter-title"><div className="shell"><div className="visitor-newsletter-row"><div><p className="landing-eyebrow">Stay in the loop</p><h2 id="visitor-newsletter-title">A little inspiration. <br/>Your next beginning.</h2></div><HomeNewsletter/></div><div className="visitor-socials"><span>Follow the music</span><a href="https://www.instagram.com/hymnmusic.in/" target="_blank" rel="noreferrer" aria-label="HYMN on Instagram"><Instagram size={18}/></a><a href="https://www.youtube.com/@hymnmusic_in/" target="_blank" rel="noreferrer" aria-label="HYMN on YouTube"><Youtube size={19}/></a></div></div></section>
  <PublicHomeInformation/>

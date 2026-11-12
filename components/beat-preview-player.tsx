@@ -11,6 +11,7 @@ import { BeatFreeDownload } from "@/components/beat-free-download";
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {createPortal} from "react-dom";
 import { CustomerOverlay } from "@/components/customer-overlay";
 import { LicenceWheel } from "@/components/licence-wheel";
@@ -333,7 +334,7 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-2"><div className="flex gap-1"><button type="button" className="hymn-player-icon" onClick={value.previous} aria-label="Previous beat"><SkipBack size={17}/></button><button type="button" className="hymn-player-icon" onClick={value.next} aria-label="Next beat"><SkipForward size={17}/></button><button type="button" className="hymn-player-icon" onClick={() => value.setShuffle(!value.shuffle)} aria-label="Shuffle beats" aria-pressed={value.shuffle}><Shuffle size={17}/></button></div><BeatFreeDownload key={beat.id} id={beat.id} title={beat.title}/><label className="flex items-center gap-2 text-xs"><Volume2 size={15}/><input className="hymn-player-volume-slider" style={{ backgroundImage: `linear-gradient(to right, var(--text) ${value.volume * 100}%, var(--border) ${value.volume * 100}%)` }} aria-label="Preview volume" type="range" min="0" max="1" step="0.01" value={value.volume} onChange={event => value.setVolume(Number(event.target.value))}/></label></div>
                   {shareNotice ? <div className="px-4 pb-3"><input className="hymn-player-share-link" aria-label="Share beat link" value={shareUrl} readOnly onFocus={event => event.target.select()}/></div> : null}
                   <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-2 text-xs font-semibold text-[var(--text)] sm:grid-cols-4">
-                    <Link href={`/beat-store/producers/${beat.producer.slug}`} className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 hover:bg-white/8">Producer <ExternalLink className="h-3.5 w-3.5" /></Link>
+                    <Link href={beat.producer.slug?`/beat-store/producers/${encodeURIComponent(beat.producer.slug)}`:"/beat-store#beat-catalog"} className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 hover:bg-white/8">Producer <ExternalLink className="h-3.5 w-3.5" /></Link>
                     <button type="button" onClick={() => value.setLoop(!value.loop)} className={`rounded-xl px-3 py-2 transition hover:bg-white/8 ${value.loop ? "text-[var(--accent)]" : ""}`}>{value.loop ? "Loop On" : "Loop"}</button>
                     <button type="button" onClick={() => value.setMuted(!value.muted)} className="rounded-xl px-3 py-2 transition hover:bg-white/8">{value.muted ? "Unmute" : "Mute"}</button>
                     <button type="button" onClick={() => { value.openLicensing(beat); setMenuOpen(false); }} className="rounded-xl px-3 py-2 text-[var(--accent)] transition hover:bg-white/8">Terms</button>
@@ -349,6 +350,8 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
 }
 
 export function BeatPreviewPlayerProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname() || "/";
+  const inBeatStore = pathname === "/beat-store" || pathname.startsWith("/beat-store/") || pathname === "/beatstore";
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const queueRef = useRef<StorefrontBeat[]>([]);
   const activeBeatRef = useRef<StorefrontBeat | null>(null);
@@ -370,9 +373,11 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const storedVolume = window.localStorage.getItem("hymn-beat-preview-volume");
-    const savedVolume = storedVolume === null ? 1 : Number(storedVolume);
-    if (Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) setVolumeState(savedVolume);
+    try {
+      const storedVolume = window.localStorage.getItem("hymn-beat-preview-volume");
+      const savedVolume = storedVolume === null ? 1 : Number(storedVolume);
+      if (Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) setVolumeState(savedVolume);
+    } catch { /* Playback remains available when browser storage is blocked. */ }
   }, []);
 
   const ensureAudio = useCallback(() => {
@@ -399,7 +404,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     const audio = ensureAudio();
     audio.volume = volume;
     audio.muted = muted;
-    if (typeof window !== "undefined") window.localStorage.setItem("hymn-beat-preview-volume", String(volume));
+    try { window.localStorage.setItem("hymn-beat-preview-volume", String(volume)); } catch { /* Preferences are optional. */ }
   }, [ensureAudio, muted, volume]);
 
   const playBeat = useCallback((beat: StorefrontBeat, queue?: StorefrontBeat[]) => {
@@ -454,6 +459,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
       };
       audio.onplaying = () => { clearTimeout(timeout); if (current()) { setPlaying(true); setError(null); } };
       audio.onpause = () => { clearTimeout(timeout); if (current()) setPlaying(false); };
+      audio.onended = () => { if (current()) setPlaying(false); };
       audio.onerror = fail;
       const timeout = setTimeout(fail, 12000);
       audio.src = url;
@@ -520,12 +526,13 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     closeLicensing: () => setLicensingOpen(false)
   }), [activeBeat, currentTime, duration, sourceUrl, ensureAudio, error, loop, muted, playBeat, playQueueOffset, playing, shuffle, volume]);
 
+  const showPlayer = Boolean(activeBeat && (inBeatStore || playing));
   return (
     <BeatPreviewContext.Provider value={value}>
-      <div className={activeBeat ? "hymn-player-page-space" : undefined}>
+      <div className={showPlayer ? "hymn-player-page-space" : undefined}>
         {children}
       </div>
-      <BottomPlayer value={value} licensingOpen={licensingOpen} />
+      {showPlayer ? <BottomPlayer value={value} licensingOpen={licensingOpen} /> : null}
       <LicensingSurface beat={licensingBeat ?? activeBeat} open={licensingOpen} selected={selectedLicense} onSelect={setSelectedLicense} onClose={() => setLicensingOpen(false)} />
     </BeatPreviewContext.Provider>
   );

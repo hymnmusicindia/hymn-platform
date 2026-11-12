@@ -220,6 +220,7 @@ model User {
   referralVisits                ReferralVisit[]
   referralCommissionPayouts     ReferralCommissionPayout[]
   beats                         Beat[]
+  producerFollows               ProducerFollow[]
   producerProfile               ProducerProfile?
   artistCards                   ArtistCard[]
   ownedSplitRecords             SplitRecord[]                       @relation("SplitOwner")
@@ -2272,6 +2273,8 @@ model ProducerProfile {
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   contributorParty ContributorParty? @relation(fields: [contributorPartyId], references: [id], onDelete: SetNull)
+
+  followers ProducerFollow[]
 
   @@index([slug])
   @@index([active, sortOrder])
@@ -4461,4 +4464,16 @@ model TeamOutreachSuppression {
   email String @id
   createdAt DateTime @default(now())
   @@map("team_outreach_suppressions")
+}
+
+
+model ProducerFollow {
+  followerUserId Int @map("follower_user_id")
+  producerProfileId Int @map("producer_profile_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  follower User @relation(fields:[followerUserId],references:[id],onDelete:Cascade)
+  producer ProducerProfile @relation(fields:[producerProfileId],references:[id],onDelete:Cascade)
+  @@id([followerUserId,producerProfileId])
+  @@index([producerProfileId])
+  @@map("producer_follows")
 }
