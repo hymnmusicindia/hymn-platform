@@ -47,7 +47,7 @@ const {build}=require('esbuild'),postcss=require('postcss'),tailwind=require('ta
     if(data.action==='verify-payment'){captures++;owned=true;return route.fulfill({json:{success:true}})}throw Error('Unexpected OAC action '+data.action);
   });
   await page.goto(origin+'/oac-page');await page.getByRole('combobox',{name:'Choose artist',exact:true}).click();await page.getByRole('option',{name:'Example Artist'}).click();
-  await expect(page.getByText(/4 of 5 required live songs/)).toBeVisible();await page.getByRole('button',{name:amount?'Reserve for Example Artist':'Reserve included OAC access',exact:!amount}).click();await expect(page.getByText('OAC access reserved for Example Artist.',{exact:true})).toBeVisible();expect(purchases).toBe(1);expect(captures).toBe(amount?1:0);if(amount)expect(await page.evaluate(()=>window.checkoutAmount)).toBe(amount*100);
+  await expect(page.getByText(/4 of 5 required live songs/)).toBeVisible();await page.getByRole('button',{name:amount?'Buy OAC submission for Example Artist':'Activate included OAC submission',exact:!amount}).click();await expect(page.getByText('OAC submission unlocked for Example Artist.',{exact:true})).toBeVisible();expect(purchases).toBe(1);expect(captures).toBe(amount?1:0);if(amount)expect(await page.evaluate(()=>window.checkoutAmount)).toBe(amount*100);
   await page.getByRole('button',{name:'Set up YouTube OAC',exact:true}).click();await expect(page.getByRole('dialog').locator('form')).toHaveCount(0);await expect(page.getByRole('dialog')).toContainText('five live songs');await page.close();
  }
 

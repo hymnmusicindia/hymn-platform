@@ -49,6 +49,20 @@ async function main(){
  assert.equal(metadataApplication.releaseId,fifthLinked.id);assert.equal(metadataApplication.operation.artistProfileId,linkedArtist.id);
  await assert.rejects(buildService(fifthLinked.id,user.id,{...metadataApplication.operation,artistProfileId:artist.id}),/primary artist linked/);
 
+ // Live synced catalogue survives delivery reconciliation without admitting uncertain sends.
+ const reconcileArtist=await prisma.artistCard.create({data:{userId:user.id,artistName:'Reconciled catalogue',direNoteArtistId:'911'}});
+ for(let i=0;i<4;i++)await prisma.release.create({data:{userId:user.id,artistProfileId:reconcileArtist.id,title:`Reconciled song ${i}`,artistName:reconcileArtist.artistName,genre:'Pop',releaseDate:new Date('2025-01-01'),status:'LIVE',direNoteStatus:'live',tracks:{create:{trackNumber:1,title:`Recording ${i}`,isrc:`USREC260000${i}`,metadata:{direNote:{external:{isrc:`USREC260000${i}`,status:'Live'}}}}},distributionSubmissions:{create:{...delivered,state:i?'reconciliation_required':'submitted',providerReference:`catalogue-${i}`,idempotencyKey:randomUUID()}}}});
+ assert.equal(await oacArtistLiveSongCount(user.id,reconcileArtist.id),4,'All four verified live songs count even when three current delivery attempts require reconciliation.');
+ const unverifiedCatalogue=await prisma.release.create({data:{userId:user.id,artistProfileId:reconcileArtist.id,title:'Unverified catalogue',artistName:reconcileArtist.artistName,genre:'Pop',releaseDate:new Date(),status:'LIVE',direNoteStatus:'live',tracks:{create:{trackNumber:1,title:'Unverified song',isrc:'USREC2600009',metadata:{direNote:{external:{isrc:'USREC2600099',status:'Live'}}}}},distributionSubmissions:{create:{...delivered,state:'reconciliation_required',providerReference:'uncertain',idempotencyKey:randomUUID()}}}});
+ assert.equal(await oacArtistLiveSongCount(user.id,reconcileArtist.id),4,'A mismatched live receipt cannot qualify an uncertain delivery.');
+ await prisma.track.updateMany({where:{releaseId:unverifiedCatalogue.id},data:{metadata:{direNote:{external:{isrc:'USREC2600009',status:'Pending'}}}}});
+ assert.equal(await oacArtistLiveSongCount(user.id,reconcileArtist.id),4,'A pending recording cannot qualify from release status alone.');
+ await prisma.track.updateMany({where:{releaseId:unverifiedCatalogue.id},data:{metadata:{direNote:{external:{isrc:'USREC2600009',status:'Live'}}}}});
+ await prisma.distributionSubmissionAttempt.updateMany({where:{releaseId:unverifiedCatalogue.id},data:{providerReference:null}});
+ assert.equal(await oacArtistLiveSongCount(user.id,reconcileArtist.id),4,'A live receipt without delivery provenance cannot qualify an uncertain delivery.');
+ await prisma.distributionSubmissionAttempt.updateMany({where:{releaseId:unverifiedCatalogue.id},data:{providerReference:'confirmed-catalogue'}});
+ assert.equal(await oacArtistLiveSongCount(user.id,reconcileArtist.id),5,'A matching live recording and referenced HYMN delivery qualifies.');
+
  // Artist-specific access, tier pricing, notification idempotency, refund isolation and gateway recovery.
  assert.equal(oacAccessPrice(null,false),200);assert.equal(oacAccessPrice('yearly',true),150);assert.equal(oacAccessPrice('pro',true),150);assert.equal(oacAccessPrice('yearly_plus',true),0);assert.equal(oacAccessPrice('elite',true),0);assert.equal(oacAccessPrice('yearly_plus',false),200);
  await assert.rejects(purchaseOacAccess(stranger.id,artist.id));
