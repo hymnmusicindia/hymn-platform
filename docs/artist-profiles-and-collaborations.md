@@ -130,6 +130,6 @@ provider-mapping regressions passed; new profile/KYC browser journeys and the
 existing artist-profile dialog passed at desktop/mobile sizes. All 16 core
 regression groups and request/update-boundary checks passed. Targeted lint reported
 zero errors and 17 existing warnings in retained workspace components/helpers. The
-the isolated production build (compilation, TypeScript, static generation and
+isolated production build (compilation, TypeScript, static generation and
 traces) passed. No production migration, live delivery or customer email was
 performed as part of verification. Deployment remains a separate operation.
