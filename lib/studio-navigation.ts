@@ -12,6 +12,7 @@ export const studioDestinations = [
   { key: 'overview', label: 'Overview', group: 'Workspace', href: '/studio', icon: 'home' },
   { key: 'library', label: 'My library', group: 'Workspace', href: '/library', icon: 'folder' },
   { key: 'releases', label: 'Releases', group: 'Create & manage', href: '/studio?tab=releases', icon: 'disc' },
+  { key: 'artists', label: 'Artist profiles', group: 'Create & manage', href: '/studio?tab=artists', icon: 'users' },
   { key: 'projects', label: 'Mixing & mastering', group: 'Create & manage', href: '/studio?view=projects', icon: 'headphones' },
   { key: 'engineers', label: 'Find an engineer', group: 'Create & manage', href: '/studio?view=engineers', icon: 'sliders' },
   { key: 'engineer-workspace', label: 'Engineer workspace', group: 'Create & manage', href: '/studio/engineer', icon: 'headphones' },

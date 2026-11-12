@@ -26,6 +26,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         const ticket = await prisma.supportTicket.findFirst({where:{details:{path:["screenshotIds"],array_contains:[assetId]}},select:{id:true}});
         if (ticket) releaseAdmin = !("error" in await requireSupportAccess());
       }
+      if (linked?.assetType === 'private_kyc_document' && linked.ownerUserId !== user.sub) releaseAdmin = !('error' in await requireAdminPermission('kyc.review'));
       if(linked?.ownerUserId !== user.sub && linked?.assetType==='private_ownership_proof' && linked.entityType==='BEAT' && linked.category==='BEAT_SAMPLE_LICENSE') releaseAdmin = !('error' in await requireAdminPermission('users.manage'));
       if (!releaseAdmin && linked?.ownerUserId !== user.sub) releaseAdmin = await canReadAssignedQcAsset(user.sub, assetId);
     }

@@ -102,6 +102,7 @@ export async function createSplitInvite(userId: number, input: {
             throw new Error("Split record not found or you do not own the release.");
         if (["locked", "archived"].includes(record.status))
             throw new Error("This agreement is locked. Contact support for a future amendment; historical earnings stay unchanged.");
+        if (await tx.auditLog.count({ where: { action: 'ARTIST_HUB_SPLIT_PROPOSED', entity: 'split_record', entityId: String(record.id) } })) throw new Error('This complete proposal requires fresh consent for changes. Cancel it and send a replacement proposal.');
         const rows = await refreshSplit(tx, record.id);
         if (recipientUser && rows.some((r: any) => r.recipientUserId === recipientUser!.id))
             throw new Error("This artist already has an active share in this agreement.");
@@ -190,6 +191,7 @@ export async function revokeSplitInvite(userId: number, inviteId: number) {
         if (!ref)
             throw new Error("Invitation not found.");
         await lockRecord(tx, ref.splitRecordId);
+        if (await tx.auditLog.count({ where: { action: 'ARTIST_HUB_SPLIT_PROPOSED', entity: 'split_record', entityId: String(ref.splitRecordId) } })) throw new Error('Cancel the complete proposal and send a replacement so everyone approves the same allocation.');
         const invite = await tx.splitRecipient.findFirst({ where: { id: inviteId, splitRecord: { ownerUserId: userId, release: { userId }, status: { notIn: ["locked", "archived"] } } } });
         if (!invite || invite.inviteStatus !== "pending")
             throw new Error("Only the owner can revoke a pending invitation.");
@@ -208,7 +210,7 @@ export async function listUserSplits(userId: number) {
         await prisma.$transaction(async (tx) => { await lockRecord(tx, record.id); await refreshSplit(tx, record.id); });
     const [created, received, earnings] = await Promise.all([
         (prisma as any).splitRecord.findMany({ where: { ownerUserId: userId }, include: { release: true, track: true, recipients: { orderBy: { createdAt: "asc" } } }, orderBy: { updatedAt: "desc" } }),
-        (prisma as any).splitRecipient.findMany({ where: { recipientUserId: userId }, include: { release: { select: { id: true, title: true } }, track: { select: { id: true, title: true } }, splitRecord: { select: { status: true, owner: { select: { name: true } } } } }, orderBy: { createdAt: "desc" } }),
+        (prisma as any).splitRecipient.findMany({ where: { recipientUserId: userId }, include: { release: { select: { id: true, title: true } }, track: { select: { id: true, title: true } }, splitRecord: { select: { status: true, effectiveFromMonth: true, effectiveFromYear: true, owner: { select: { name: true } }, recipients: { select: { recipientName: true, role: true, sharePercent: true, inviteStatus: true }, orderBy: { id: "asc" } } } } }, orderBy: { createdAt: "desc" } }),
         (prisma as any).splitEarningLineItem.findMany({ where: { recipientUserId: userId }, include: { release: { select: { id: true, title: true } }, track: { select: { id: true, title: true } }, royaltyLineItem: { select: { statementMonth: true, platform: true } } }, orderBy: { createdAt: "desc" } })
     ]);
     const cleanRecipient = (row: any, keepCode = false) => {

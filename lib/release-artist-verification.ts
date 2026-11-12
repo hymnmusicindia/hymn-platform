@@ -93,6 +93,7 @@ export async function approveReleaseArtistProfiles(userId: number, releaseId: nu
   });
   await prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${releaseId}::integer)`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422100, 1)`;
     if (await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId, isCurrent: true, OR: [{ state: 'processing' }, { state: 'submitted', providerStatus: { in: ['queued', 'processing'] } }] } })) throw new ArtistVerificationError('An accepted release is still processing. Wait for the current delivery before changing its mapping.');
     // Serialise card corrections with other submissions and the normal card editor.
     for (const { card } of [...checked].sort((a, b) => a.card.id - b.card.id)) await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${card.id}::integer)`;
@@ -102,6 +103,7 @@ export async function approveReleaseArtistProfiles(userId: number, releaseId: nu
       const card = await tx.artistCard.findUniqueOrThrow({ where: { id: before.id } });
       if (card.archivedAt || artistIdentityFingerprint(card) !== input.fingerprint) throw new ArtistVerificationError('The artist card changed. Refresh before approving.');
       const corrected = JSON.stringify(cardIdentity(card)) !== JSON.stringify({ artistName: card.artistName, ...links });
+      await (await import('./artist-hub')).guardHubCardEdit(tx, card, { artistName: card.artistName, spotifyProfileUrl: links.spotifyUrl, appleMusicProfileUrl: links.appleUrl, instagramUrl: links.instagramUrl, youtubeUrl: links.youtubeUrl }, corrected);
       if (corrected) {
         await preserveArtistReleaseMappings(tx, card);
         // A new local mapping starts unbound. Ingestion resolves its provider artist ID;
@@ -120,6 +122,9 @@ export async function approveReleaseArtistProfiles(userId: number, releaseId: nu
 
 /** Used at review, checkout, submission, and delivery. Customer metadata cannot forge this. */
 export async function assertReleaseArtistVerification(userId: number, releaseId: number, ids?: number[], freeze = false) {
+  const hub = await import('./artist-hub');
+  await hub.syncHubParticipation(userId, releaseId);
+  await hub.assertHubParticipation(releaseId);
   const ctx = await context(userId, releaseId, ids);
   const submitted = !editable.has(ctx.release.status);
   const liveIds = await liveArtistIds(userId, releaseId);

@@ -1,3 +1,4 @@
+import { assertArtistHubSchemaReady } from "../lib/artist-hub-schema";
 import { PrismaClient } from "@prisma/client";
 import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
 import { assertTeamSchemaReady } from "../lib/team/schema-readiness";
@@ -7,7 +8,7 @@ async function main() {
   const db = new PrismaClient();
   try {
     await assertDireNoteSchemaReady(db);
-    await assertTeamSchemaReady(db);
+    await assertTeamSchemaReady(db); await assertArtistHubSchemaReady(db);
     console.log("DireNote submission schema is ready.");
   } finally { await db.$disconnect(); }
 }

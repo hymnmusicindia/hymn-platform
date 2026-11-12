@@ -2474,6 +2474,7 @@ function normalizeArtistProfileName(name: string) {
 // optional DireNote reconciliation migration has not been deployed yet.
 const portalArtistCardSelect = {
   id: true,
+  hubIdentityId: true,
   userId: true,
   artistName: true,
   spotifyProfileUrl: true,
@@ -2505,7 +2506,7 @@ function mapPrismaArtistCard(card: any): ArtistProfile {
   } catch {
     producerLegalName = null;
   }
-  return { id: card.id, userId: card.userId, name: card.artistName, spotifyArtistId: card.spotifyArtistId ?? null, spotifyUrl: card.spotifyProfileUrl ?? null, appleArtistId: card.appleArtistId ?? null, appleUrl: card.appleMusicProfileUrl ?? null, instagramUrl: card.instagramUrl ?? null, youtubeUrl: card.youtubeUrl ?? null, imageUrl: card.imageUrl ?? null, followers: card.followers ?? null, isLinked: Boolean(card.spotifyProfileUrl || card.appleMusicProfileUrl), isPrimary: Boolean(card.isPrimary), isProducer, producerArtistName, producerLegalName, archivedAt: card.archivedAt?.toISOString?.() ?? null, lastUsedAt: null, createdAt: card.createdAt.toISOString(), updatedAt: card.updatedAt.toISOString() };
+  return { id: card.id, userId: card.userId, hubIdentityId: card.hubIdentityId ?? null, name: card.artistName, spotifyArtistId: card.spotifyArtistId ?? null, spotifyUrl: card.spotifyProfileUrl ?? null, appleArtistId: card.appleArtistId ?? null, appleUrl: card.appleMusicProfileUrl ?? null, instagramUrl: card.instagramUrl ?? null, youtubeUrl: card.youtubeUrl ?? null, imageUrl: card.imageUrl ?? null, followers: card.followers ?? null, isLinked: Boolean(card.spotifyProfileUrl || card.appleMusicProfileUrl), isPrimary: Boolean(card.isPrimary), isProducer, producerArtistName, producerLegalName, archivedAt: card.archivedAt?.toISOString?.() ?? null, lastUsedAt: null, createdAt: card.createdAt.toISOString(), updatedAt: card.updatedAt.toISOString() };
 }
 
 function artistProducerRole(input: Pick<ArtistProfile, "name" | "isProducer" | "producerArtistName" | "producerLegalName">) {
@@ -2599,10 +2600,14 @@ export async function listRecentArtistProfilesByUser(userId: number, limit = 6) 
 
 export async function createArtistProfile(input: Omit<ArtistProfile, "id" | "createdAt" | "updatedAt" | "lastUsedAt">) {
   if (usesPostgresPrisma()) {
-    const card = await prisma.artistCard.create({
+    const card = await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422100, 1)`;
+      await (await import('./artist-hub')).guardHubCardEdit(tx, { id: -1, userId: input.userId, hubIdentityId: null }, { artistName: input.name, spotifyProfileUrl: input.spotifyUrl, appleMusicProfileUrl: input.appleUrl }, true);
+      return tx.artistCard.create({
       data: { userId: input.userId, artistName: input.name, spotifyProfileUrl: input.spotifyUrl, spotifyArtistId: input.spotifyArtistId, appleMusicProfileUrl: input.appleUrl, appleArtistId: input.appleArtistId, instagramUrl: input.instagramUrl!, youtubeUrl: input.youtubeUrl, imageUrl: input.imageUrl, followers: input.followers, isPrimary: input.isPrimary ?? false, role: artistProducerRole(input) },
       select: portalArtistCardSelect,
-    });
+      });
+    }, { timeout: 30000 });
     return mapPrismaArtistCard(card);
   }
   const pool = getPool();
@@ -2657,12 +2662,14 @@ export async function updateArtistProfile(userId: number, id: number, patch: Par
   if (usesPostgresPrisma()) {
     const { preserveArtistReleaseMappings, artistIdentityFingerprint } = await import('./release-artist-verification');
     const result = await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422100, 1)`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${id}::integer)`;
       const card = await tx.artistCard.findFirst({ where: { id, userId, archivedAt: null } });
       if (!card) return { count: 0 };
       const latest = { ...mapPrismaArtistCard(card), ...patch };
       const data = { artistName: latest.name, spotifyProfileUrl: latest.spotifyUrl ?? null, spotifyArtistId: latest.spotifyArtistId ?? null, appleMusicProfileUrl: latest.appleUrl ?? null, appleArtistId: latest.appleArtistId ?? null, instagramUrl: latest.instagramUrl ?? null, youtubeUrl: latest.youtubeUrl ?? null, imageUrl: latest.imageUrl, followers: latest.followers, role: artistProducerRole(latest) };
       const changed = artistIdentityFingerprint(card) !== artistIdentityFingerprint({ ...card, ...data });
+      await (await import('./artist-hub')).guardHubCardEdit(tx, card, data, changed);
       if (changed) await preserveArtistReleaseMappings(tx, card);
       return tx.artistCard.updateMany({ where: { id, userId, archivedAt: null }, data: { ...data, ...(changed ? { direNoteArtistId: null, direNoteLastSyncedAt: null } : {}) } });
     }, { timeout: 30000 });

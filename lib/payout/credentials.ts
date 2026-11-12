@@ -30,7 +30,7 @@ function maskIfsc(value: string) { return `${value.slice(0, 4)}•••${value.
 export async function getPayoutCredential(userId: number) {
   const row = await (prisma as any).payoutCredential.findUnique({ where: { userId } });
   if (!row) return { status: "missing" as const, method: null, upiIdMasked: null, accountHolderName: null, bankAccountMasked: null, ifscMasked: null, updatedAt: null };
-  return { status: row.status, method: row.method, upiIdMasked: row.upiIdMasked, accountHolderName: row.accountHolderName, bankAccountMasked: row.bankAccountMasked, ifscMasked: row.ifscMasked, updatedAt: row.updatedAt.toISOString() };
+  return { status: row.status, method: row.method, upiIdMasked: row.upiIdMasked, accountHolderName: row.accountHolderName, bankAccountMasked: row.bankAccountMasked, ifscMasked: row.ifscMasked, updatedAt: row.updatedAt.toISOString(), rejectionReason: row.rejectionReason, nextStep: row.status === 'verified' ? 'Your verified payout setup is ready across HYMN.' : row.status === 'changes_requested' || row.status === 'rejected' ? row.rejectionReason || 'Review and update your payout details.' : 'Your details are saved. HYMN will notify you when verification is complete.' };
 }
 
 export async function savePayoutCredential(userId: number, input: { method: "UPI" | "BANK"; legalName?: string; country?: string; taxResidency?: string; upiId?: string; accountHolderName?: string; bankAccountNumber?: string; ifsc?: string; taxInfo?: string }) {
@@ -40,6 +40,7 @@ export async function savePayoutCredential(userId: number, input: { method: "UPI
   const holder = input.accountHolderName?.trim();
   const ifsc = input.ifsc?.trim().toUpperCase();
   const legalName = input.legalName?.trim(); const country = input.country?.trim().toUpperCase();
+  if ([input.legalName, input.accountHolderName, input.taxInfo, input.taxResidency].some(value => value && value.length > 200)) throw new Error('Keep identity fields under 200 characters.');
   if (!legalName || legalName.length < 2 || !country || !/^[A-Z]{2}$/.test(country)) throw new Error("Legal name and two-letter country are required for manual verification.");
   if (input.method === "UPI" && (!upi || !/^[\w.-]{2,}@[\w.-]{2,}$/.test(upi))) throw new Error("Enter a valid UPI ID.");
   if (input.method === "BANK" && (!holder || !account || !/^\d{6,20}$/.test(account) || !ifsc || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc))) throw new Error("Enter valid account holder, account number, and IFSC details.");
@@ -53,7 +54,17 @@ export async function savePayoutCredential(userId: number, input: { method: "UPI
     bankAccountMasked: maskAccount(account!), bankAccountEncrypted: encrypt(account!), ifscMasked: maskIfsc(ifsc!), ifscEncrypted: encrypt(ifsc!),
     taxInfoEncrypted: input.taxInfo?.trim() ? encrypt(input.taxInfo.trim()) : null, legalName, country, taxResidency: input.taxResidency?.trim() || null, panLastFour: input.taxInfo?.trim().slice(-4) || null, status: "submitted", rejectionReason: null, verifiedAt: null, verifiedByAdminId: null
   };
-  const saved = await prisma.$transaction(async tx => { await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`; return tx.payoutCredential.upsert({ where: { userId }, create: { userId, ...data }, update: data }); });
+  const saved = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
+    const current = await tx.payoutCredential.findUnique({ where: { userId } });
+    const secretEquals = (encrypted: string | null, plain: string | null | undefined) => (encrypted ? decryptPayoutSecret(encrypted) : '') === (plain || '');
+    // Re-saving identical details is safe: preserve the verification and avoid duplicate reviews.
+    if (current && current.method === input.method && current.legalName === legalName && current.country === country && (current.taxResidency || '') === (input.taxResidency?.trim() || '') && secretEquals(current.taxInfoEncrypted, input.taxInfo?.trim()) && (input.method === 'UPI' ? secretEquals(current.upiIdEncrypted, upi) : current.accountHolderName === holder && secretEquals(current.bankAccountEncrypted, account) && secretEquals(current.ifscEncrypted, ifsc))) return current;
+    const profile = await tx.payoutCredential.upsert({ where: { userId }, create: { userId, ...data }, update: data });
+    await tx.payoutVerification.updateMany({ where: { userId }, data: { status: 'draft', consentAt: null, credentialUpdatedAt: null } });
+    await tx.notification.create({ data: { userId, title: current ? 'Payout details changed' : 'Payout details saved', body: current ? 'Your payout details were updated and need verification before withdrawals. If you did not make this change, contact HYMN support.' : 'Your payout details are saved for verification. You can track progress in Earnings & payouts.', href: '/payout', type: 'payout' } });
+    return profile;
+  });
   await logAuditEvent({ actorType: "user", actorId: userId, entityType: "payout_credential", entityId: saved.id, action: existing ? "payout_credential.updated" : "payout_credential.created", oldValue: existing ? { method: existing.method, status: existing.status } : null, newValue: { method: saved.method, status: saved.status } });
   return getPayoutCredential(userId);
 }
@@ -87,7 +98,14 @@ export async function reviewPayoutCredential(userId: number, input: { status: "u
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
     const current = await tx.payoutCredential.findUniqueOrThrow({ where: { userId } });
     if (!allowed[current.status]?.includes(input.status)) throw new Error("Payout profile changed during review. Refresh and try again.");
+    const evidence = await tx.payoutVerification.findUnique({ where: { userId } });
+    if (input.status === 'verified' && evidence) {
+      if (evidence.status !== 'submitted' || !evidence.consentAt || !evidence.identityAssetId || !evidence.beneficiaryAssetId || evidence.credentialUpdatedAt?.getTime() !== current.updatedAt.getTime()) throw new Error('Complete current identity and beneficiary evidence before approving this verification.');
+      if (await tx.storedAsset.count({ where: { id: { in: [evidence.identityAssetId, evidence.beneficiaryAssetId] }, ownerUserId: userId, assetType: 'private_kyc_document', deletedAt: null } }) !== 2) throw new Error('Verification evidence is missing or no longer available.');
+    }
     const profile = await tx.payoutCredential.update({ where: { userId }, data: { status: input.status, verificationNote: input.note.trim(), rejectionReason: ["changes_requested", "rejected"].includes(input.status) ? input.note.trim() : null, verifiedAt: input.status === "verified" ? new Date() : null, verifiedByAdminId: input.status === "verified" ? input.actorId : null } });
+    if (evidence) await tx.payoutVerification.update({ where: { userId }, data: { status: input.status === 'verified' ? 'verified' : ['changes_requested', 'rejected', 'suspended'].includes(input.status) ? 'changes_requested' : evidence.status, credentialUpdatedAt: profile.updatedAt } });
+    await tx.notification.create({ data: { userId, title: input.status === 'verified' ? 'Payout verification approved' : 'Payout verification updated', body: input.status === 'verified' ? 'Your verified payout setup is ready across HYMN.' : input.note.trim(), href: '/payout', type: 'payout' } });
     const releasedEarnings = input.status === "verified" ? await releaseVerifiedPayoutEarnings(userId, tx) : 0;
     await tx.auditLog.create({ data: { actorId: input.actorId, action: "KYC_DECISION", entity: "payout_credential", entityId: String(profile.id), metadata: { previousStatus: existing.status, newStatus: input.status, note: input.note.trim(), releasedEarnings } } });
     return { profile, releasedEarnings };

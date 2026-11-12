@@ -1,0 +1,23 @@
+name: Artist profiles regression
+on:
+  push:
+    paths: ['components/artist-*', 'components/kyc-*', 'lib/artist-*', 'lib/payout/**', 'lib/release-artist-verification.ts', 'lib/splits.ts', 'app/api/artist-hub/**', 'app/api/payout/**', 'prisma/**', 'scripts/verify-artist-hub-*', '.github/workflows/artist-profiles-regression.yml']
+  pull_request:
+    paths: ['components/artist-*', 'components/kyc-*', 'lib/artist-*', 'lib/payout/**', 'lib/release-artist-verification.ts', 'lib/splits.ts', 'app/api/artist-hub/**', 'app/api/payout/**', 'prisma/**', 'scripts/verify-artist-hub-*', '.github/workflows/artist-profiles-regression.yml']
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EMAIL_ENABLED: 'false'
+      HYMN_CRON_WORKER_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:artist-profiles

@@ -47,7 +47,7 @@ export function StudioFrameView<T extends string>({ children, workspaceKind, act
     <aside className={s.rail} data-open={mobileOpen} aria-label="Studio navigation">
       <button ref={trigger} className={s.finderButton} onClick={() => setFinderOpen(true)}><Search size={16}/>Find a tool<kbd>⌘ K</kbd></button>
       <nav className={s.navigation}><SlidingMenu menuKey={visibleItems.map(item => item.key).join('|')}>{groups.map(group => <div key={group}><p>{group}</p>{visibleItems.filter(item => item.group === group).map(item => {
-        const inside = !producer && ['analytics','promotions','content-id','collaborators','subscription','referral','messages','settings','support','account','overview'].includes(item.key);
+        const inside = !producer && ['artists','analytics','promotions','content-id','collaborators','subscription','referral','messages','settings','support','account','overview'].includes(item.key);
         const content = <><StudioIcon name={studioDestinations.find(dest => dest.key === item.key)?.icon || (item.key === 'upload' ? 'disc' : 'music')}/><span>{item.label}</span>{item.key === 'messages' && notificationCount > 0 ? <b>{notificationCount}</b> : null}</>;
         return item.href && !inside ? <Link prefetch={false} key={item.key} href={item.href} aria-current={activeKey === item.key ? 'page' : undefined} onClick={() => setMobileOpen(false)}>{content}</Link> : <button type="button" key={item.key} aria-current={activeKey === item.key ? 'page' : undefined} onClick={() => { onSelect(item.key as T); setMobileOpen(false); }}>{content}</button>;
       })}</div>)}</SlidingMenu></nav>

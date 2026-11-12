@@ -27,6 +27,7 @@ const PlaylistReviewMarketplace = dynamic(() => import("@/components/playlist-re
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard), {loading:()=> <WorkspaceLoading/>});
 const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel), {loading:()=> <WorkspaceLoading/>});
 const SplitsDashboard = dynamic(() => import("@/components/splits-dashboard").then((module) => module.SplitsDashboard), {loading:()=> <WorkspaceLoading/>});
+const ArtistHub = dynamic(() => import('@/components/artist-hub').then(module => module.ArtistHub), { loading: () => <WorkspaceLoading label="Loading Artist profiles"/> });
 const ProfilePreferencesForm = dynamic(() => import("@/components/profile-preferences-form").then((module) => module.ProfilePreferencesForm), {loading:()=> <WorkspaceLoading/>});
 
 type CustomerPayoutSummary = {
@@ -612,6 +613,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </Panel>} />
       ) : null}
 
+      {activeTab === "artists" ? <ArtistHub/> : null}
       {activeTab === "collaborators" ? <SplitsDashboard releases={releases} /> : null}
 
       {activeTab === "content-id" ? (

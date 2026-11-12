@@ -239,6 +239,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
   async delete(input) {
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });
     if (!asset || (!input.isAdmin && asset.ownerUserId !== input.requesterUserId)) throw new Error("Forbidden.");
+    if (asset.assetType === 'private_kyc_document' && await prisma.payoutVerification.count({ where: { OR: [{ identityAssetId: asset.id }, { beneficiaryAssetId: asset.id }], status: { in: ['submitted', 'verified'] } } })) throw new Error('This document is retained as verification evidence. Contact HYMN to request a privacy review.');
     await prisma.storedAsset.update({ where: { id: asset.id }, data: { deletedAt: new Date(), uploadStatus: "deleted" } });
     const root = privateStorageRootPath();
     const target = path.resolve(/* turbopackIgnore: true */ root, asset.relativePath || asset.objectKey);

@@ -55,6 +55,8 @@
     "test:consultation": "tsx scripts/verify-consultation-domain.ts",
     "test:first-release": "tsx scripts/verify-first-release-funnel.ts && tsx scripts/verify-artist-profile-validation.ts",
     "test:artist-profile-correction": "tsx scripts/verify-artist-profile-correction.ts",
+    "test:artist-profiles": "node --import tsx scripts/verify-artist-hub-isolated.ts && node scripts/verify-artist-hub-browser.cjs",
+    "test:artist-profiles:build": "node --import tsx scripts/verify-artist-hub-isolated.ts --build && node scripts/verify-artist-hub-browser.cjs",
     "test:distribution-pricing": "node --conditions=react-server --import tsx scripts/verify-distribution-pricing.ts && node --conditions=react-server --import tsx scripts/verify-content-id-review-eligibility.ts",
     "test:growth": "tsx scripts/verify-growth-domain.ts",
     "test:acquisition-revenue": "node --conditions=react-server --import tsx scripts/verify-acquisition-revenue.ts",

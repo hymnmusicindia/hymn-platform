@@ -272,6 +272,7 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
 }
 
 async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean; amendmentRequestId?: number; automaticQcRevision?: string }) {
+  await (await import('./artist-hub')).assertHubParticipation(releaseId);
   if (options.amendmentRequestId) throw new Error('Post-release amendments use existing-recording support requests, never content ingestion. Open the correction request.');
   let release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
@@ -460,6 +461,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       payloadRedacted: JSON.parse(JSON.stringify(providerRedactedPayload)),
       payloadDiff: previousAttempt?.payloadRedacted ? JSON.parse(JSON.stringify(diffDireNotePayload(previousAttempt.payloadRedacted, providerRedactedPayload))) : undefined
     } });
+    await (await import('./artist-hub')).assertHubParticipation(releaseId);
     providerRequestStarted = true;
     const response = await submitToDireNote(providerPayload);
     const data = redactDireNoteDiagnostic(response.data ?? (response.error ? { error: response.error } : {}));

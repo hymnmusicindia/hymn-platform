@@ -2512,6 +2512,7 @@ model PaymentWebhookEvent {
 model ArtistCard {
   id                   Int                         @id @default(autoincrement())
   userId               Int                         @map("user_id")
+  hubIdentityId        Int?                        @map("hub_identity_id")
   contributorPartyId   Int?                        @map("contributor_party_id")
   artistName           String                      @map("artist_name")
   spotifyProfileUrl    String?                     @map("spotify_profile_url")
@@ -2538,8 +2539,97 @@ model ArtistCard {
 
   @@unique([userId, artistName])
   @@index([userId])
+  @@index([hubIdentityId])
   @@index([contributorPartyId])
   @@map("artist_cards")
+}
+
+// Additive Artist Hub records. Account libraries and historical release snapshots remain intact.
+model ArtistHubIdentity {
+  id Int @id @default(autoincrement())
+  ownerUserId Int @map("owner_user_id")
+  sourceCardId Int @unique @map("source_card_id")
+  displayName String @map("display_name")
+  spotifyId String? @unique @map("spotify_id")
+  appleId String? @unique @map("apple_id")
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([ownerUserId])
+  @@map("artist_hub_identities")
+}
+
+model ArtistHubParticipation {
+  id Int @id @default(autoincrement())
+  releaseId Int @map("release_id")
+  identityId Int @map("identity_id")
+  ownerUserId Int @map("owner_user_id")
+  recipientUserId Int @map("recipient_user_id")
+  revision String
+  status String @default("pending")
+  reason String?
+  decidedAt DateTime? @map("decided_at")
+  intervention String @default("none")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([releaseId, identityId])
+  @@index([recipientUserId, status])
+  @@index([intervention, updatedAt])
+  @@map("artist_hub_participations")
+}
+
+model ArtistHubCase {
+  id Int @id @default(autoincrement())
+  eventKey String @unique @map("event_key")
+  requesterUserId Int @map("requester_user_id")
+  identityId Int @map("identity_id")
+  kind String
+  status String @default("open")
+  reason String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([requesterUserId, status])
+  @@map("artist_hub_cases")
+}
+
+model ArtistHubEndorsement {
+  id Int @id @default(autoincrement())
+  identityId Int @map("identity_id")
+  userId Int @map("user_id")
+  releaseId Int @map("release_id")
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([identityId, userId])
+  @@map("artist_hub_endorsements")
+}
+
+model ArtistHubMail {
+  id Int @id @default(autoincrement())
+  eventKey String @unique @map("event_key")
+  userId Int @map("user_id")
+  title String
+  body String
+  status String @default("pending")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([status, nextAttemptAt])
+  @@map("artist_hub_mail")
+}
+
+model PayoutVerification {
+  id Int @id @default(autoincrement())
+  userId Int @unique @map("user_id")
+  status String @default("draft")
+  documentType String @default("government_id") @map("document_type")
+  identityAssetId Int? @map("identity_asset_id")
+  beneficiaryAssetId Int? @map("beneficiary_asset_id")
+  consentAt DateTime? @map("consent_at")
+  credentialUpdatedAt DateTime? @map("credential_updated_at")
+  checks Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("payout_verifications")
 }
 
 model DireNoteReconciliationDiscrepancy {

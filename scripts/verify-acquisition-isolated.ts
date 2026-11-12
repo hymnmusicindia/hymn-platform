@@ -259,6 +259,10 @@ async function main() {
       writeFileSync(oldSchema, execFileSync("git", ["show", "2a7c960:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
       await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);
       await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261022150000_release_artist_verification/migration.sql", "--schema", "prisma/schema.prisma"]);
+      await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261112120000_artist_hub/migration.sql", "--schema", "prisma/schema.prisma"]);
+      // This hardcoded disposable database is still empty. Retire obsolete baseline fields
+      // after rehearsing the migrations, before seeding the current-code regression.
+      await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate", "--accept-data-loss"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-artist-verification.ts"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-artist-delivery-mapping.ts"]);
       return;

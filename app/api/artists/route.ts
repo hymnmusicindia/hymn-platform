@@ -7,6 +7,7 @@ import { getUserEntitlements } from "@/lib/entitlements";
 import { ensureClaimedContributorParty } from "@/lib/contributor-identity";
 import { prisma } from "@/lib/prisma";
 import { refreshSpotifyArtistPhoto } from "@/lib/spotify-artist-photos";
+import { findHubIdentity, publicHubCard } from '@/lib/artist-hub';
 
 const LIMIT_MESSAGE = "You have reached your artist profile limit for your current plan. Upgrade to add more artist profiles.";
 
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
     const isLinked = Boolean(payload.hasLiveMusic);
     const spotifyUrl = isLinked ? payload.spotifyUrl?.trim() || "" : "";
     const appleUrl = isLinked ? payload.appleUrl?.trim() || "" : "";
+    const hubMatch = await findHubIdentity({ spotifyUrl, appleUrl });
+    if (hubMatch) return NextResponse.json({ error: 'This artist is already connected to HYMN. Add their existing artist card to continue.', hubMatch: publicHubCard(hubMatch) }, { status: 409 });
     const artistUsage = await usage(result.user.id);
     if (!artistUsage.canCreateMore) return NextResponse.json({ error: LIMIT_MESSAGE, ...artistUsage }, { status: 403 });
 

@@ -1,4 +1,4 @@
-export const customerTabs = ['overview','releases','upload','analytics','earnings','promotions','collaborators','distribution','content-id','messages','support','settings','purchases','subscription','referral','account'] as const;
+export const customerTabs = ['overview','artists','releases','upload','analytics','earnings','promotions','collaborators','distribution','content-id','messages','support','settings','purchases','subscription','referral','account'] as const;
 export type CustomerTab = typeof customerTabs[number];
 export function customerTab(params:{get:(key:string)=>string|null}):CustomerTab{
   if(params.get('module')==='splits')return 'collaborators';

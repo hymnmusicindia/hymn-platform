@@ -89,6 +89,7 @@ export interface ContributorCredit {
 export interface ArtistProfile {
   id: number;
   userId: number;
+  hubIdentityId?: number | null;
   name: string;
   spotifyArtistId?: string | null;
   spotifyUrl?: string | null;

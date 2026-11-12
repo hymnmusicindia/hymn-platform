@@ -123,6 +123,25 @@ export function ArtistPicker({
   }, [query,open]);
   useEffect(() => () => nameRequest.current?.abort(), []);
   const [saving, setSaving] = useState(false);
+  const [hubMatch, setHubMatch] = useState<{ id: number; name: string } | null>(null);
+  const [hubMatches, setHubMatches] = useState<Array<{ id: number; name: string }>>([]);
+  useEffect(() => {
+    if (!open || !query.trim() || (!query.trim().startsWith('@') && !query.includes('://'))) { setHubMatches([]); return; }
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      fetch('/api/artist-hub', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'lookup', query: query.trim() }), signal: abort.signal }).then(async response => { const data = await response.json(); if (!response.ok) throw Error(data.error || 'Could not find the artist.'); if (!abort.signal.aborted) setHubMatches(data.matches || []); }).catch(error => { if (!abort.signal.aborted) setSearchError(error.message); });
+    }, 300);
+    return () => { clearTimeout(timer); abort.abort(); };
+  }, [open, query]);
+  async function attachHub(identityId: number) {
+    setSaving(true); setSearchError(null); setSpotifyError(null);
+    try {
+      const response = await fetch('/api/artist-hub', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'attach', identityId }) });
+      const data = await response.json(); if (!response.ok) throw Error(data.error || 'Could not add artist.');
+      selectSaved(data.profile); setCreateOpen(false); setHubMatch(null); setHubMatches([]);
+    } catch (cause) { const message = cause instanceof Error ? cause.message : 'Could not add artist.'; setSearchError(message); setSpotifyError(message); }
+    finally { setSaving(false); }
+  }
   const [editingProfile, setEditingProfile] = useState<ArtistProfile | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -289,6 +308,7 @@ export function ArtistPicker({
     });
     const data = await response.json();
     if (!response.ok) {
+      if (data.hubMatch) setHubMatch(data.hubMatch);
       throw new Error(data.error || "Could not create artist profile.");
     }
     return data.profile as ArtistProfile;
@@ -302,6 +322,7 @@ export function ArtistPicker({
   }
 
   function openCreateModal(options: { name?: string; requireInstagram?: boolean } = {}) {
+    setHubMatch(null);
     const initialName = options.name ?? query.trim();
     setRequireInstagram(options.requireInstagram ?? Boolean(onSelectName));
     setCreateName(initialName);
@@ -505,6 +526,7 @@ export function ArtistPicker({
           <label className="artist-library-search"><Search size={18} aria-hidden="true" /><input data-autofocus autoFocus={focused} value={query} aria-label="Search artist profiles" placeholder="Find your artist" onChange={event => onQueryChange(event.target.value)} /></label>
           {profilesLoading || loading ? <div className="artist-library-loading" role="status"><LoaderCircle size={20} className="animate-spin" /><span>Loading artists</span></div> : null}
           {searchError ? <p role="alert" className="inline-error">{customerMessage(searchError)}</p> : null}
+          {hubMatches.map(match => <div className="artist-library-row" key={`hub-${match.id}`}><button type="button" className="artist-library-select" disabled={saving || reachedMax} onClick={() => void attachHub(match.id)}><ArtistAvatar name={match.name}/><span>{match.name}<small className="block">Connected on HYMN</small></span><Plus size={18}/></button></div>)}
           {hasQuery && savedMatches.length === 0 && recent.length > 0 && !loading ? <p className="artist-library-hint">No match. Your saved artists:</p> : null}
           <div className="artist-library-list">{visibleSavedProfiles.map(profile => {
             const selected = valueIds.some(artist => artist.id === profile.id);
@@ -526,6 +548,7 @@ export function ArtistPicker({
         <div className="artist-profile-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target && !saving) setCreateOpen(false); }}>
           <div ref={artistDialogRef as React.RefObject<HTMLDivElement | null>} role="dialog" aria-modal="true" aria-labelledby={dialogTitleId} tabIndex={-1} className="artist-profile-modal" aria-busy={saving}>
             <div className="artist-profile-modal-header">
+            {hubMatch && <div className="rounded-xl border p-4" style={{borderColor:'var(--border)'}}><strong>{hubMatch.name} is connected on HYMN</strong><p className="mt-2 text-sm">Add their saved profile. Participation is requested per release; you can continue while it is pending.</p><button type="button" disabled={saving} className="btn-primary mt-3" onClick={() => void attachHub(hubMatch.id)}>Add existing HYMN artist</button></div>}
             <div className="flex items-start justify-between gap-4">
               <div>
 

@@ -15,8 +15,8 @@ async function main() {
   const oldSchema = path.join(fixture, "schema.prisma");
   const baseline = readFileSync("prisma/schema.prisma", "utf8")
     .replace(/^model UserHandle(?:Reservation)? \{[\s\S]*?^\}/gm, "")
-    .replace(/^\s*handle UserHandle\?\r?$/gm, "")
-    .replace(/^\s*handleReservations UserHandleReservation\[\]\r?$/gm, "");
+    .replace(/^\s*handle\s+UserHandle\?\r?$/gm, "")
+    .replace(/^\s*handleReservations\s+UserHandleReservation\[\]\r?$/gm, "");
   writeFileSync(oldSchema, baseline);
   const pg = new EmbeddedPostgres({ databaseDir, port, user: "fixture", password: "fixture", persistent: true, initdbFlags: ["--encoding=UTF8", "--locale=C"], postgresFlags: ["-h", "127.0.0.1"] });
   await pg.initialise(); await pg.start();
