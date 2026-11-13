@@ -116,13 +116,17 @@ async function main() {
     return Response.json({ success: true });
   }) as typeof fetch });
   try {
+    await new Promise(resolve => setImmediate(resolve));
     clock = 300000;
-    await worker.tick();
-    assert.deepEqual(invoked.slice(0, 2), ["team-appointments", "playlist-reviews"]);
+    const running = worker.tick();
+    await new Promise(resolve => setImmediate(resolve));
+    assert(invoked.includes('team-appointments'));
+    assert(invoked.filter(id => id !== 'team-appointments').length >= 2, 'An urgent job must not block bulk work.');
     assert.equal(invoked.filter(id => id === "team-appointments").length, 1);
     resolveUrgent!(Response.json({ success: true }));
+    await running;
     await new Promise(resolve => setImmediate(resolve));
-    clock += 999;
+    clock = 359999;
     await worker.tick();
     assert.equal(invoked.filter(id => id === "team-appointments").length, 1);
     clock += 1;
@@ -137,11 +141,33 @@ async function main() {
   }) as typeof fetch });
   try {
     await new Promise(resolve => setImmediate(resolve));
-    retryClock = 119999; await retryWorker.tick();
+    retryClock = 4000; await retryWorker.tick();
+    retryClock = 123999; await retryWorker.tick();
     assert.equal(urgentAttempts, 1, "Provider Retry-After must override the ordinary minute retry.");
-    retryClock = 120000; await retryWorker.tick();
+    retryClock = 124000; await retryWorker.tick();
     assert.equal(urgentAttempts, 2);
   } finally { retryWorker.stop(); }
+  let continuationClock = 0, photoRuns = 0;
+  const photoJob = CRON_JOBS.find(job => job.id === 'spotify-artist-photos')!;
+  const continuationWorker = startCronScheduler({port: 3000, secret: 'fixture', now: () => continuationClock, random: () => 0, fetcher: (async input => {
+    if (String(input).endsWith('/spotify-artist-photos')) { photoRuns++; return Response.json({success: true, deferred: 6}, {headers: {'X-HYMN-Cron-Continue-After': '60'}}); }
+    return Response.json({success: true});
+  }) as typeof fetch});
+  try {
+    await new Promise(resolve => setImmediate(resolve));
+    continuationClock = 100000;
+    for (let i = 0; i < CRON_JOBS.length; i++) await continuationWorker.tick();
+    assert.equal(photoRuns, 1);
+    continuationClock += 59999;
+    for (let i = 0; i < CRON_JOBS.length; i++) await continuationWorker.tick();
+    assert.equal(photoRuns, 1);
+    continuationClock++;
+    for (let i = 0; i < CRON_JOBS.length; i++) await continuationWorker.tick();
+    assert.equal(photoRuns, 2, 'A healthy bounded photo batch continues without waiting a full day.');
+    assert(photoJob.seconds > 60);
+  } finally { continuationWorker.stop(); }
+  const dispatchSource = readFileSync('lib/cron/local-dispatch.ts', 'utf8');
+  for (const job of CRON_JOBS) assert(dispatchSource.includes(`api/cron/${job.id}/route`), `In-process cron coverage: ${job.id}`);
   console.log("Cron registry, fallback coverage, failure classification, safe runner validation and urgent/bulk lane isolation passed.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

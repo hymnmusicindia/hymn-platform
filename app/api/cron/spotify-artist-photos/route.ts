@@ -29,6 +29,7 @@ async function runJob(request: Request) {
         WHERE l.entity='artist_card' AND l.entity_id=a.id::text AND l.action='SPOTIFY_PHOTO_CHECKED'
       ) observed ON TRUE
       WHERE a.archived_at IS NULL AND a.spotify_profile_url IS NOT NULL
+        AND (observed.checked_at IS NULL OR observed.checked_at < NOW() - INTERVAL '24 hours')
       ORDER BY observed.checked_at ASC NULLS FIRST, a.id LIMIT 25`;
     for (const card of cards) {
       if (Date.now() - started > 30_000) break;
@@ -45,7 +46,7 @@ async function runJob(request: Request) {
     }
     const summary = { runId, eligible: cards.length, processed: results.length, updated: results.filter(item => item.outcome === "updated").length, errors: results.filter(item => item.outcome === "failed").length, deferred: cards.length - results.length, durationMs: Date.now() - started, results };
     await prisma.auditLog.create({ data: { actorType: "system", action: "SPOTIFY_ARTIST_PHOTOS_REFRESHED", entity: "cron", entityId: runId, metadata: summary } });
-    return NextResponse.json({ success: summary.errors === 0 && summary.deferred === 0, ...summary }, { status: summary.errors || summary.deferred ? 503 : 200 });
+    return NextResponse.json({ success: summary.errors === 0, ...summary }, { status: summary.errors ? 503 : 200, headers: summary.errors === 0 && (summary.deferred > 0 || cards.length === 25) ? { 'X-HYMN-Cron-Continue-After': '60' } : undefined });
   } finally {
     await prisma.$executeRaw`UPDATE "cron_leases" SET "leased_until" = NOW(), "updated_at" = NOW() WHERE "lease_key" = ${leaseKey} AND "run_id" = ${runId}`;
   }

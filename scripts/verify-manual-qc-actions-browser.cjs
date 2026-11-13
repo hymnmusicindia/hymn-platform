@@ -44,7 +44,7 @@ async function main() {
         if (req.method() === 'PATCH') {
           writes.push({ path: url.pathname, data: req.postDataJSON() });
           const id = Number(url.pathname.split('/').at(-1));
-          return route.fulfill({ json: { release: { ...releases.find(release => release.id === id), status: 'distributor_processing' } } });
+          return route.fulfill({ status: 202, json: { queued: true, retryable: true, retryAfterSeconds: 240, message: 'HYMN approved this package. Waiting for partner request capacity.', release: { ...releases.find(release => release.id === id), status: 'queued_for_distribution' } } });
         }
         return route.fulfill({ json: url.pathname === '/api/admin/releases' ? { releases, watermark: new Date().toISOString() } : { logs: [], attempts: [], history: [], items: [], tasks: [], stores: [], summary: {}, data: [] } });
       });
@@ -70,6 +70,8 @@ async function main() {
       await expect.poll(() => writes.length).toBe(1);
       assert.equal(writes[0].path, '/api/admin/update-status/2');
       assert.equal(writes[0].data.status, 'approved');
+      await expect(page.getByRole('alertdialog')).toContainText('waiting for delivery capacity');
+      await expect(page.getByRole('alertdialog')).toContainText('Waiting for partner request capacity');
       // Dismiss the outcome dialog before inspecting more records.
       const dismiss = page.getByRole('button', { name: /close|got it|understood/i }).last();
       if (await dismiss.isVisible()) await dismiss.click();

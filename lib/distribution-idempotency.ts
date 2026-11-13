@@ -33,6 +33,10 @@ export async function claimDistributionSubmission(releaseId: number, payload: un
   // ingestion idempotency key, so a new payload hash must not bypass this guard.
   const unresolved = await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", state: { in: ["processing", "reconciliation_required"] } }, orderBy: { id: "desc" } });
   if (unresolved) return { attempt: unresolved, claimed: false, alreadySubmitted: false, retryAfterSeconds: undefined };
+  const deferredUntil = (latestAttempt?.responseRedacted as { retryAt?: string } | null)?.retryAt;
+  if (latestAttempt?.state === 'retryable' && deferredUntil && Date.parse(deferredUntil) > Date.now()) {
+    return { attempt: latestAttempt, claimed: false, alreadySubmitted: false, retryAfterSeconds: Math.max(1, Math.ceil((Date.parse(deferredUntil) - Date.now()) / 1000)) };
+  }
   const cooldownMs = latestAttempt ? submissionRetryDelayMs(latestAttempt.attemptCount, latestAttempt.idempotencyKey) : 0;
   if (latestAttempt && latestAttempt.startedAt > new Date(Date.now() - cooldownMs)) {
     const retryAfterSeconds = Math.max(1, Math.ceil((latestAttempt.startedAt.getTime() + cooldownMs - Date.now()) / 1000));

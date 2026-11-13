@@ -6,13 +6,15 @@ import { getDetailedReleaseById } from './distribution-db';
 import { getPublicAppUrl } from './public-app-url';
 import { processPendingAutomaticAmendments } from './release-amendment-automation';
 import { DISTRIBUTION_QC_POLICY_VERSION, earliestPartnerReleaseDate } from './distribution-automation-policy';
+import { hasCurrentManualQcEvidence } from './distribution-qc-evidence';
 
 export async function distributionAutomationCandidates(limit = 2) {
   return prisma.$queryRaw<Array<{ id: number }>>`
     SELECT r.id FROM releases r JOIN users u ON u.id=r.user_id
     WHERE r.archived_at IS NULL AND u.status='ACTIVE' AND r.payment_status='paid'
       AND r.status IN ('SUBMITTED','UNDER_REVIEW','IN_QC_QUEUE','IN_QUEUE','RESUBMITTED','APPROVED','QUEUED_FOR_DISTRIBUTION','CHANGES_REQUESTED')
-      AND (COALESCE(r.metadata->'autoQc'->>'status','pending') IN ('pending','passed')
+      AND ((r.status='QUEUED_FOR_DISTRIBUTION' AND r.metadata->'manualQc'->>'status'='passed' AND r.metadata->'manualQc'->>'packageRevision' IS NOT NULL)
+        OR COALESCE(r.metadata->'autoQc'->>'status','pending') IN ('pending','passed')
         OR (r.metadata->'correctionReview'->>'status'='pending' AND r.status IN ('UNDER_REVIEW','RESUBMITTED','APPROVED') AND r.metadata->>'liveAt' IS NULL AND r.release_date<${new Date(earliestPartnerReleaseDate())})
         OR (r.metadata->'autoQc'->>'status'='manual_review_required' AND r.metadata->'autoQc'->>'changeKind' IN ('missing_baseline','rights_review')
           AND COALESCE(r.metadata->'autoQc'->>'policyVersion','')<>${String(DISTRIBUTION_QC_POLICY_VERSION)})
@@ -47,6 +49,13 @@ export async function processDistributionAutomation(siteUrl = getPublicAppUrl())
     if (Date.now() > deadline) break;
     checked++;
     try {
+      const manuallyReviewed = await getDetailedReleaseById(candidate.id);
+      if (manuallyReviewed?.status === 'queued_for_distribution' && hasCurrentManualQcEvidence(manuallyReviewed)) {
+        const result = await submitRelease(candidate.id, { siteUrl, retry: true, manualQcRevision: String((manuallyReviewed.metadata?.manualQc as Record<string, unknown>).packageRevision) });
+        if (result.submitted) submitted++;
+        outcomes.push({ releaseId: candidate.id, status: result.submitted ? 'submitted' : result.retryable ? 'retryable' : 'review' });
+        continue;
+      }
       if (!await runPendingDistributionQc(candidate.id, siteUrl)) {
         outcomes.push({ releaseId: candidate.id, status: 'paused' });
         continue;

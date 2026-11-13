@@ -360,6 +360,20 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   }
   const suppressAmendmentNotifications = Number(record(attempt.responseRedacted).amendmentRequestId) > 0;
   const corrections = record(attempt.corrections);
+  if (corrections.status === 'customer_resolved' &&
+      ['UNDER_REVIEW','RESUBMITTED','APPROVED','QUEUED_FOR_DISTRIBUTION','SUBMITTING_TO_DISTRIBUTOR','DELIVERY_FAILED','SENT_TO_DISTRIBUTOR'].includes(release.status)) {
+    // This UPC still describes the previous package, including removed tracks.
+    // It cannot prove receipt or reopen review of the approved replacement.
+    // Older code also repaired this state to SENT using that stale receipt.
+    if (release.status === 'SENT_TO_DISTRIBUTOR') {
+      const latest = await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: 'direnote' }, orderBy: [{ startedAt: 'desc' }, { id: 'desc' }] });
+      const pretransportCapacity = (record(latest?.responseRedacted).transportStarted === false && record(latest?.responseRedacted).deferredReason === 'provider_capacity') || /^DireNote hourly request capacity is exhausted/.test(latest?.safeError ?? '');
+      if (latest && latest.id !== attempt.id && latest.state === 'retryable' && !latest.providerReference && !latest.upc && pretransportCapacity) {
+        await updateDetailedReleaseStatus(releaseId, 'queued_for_distribution', 'HYMN corrected a stale delivery projection. Approval is retained; the corrected package is awaiting delivery.', undefined, { manualOverride: true, actorType: 'system', notify: false });
+      }
+    }
+    return { success: true, releaseId, attemptId: attempt.id, skipped: 'correction_delivery_pending' as const };
+  }
   // Continue observing the current delivery while a corrected local revision is
   // awaiting review. Observation must never submit that revision or discard it.
   // A submitted current attempt is authoritative provider-acceptance evidence.
@@ -367,7 +381,9 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   // calling ingest again.
   if (["SUBMITTING_TO_DISTRIBUTOR", "QUEUED_FOR_DISTRIBUTION"].includes(release.status) && attempt.state === "submitted") {
     await updateDetailedReleaseStatus(releaseId, "sent_to_distributor", "DireNote submission was already accepted; reconciliation repaired the stale handoff status.", undefined, { manualOverride: true, actorType: "system", notify: !suppressAmendmentNotifications });
-    release.status = "SENT_TO_DISTRIBUTOR" as typeof release.status;
+    const repaired = await prisma.release.findUniqueOrThrow({where:{id:releaseId},select:{status:true,version:true}});
+    release.status = repaired.status;
+    release.version = repaired.version;
   }
   const attemptTracks = Array.isArray(attempt.trackIdentifiers) ? attempt.trackIdentifiers.map(record) : [];
   const mappingTracks = release.tracks.map(track => {

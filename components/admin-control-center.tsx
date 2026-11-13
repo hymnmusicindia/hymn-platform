@@ -976,6 +976,14 @@ export function AdminControlCenter({
           body: JSON.stringify({ status, note: `Status set to ${status}` })
         });
         const data = await response.json().catch(() => ({}));
+        if (isDireNoteAction && data.queued) {
+          if (data.release) setReleases(items => items.map(item => item.id === id ? data.release : item));
+          setDireNoteCooldowns(current => ({ ...current, [id]: Date.now() + Math.max(1, Number(data.retryAfterSeconds) || 60) * 1000 }));
+          const message = data.message || 'HYMN approval is retained. The package is queued for partner capacity; it has not been sent yet.';
+          setFeedback(message);
+          setDireNoteResult({ type: 'pending', title: 'Approved — waiting for delivery capacity', message });
+          return;
+        }
         if (data.inProgress) {
           setDireNoteCooldowns((current) => ({ ...current, [id]: Date.now() + Math.max(1, Number(data.retryAfterSeconds) || 10) * 1000 }));
           if (data.release) setReleases((items) => items.map((item) => item.id === id ? data.release : item));

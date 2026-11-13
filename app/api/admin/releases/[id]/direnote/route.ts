@@ -66,6 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     ? await retrySubmission(resolved.releaseId, { actorId, siteUrl })
     : await submitRelease(resolved.releaseId, { actorId, siteUrl, adminConfirmedExistingArtists });
 
+  if ('queued' in result && result.queued) return NextResponse.json(result, { status: 202, headers: { 'Retry-After': String(result.retryAfterSeconds) } });
   return NextResponse.json(result, { status: "inProgress" in result && result.inProgress ? 202 : result.submitted ? 200 : result.validation.ok ? 502 : 400 });
 }
 

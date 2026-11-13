@@ -13,7 +13,7 @@ export async function register() {
   if (flag.__hymnCronWorker) return;
   flag.__hymnCronWorker = true;
 
-  const [{ startCronScheduler }, { prisma }, { getPublicAppUrl }] = await Promise.all([import("./scripts/cron-scheduler"), import("./lib/prisma"), import("./lib/public-app-url")]);
+  const [{ startCronScheduler }, { prisma }, { getPublicAppUrl }, { dispatchLocalCron }] = await Promise.all([import("./scripts/cron-scheduler"), import("./lib/prisma"), import("./lib/public-app-url"), import("./lib/cron/local-dispatch")]);
   const publicOrigin = getPublicAppUrl();
   const port = Number(process.env.PORT || 3000);
   const loopback = Number.isInteger(port) && port > 0 && port < 65536;
@@ -22,17 +22,13 @@ export async function register() {
   const record = (action: string, metadata: Record<string, unknown>) =>
     prisma.auditLog.create({ data: { actorType: "system", action, entity: "cron_worker", entityId: String(process.pid), metadata: { ...metadata, pid: process.pid } } }).catch(() => undefined);
 
-  // Give the server time to start listening before the first loopback call.
+  // Start after initialization; jobs no longer depend on a loopback port or edge timeout.
   setTimeout(() => {
-    const origin = loopback ? `http://127.0.0.1:${port}` : publicOrigin;
+    const origin = publicOrigin;
     startCronScheduler({
-      port: loopback ? port : 3000, secret, origin, fallbackOrigin: publicOrigin,
-      onFallback: (from, to) => {
-        console.warn(`Cron worker could not reach ${from}; using ${to}.`);
-        void record("CRON_WORKER_FALLBACK", { from, to });
-      }
+      port: loopback ? port : 3000, secret, origin, fetcher: dispatchLocalCron,
     });
-    console.log(`Central cron scheduler started via ${origin}.`);
-    void record("CRON_WORKER_STARTED", { origin, portEnv: process.env.PORT ?? null });
+    console.log(`Central cron scheduler started with authenticated in-process handlers.`);
+    void record("CRON_WORKER_STARTED", { origin, transport: "in-process", portEnv: process.env.PORT ?? null });
   }, 30_000).unref();
 }

@@ -5,6 +5,7 @@ import { automaticQcRevision } from './distribution-automation-policy';
 import type { Release } from './types';
 import { prisma } from './prisma';
 import { resolvePrivateReleaseArtworkUrl } from './release-asset-resolution';
+import type { Prisma } from '@prisma/client';
 function stable(value: unknown): string {
   if(Array.isArray(value))return `[${value.map(stable).join(',')}]`;
   if(value && typeof value==='object')return `{${Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>`${JSON.stringify(key)}:${stable(item)}`).join(',')}}`;
@@ -24,6 +25,32 @@ export function validQcEvidence(evidence: unknown): boolean {
 export function assertCurrentAutomaticQc(release: Release, expectedRevision: string) {
   const qc=release.metadata?.autoQc as Record<string,unknown>|undefined;
   if (!qc || !validQcEvidence(qc) || qc.status!=='passed' || qc.revision!==expectedRevision || automaticQcRevision(release)!==expectedRevision) throw Error('This release changed or has no verified automatic QC result. Recheck the current revision before delivery.');
+}
+
+/** Human approval belongs to the package, not its transport status/version. */
+export function manualQcPackageRevision(release: Release) {
+  return automaticQcRevision({ ...release, recordVersion: undefined });
+}
+export function hasCurrentManualQcEvidence(release: Release): boolean {
+  const qc = release.metadata?.manualQc as Record<string, unknown> | undefined;
+  return Boolean(['approved', 'queued_for_distribution', 'submitting_to_distributor'].includes(release.status) && qc && validQcEvidence(qc) && qc.status === 'passed' && qc.releaseId === release.id &&
+    (qc.packageRevision ? qc.packageRevision === manualQcPackageRevision(release) : release.status === 'approved' && qc.reviewedVersion === release.recordVersion));
+}
+export async function manualQcSourceRevision(release: Release, db: Pick<Prisma.TransactionClient, 'release' | 'storedAsset'> = prisma) {
+  const artwork = await resolvePrivateReleaseArtworkUrl({ userId: release.userId, releaseId: release.id, value: release.artworkUrl }, db);
+  const sources = [];
+  for (const url of [artwork, ...(release.tracks || []).map(track => track.audioUrl)]) {
+    const id = Number(new URL(url || '', 'https://hymn.local').pathname.match(/^\/api\/assets\/(\d+)\/download$/)?.[1]);
+    const asset = id ? await db.storedAsset.findFirst({ where: { id, ownerUserId: release.userId, deletedAt: null, uploadStatus: 'ready' }, select: { id: true, checksum: true } }) : null;
+    sources.push({ url, asset });
+  }
+  return createHmac('sha256', getUserSessionSecret()).update(stable(sources)).digest('hex');
+}
+export async function assertCurrentManualQc(release: Release, revision: string) {
+  const qc = release.metadata?.manualQc as Record<string, unknown> | undefined;
+  if (!hasCurrentManualQcEvidence(release) || qc?.packageRevision !== revision || !qc.sourceRevision || qc.sourceRevision !== await manualQcSourceRevision(release)) {
+    throw Error('The manually approved package or its files changed. Review the current package before delivery.');
+  }
 }
 
 /** Check the actual selected sources again under the delivery lock. Display URLs

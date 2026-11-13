@@ -206,10 +206,15 @@ async function main() {
     globalThis.fetch = async () => Response.json({...payload,release:{upc_code:release.upc},tracks:payload.tracks.map(track=>({...track,remarks:"Please replace the unreadable artwork"}))});
     attempts[0].corrections.status="customer_resolved";
     release.metadata.correctionReview={status:"pending",submissionKey:"fixture-new-response"};
-    await syncDireNoteRelease(19);
-    assert.equal(release.status,"CHANGES_REQUESTED","A changed provider correction must reopen customer action");
-    assert.equal(attempts[0].corrections.status,"customer_action_required");
-    assert.equal(release.metadata.correctionReview.status,"changes_requested");
+    for (const status of ['UNDER_REVIEW', 'RESUBMITTED', 'APPROVED', 'QUEUED_FOR_DISTRIBUTION', 'SUBMITTING_TO_DISTRIBUTOR', 'DELIVERY_FAILED']) {
+      release.status = status;
+      release.metadata.correctionReview.status = status === 'RESUBMITTED' ? 'pending' : 'approved';
+      globalThis.fetch = async () => { throw Error('The old provider submission must not be polled while correction delivery is pending.'); };
+      const outcome = await syncDireNoteRelease(19);
+      assert.equal(outcome.skipped, 'correction_delivery_pending');
+      assert.equal(release.status, status, 'Old accepted submission cannot advance or reopen the corrected package.');
+      assert.equal(attempts[0].corrections.status, 'customer_resolved');
+    }
     console.log("DireNote correction parser and sync regression verification passed.");
   } finally { globalThis.fetch = originalFetch; }
 }

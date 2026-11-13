@@ -1,15 +1,25 @@
 import assert from "node:assert/strict";
 import { prisma } from "../lib/prisma";
+import { dispatchLocalCron, localCronHandlers } from '../lib/cron/local-dispatch';
 import { cronHandler } from "../lib/cron/runtime";
 import { GET as draftNudges } from "../app/api/cron/draft-nudges/route";
 import { GET as deleteAccounts } from "../app/api/cron/account-deletion-cleanup/route";
 import { cronHealthResponse } from "../lib/cron/health";
 import { GET as revenueSync } from "../app/api/cron/direnote-revenue-sync/route";
 import { POST as campaignSend } from "../app/api/cron/newsletter-campaign/route";
-assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
+assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:554(?:39|4[0-9])\/direnote_virtual/);
 async function main() {
   process.env.CRON_SECRET = "fixture-cron";
   const request = () => new Request("http://localhost/api/cron/test", { headers: { authorization: "Bearer fixture-cron" } });
+  assert.equal((await dispatchLocalCron('https://hymn.fixture/api/cron/team-os')).status, 401);
+  const auth = {authorization: 'Bearer fixture-cron'};
+  assert.equal((await dispatchLocalCron('https://hymn.fixture/api/cron/not-registered', {headers:auth})).status,404);
+  assert.equal((await dispatchLocalCron('https://hymn.fixture/api/cron/team-os', {method:'POST',headers:auth})).status,405);
+  const realHandler=localCronHandlers['team-os'];
+  let localCalls=0;
+  localCronHandlers['team-os']=async request=>{assert.equal(request.headers.get('authorization'),auth.authorization);localCalls++;return Response.json({success:true});};
+  try {assert.equal((await dispatchLocalCron('https://hymn.fixture/api/cron/team-os',{headers:auth})).status,200);assert.equal(localCalls,1);}
+  finally {localCronHandlers['team-os']=realHandler;}
   let executions = 0;
   const guarded = cronHandler("draft-nudges", async () => { executions++; return Response.json({ success: true }); });
   assert.equal((await guarded(new Request("http://localhost"))).status, 401);

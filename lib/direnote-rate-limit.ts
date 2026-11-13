@@ -36,7 +36,8 @@ export async function reserveDireNoteRequest(action: string, releaseId?: number 
 
     // Keep five requests available for an administrator to diagnose or submit
     // a release while scheduled work is active.
-    if (used >= 95) {
+    const capacity = actorId != null ? 100 : 95;
+    if (used >= capacity) {
       const oldest = await tx.direNoteLog.findFirst({ where: { action: "rate_limit_reservation", createdAt: { gte: since } }, orderBy: { createdAt: "asc" }, select: { createdAt: true } });
       const retryAfterSeconds = Math.max(1, Math.ceil(((oldest?.createdAt.getTime() ?? Date.now()) + 60 * 60 * 1000 - Date.now()) / 1000));
       const error = new Error(`DireNote hourly request capacity is exhausted. Retry in ${Math.ceil(retryAfterSeconds / 60)} minute(s).`);

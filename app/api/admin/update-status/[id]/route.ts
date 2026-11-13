@@ -47,6 +47,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       // submitRelease performs a fresh provider-readiness check under its advisory lock
       // before it creates the provider attempt.
       const submission = await submitRelease(Number(id), { actorId, siteUrl: getPublicAppUrl(request.url) });
+      if ('queued' in submission && submission.queued) return NextResponse.json(submission, { status: 202, headers: { 'Retry-After': String(submission.retryAfterSeconds) } });
       if ("inProgress" in submission && submission.inProgress) return NextResponse.json({ release: submission.release, inProgress: true, message: submission.error, retryAfterSeconds: submission.retryAfterSeconds }, { status: 202 });
       if (!submission.submitted) {
         const messages = submission.validation.issues.map((issue) => issue.message);
@@ -76,6 +77,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const distributionPermission = await requireAdminPermission(retry ? "distribution.retry" : "distribution.submit");
       if ("error" in distributionPermission) return distributionPermission.error;
       const submission = await submitRelease(Number(id), { actorId, siteUrl: origin, retry });
+      if ('queued' in submission && submission.queued) return NextResponse.json(submission, { status: 202, headers: { 'Retry-After': String(submission.retryAfterSeconds) } });
       if ("inProgress" in submission && submission.inProgress) return NextResponse.json({ release: submission.release, inProgress: true, message: submission.error, retryAfterSeconds: submission.retryAfterSeconds }, { status: 202 });
       if (!submission.submitted) {
         const messages = submission.validation.issues.map((issue) => issue.message);

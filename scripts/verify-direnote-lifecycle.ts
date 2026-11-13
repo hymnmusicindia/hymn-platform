@@ -5,6 +5,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { redactDireNoteDiagnostic } from "../lib/direnote";
 import { prisma } from "../lib/prisma";
 import { buildDireNotePayloadForRelease, submitRelease } from "../lib/distribution-service";
+import { hasCurrentManualQcEvidence } from '../lib/distribution-qc-evidence';
 import { distributionPayloadIdentity } from "../lib/distribution-idempotency";
 import { syncDireNoteRelease } from "../lib/direnote-service";
 import { getDetailedReleaseById, updatePaidDistributionRelease, saveDraftDistributionRelease, updateDetailedReleaseStatus } from "../lib/distribution-db";
@@ -90,7 +91,7 @@ const server = createServer(async (request, response) => {
       { track_name: `Track ${index + 1}`, isrc, status: "Approved", remarks: "", date: "2026-10-14 14:08:04" }
     ]) })); return;
   }
-  response.end(JSON.stringify({ success: true, release: { album_name: "Magenta", upc_code: body.upc, status: mode === "accepted" ? "Accepted" : mode === "rejected" ? "Rejected" : "Pending" }, tracks: ids.map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc, artist: returnedArtist, status: "Pending", remarks: mode === "remark" && index === 1 ? remark : "NONE" })) }));
+  response.end(JSON.stringify({ success: true, release: { album_name: "Magenta", upc_code: body.upc, status: mode === "accepted" ? "Accepted" : mode === "rejected" ? "Rejected" : "Pending" }, tracks: ids.map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc, artist: returnedArtist, status: mode === "remark" && index === 1 ? "Correction Required" : "Pending", remarks: mode === "remark" && index === 1 ? remark : "NONE" })) }));
 });
 
 async function main() {
@@ -168,12 +169,15 @@ async function main() {
     await prisma.distributionSubmissionAttempt.update({where:{id:firstAttempt.id},data:{lastCheckedAt:new Date(0)}});
     await prisma.direNoteLog.updateMany({ where: { releaseId: release.id, action: { in: ["release_information", "upc_lookup"] } }, data: { createdAt: new Date(0) } });
     const result = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
-    assert.equal((await result.json()).checked, 1);
+    const cycleResult = await result.json();
+    assert.equal(cycleResult.checked, 1, JSON.stringify(cycleResult));
+    assert.equal(cycleResult.results[0].success, true, JSON.stringify(cycleResult));
+    assert.equal(cycleResult.results[0].pending, undefined, JSON.stringify(cycleResult));
   }
   const corrected = await prisma.release.findUniqueOrThrow({ where: { id: release.id } });
   assert.equal(corrected.status, "CHANGES_REQUESTED");
   assert.match(JSON.stringify(corrected.reviewIssues), /tracks\.1\.trackLanguage/);
-  assert.match(JSON.stringify(corrected.reviewIssues), /ISRC check: Please correct the recording details/);
+  assert.equal(qcRequests > 0, true, "Detailed evidence must be fetched without replacing the explicit provider correction.");
   assert.equal(qcRequests, 1, "Repeated identical correction polling must reuse the same track QC report.");
   assert.equal(await prisma.notification.count({ where: { userId: user.id, title: { startsWith: "Fix required" } } }), 1);
   assert.equal(await prisma.emailLog.count({ where: { userId: user.id, template: "release_changes_requested" } }), 1);
@@ -220,8 +224,30 @@ async function main() {
   }
   await prisma.distributionSubmissionAttempt.update({ where: { id: firstAttempt.id }, data: { startedAt: new Date(0) } });
   if (browser) await browser.submit(release.id);
-  await updateDetailedReleaseStatus(release.id, "approved", "Fixture admin approved the corrected metadata.");
-  const reingested = await submitRelease(release.id);
+  await updateDetailedReleaseStatus(release.id, "approved", "Fixture admin approved the corrected metadata.", undefined, {actorType: 'admin', actorId: user.id});
+  await prisma.direNoteLog.createMany({data: Array.from({length: 100}, () => ({action: 'rate_limit_reservation', success: true, requestPayloadRedacted: {capacityFixture: true}}))});
+  const capacityDeferred = await submitRelease(release.id, {actorId: user.id});
+  assert.equal(capacityDeferred.submitted, false);
+  assert.equal('queued' in capacityDeferred && capacityDeferred.queued, true);
+  assert.equal(capacityDeferred.release?.status, 'queued_for_distribution');
+  assert.equal(ingests, 1, 'Capacity deferral must never reach provider ingestion.');
+  const queued = (await getDetailedReleaseById(release.id))!;
+  assert.equal(hasCurrentManualQcEvidence(queued), true, 'Manual approval survives queue and transport version changes.');
+  assert.equal((await syncDireNoteRelease(release.id)).skipped, 'correction_delivery_pending');
+  assert.equal((await prisma.release.findUniqueOrThrow({where:{id: release.id}})).status, 'QUEUED_FOR_DISTRIBUTION', 'Old receipt must not falsely repair this correction to sent.');
+  const deferredAttempt = await prisma.distributionSubmissionAttempt.findFirstOrThrow({where:{releaseId:release.id,state:'retryable'},orderBy:{id:'desc'}});
+  await prisma.release.update({where:{id:release.id},data:{status:'SENT_TO_DISTRIBUTOR',version:{increment:1}}});
+  assert.equal((await syncDireNoteRelease(release.id)).skipped, 'correction_delivery_pending');
+  assert.equal((await prisma.release.findUniqueOrThrow({where:{id:release.id}})).status,'QUEUED_FOR_DISTRIBUTION','Historic false acceptance must recover without provider transport or identifier changes.');
+  assert.equal((deferredAttempt.responseRedacted as any).transportStarted, false);
+  assert.equal((deferredAttempt.responseRedacted as any).correctionAttemptId, firstAttempt.id);
+  assert.equal(await prisma.auditLog.count({where:{entityId:String(release.id),action:'DIRENOTE_DELIVERY_DEFERRED'}}),1);
+  const coolingDown = await submitRelease(release.id, {retry:true});
+  assert.equal(coolingDown.submitted,false);
+  assert.equal(ingests,1);
+  await prisma.direNoteLog.updateMany({where:{action:'rate_limit_reservation',requestPayloadRedacted:{path:['capacityFixture'],equals:true}},data:{createdAt:new Date(0)}});
+  await prisma.distributionSubmissionAttempt.update({where:{id:deferredAttempt.id},data:{startedAt:new Date(0),responseRedacted:{...(deferredAttempt.responseRedacted as any),retryAt:new Date(0).toISOString()}}});
+  const reingested = await submitRelease(release.id, {retry:true,manualQcRevision:String((queued.metadata!.manualQc as any).packageRevision)});
   assert.equal(reingested.submitted, true, JSON.stringify(reingested));
   assert.equal(ingests, 2);
   assert.equal(ingestPayloads[0].tracks[1].trackLanguage, "Hindi");

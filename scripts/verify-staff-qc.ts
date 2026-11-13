@@ -10,7 +10,7 @@ import { changeStaffTeamAccess } from '../lib/staff-team-access';
 import { getDetailedReleaseById } from '../lib/distribution-db';
 import { runIntelligentDistributionQc } from '../lib/distribution-intelligent-qc';
 import { hasCurrentManualQcPass, automationSummary, releaseReviewActions } from '../lib/distribution-workspace';
-import { validQcEvidence } from '../lib/distribution-qc-evidence';
+import { validQcEvidence, hasCurrentManualQcEvidence, assertCurrentManualQc } from '../lib/distribution-qc-evidence';
 async function main() {
   assert.equal(process.env.DATABASE_URL, 'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
   assert.equal(process.env.EMAIL_ENABLED, 'false');
@@ -67,6 +67,14 @@ async function main() {
   assert.equal(validQcEvidence(approved.metadata?.manualQc),true,'Human approval evidence must be signed by the server.');
   assert.equal(hasCurrentManualQcPass({...approved,recordVersion:approved.recordVersion!+1}),false,'A different revision cannot inherit manual QC.');
   assert.equal(hasCurrentManualQcPass({...approved,id:approved.id+1}),false,'Another release cannot inherit manual QC evidence.');
+  assert.equal(hasCurrentManualQcEvidence(approved), true);
+  const queuedApproval = {...approved, status: 'queued_for_distribution' as const, recordVersion: approved.recordVersion! + 3};
+  assert.equal(hasCurrentManualQcEvidence(queuedApproval), true, 'Status-only transport transitions preserve the reviewed package.');
+  const revision = String((approved.metadata!.manualQc as Record<string, unknown>).packageRevision);
+  await assertCurrentManualQc(queuedApproval, revision);
+  assert.equal(hasCurrentManualQcEvidence({...queuedApproval, releaseTitle: 'Changed title'}), false, 'Content edits invalidate human approval.');
+  assert.equal(hasCurrentManualQcEvidence({...queuedApproval, tracks: [{trackTitle: 'Unexpected track'}] as never}), false, 'Track changes invalidate human approval.');
+  await assert.rejects(assertCurrentManualQc({...queuedApproval, releaseTitle: 'Changed title'}, revision), /changed/);
   assert.equal(automationSummary(approved).label,'Manual QC passed');
   assert.equal(releaseReviewActions(approved).approve,true,'An approved release retains its operator send action.');
   assert.equal((await prisma.adminTask.findUniqueOrThrow({where:{eventKey:`release:${first.id}:qc-review:fixture`}})).status,'resolved');
@@ -117,6 +125,20 @@ async function main() {
   assert.equal((await deliverApprovedReleaseQc(1,operatorTask.id,fakeSubmit as never)).sent,1);
   assert.equal(submits,beforeOperator,'A later staff delivery cycle must reconcile the operator send without sending again.');
   assert.equal(((await prisma.teamTask.findUniqueOrThrow({where:{id:operatorTask.id}})).followUpContext as any).delivery,'sent');
+  const capacityRelease=await release('Capacity deferred after staff QC');
+  await teamWrite(owner,(tx,a)=>syncReleaseQcAssignments(tx,a));
+  const capacityTask=await prisma.teamTask.findFirstOrThrow({where:{recordId:capacityRelease.id,eventKey:{startsWith:'release-qc:'}}});
+  const capacityReviewer=await prisma.teamMember.findUniqueOrThrow({where:{id:capacityTask.ownerId},include:{role:true}});
+  await reviewAssignedReleaseQc(capacityReviewer,{...decision,taskId:capacityTask.id,taskVersion:capacityTask.version,releaseVersion:capacityRelease.version});
+  await prisma.distributionSubmissionAttempt.create({data:{releaseId:capacityRelease.id,state:'retryable',payloadHash:'staff-capacity',idempotencyKey:'staff-capacity'}});
+  let capacitySends=0;
+  const capacitySubmit=async()=>{capacitySends++;return {submitted:false,queued:true,retryable:true,retryAfterSeconds:60,validation:{ok:true,issues:[],warnings:[]}};};
+  const capacityOutcome=await deliverApprovedReleaseQc(1,capacityTask.id,capacitySubmit as never);
+  assert.equal(capacityOutcome.review,0,'Capacity waiting is not a failed manual QC handoff.');
+  assert.equal(((await prisma.teamTask.findUniqueOrThrow({where:{id:capacityTask.id}})).followUpContext as Record<string,unknown>).delivery,'waiting_capacity');
+  await deliverApprovedReleaseQc(1,capacityTask.id,capacitySubmit as never);
+  assert.equal(capacitySends,1,'Capacity retries are owned by guarded delivery automation, not a second staff sender.');
+  assert.equal(await prisma.adminTask.count({where:{eventKey:`${capacityTask.id}:qc-delivery-review`}}),0);
   console.log('PASS staff identity exclusion and stale calendar cancellation; genuine customer signals; balanced QC tasks; self/cross-assignment denial; private media scope; stale/revoked review denial; atomic customer correction mail; resubmission rounds; one delivery claim; protected role grants. No external distribution or emails sent.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

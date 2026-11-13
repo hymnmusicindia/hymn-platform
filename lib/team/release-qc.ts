@@ -138,6 +138,7 @@ export async function deliverApprovedReleaseQc(limit = 2, taskId?: string, submi
         if (!member || !release || context.kind !== 'RELEASE_QC' || context.decision !== 'approved' || context.reviewerId !== member.id || release.userId === member.userId || release.status !== 'APPROVED' || release.version !== context.reviewedReleaseVersion) throw Error('Approval, assignment or release changed before delivery.');
         const result = await submit(task.recordId!, { actorId: member.userId, siteUrl: getPublicAppUrl() });
         if (result.submitted) { outcome = 'sent'; message = 'HYMN distribution accepted the approved release.'; sent++; }
+        else if ('queued' in result && result.queued) { outcome = 'waiting_capacity'; message = 'QC approval is retained. Automatic delivery will continue when partner request capacity is available.'; }
         else if ('inProgress' in result && result.inProgress) { outcome = 'pending'; message = 'Existing distribution work is still processing.'; }
         else message = customerBrandText(result.error || result.validation.issues.map(i => i.message).join(' ') || message);
       }
@@ -150,12 +151,16 @@ export async function deliverApprovedReleaseQc(limit = 2, taskId?: string, submi
   // remains authoritative and can be reconciled by the distribution operator.
   const interrupted = await prisma.teamTask.findMany({ where: { eventKey: { startsWith: 'release-qc:' }, followUpContext: { path: ['delivery'], equals: 'sending' }, updatedAt: { lt: new Date(Date.now() - 10 * 60000) } }, take: 20 });
   for (const task of interrupted) await prisma.teamTask.updateMany({ where: { id: task.id, version: task.version }, data: { followUpContext: json({ ...object(task.followUpContext), delivery: 'review', deliveryMessage: 'Interrupted delivery. Verify the saved distribution attempt before any resend.' }), version: { increment: 1 } } });
-  const attention = await prisma.teamTask.findMany({ where: { eventKey: { startsWith: 'release-qc:' }, followUpContext: { path: ['delivery'], equals: 'review' } }, take: 20 });
+  const attention = await prisma.teamTask.findMany({ where: { eventKey: { startsWith: 'release-qc:' }, OR: [{ followUpContext: { path: ['delivery'], equals: 'review' } }, { followUpContext: { path: ['delivery'], equals: 'waiting_capacity' } }] }, take: 20 });
   for (const task of attention) {
     if (await qcDeliveryAlreadyAcknowledged(task)) {
       await prisma.teamTask.updateMany({ where: { id: task.id, version: task.version }, data: { followUpContext: json({ ...object(task.followUpContext), delivery: 'sent', deliveryMessage: 'HYMN verified the existing delivery acknowledgement. No second submission was sent.', deliveryUpdatedAt: new Date().toISOString() }), version: { increment: 1 } } });
       await resolveAdminTask(`${task.id}:qc-delivery-review`, 'Existing partner acknowledgement verified. No resend required.');
       continue;
+    }
+    if (object(task.followUpContext).delivery === 'waiting_capacity') {
+      const attempt = await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId: task.recordId!, provider: 'direnote' }, orderBy: [{ startedAt: 'desc' }, { id: 'desc' }] });
+      if (attempt && ['retryable', 'processing'].includes(attempt.state) && attempt.attemptCount < 5) continue;
     }
     await createAdminTaskOnce({ eventKey: `${task.id}:qc-delivery-review`, type: 'distribution_delivery_review', priority: 'high', title: `QC delivery needs attention: release #${task.recordId}`, body: String(object(task.followUpContext).deliveryMessage || 'Verify the saved partner attempt before resending.'), href: `/admin?tab=releases&releaseId=${task.recordId}`, entityType: 'release', entityId: task.recordId || 0 });
   }

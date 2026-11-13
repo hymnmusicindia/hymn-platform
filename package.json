@@ -29,6 +29,7 @@
     "test:navigation-sections": "tsx scripts/verify-navigation-sections.ts && node scripts/verify-navigation-sections-browser.cjs",
     "test:customer-experience": "tsx scripts/verify-customer-experience-isolated.ts --features",
     "test:staff-qc": "tsx scripts/verify-acquisition-isolated.ts --staff-qc-only",
+    "test:runtime-recovery": "node --import tsx scripts/verify-cron-domain.ts && node --conditions=react-server scripts/verify-spotify-photo-cron.cjs && node --import tsx scripts/verify-direnote-virtual.ts --lifecycle-only",
     "test:manual-qc": "node --conditions=react-server --import tsx scripts/verify-distribution-automation-policy.ts && tsx scripts/verify-acquisition-isolated.ts --staff-qc-only && node scripts/verify-manual-qc-actions-browser.cjs",
     "test:team-coordinator": "tsx scripts/verify-acquisition-isolated.ts --team-coordinator-only",
     "test:team-coordinator:browser": "tsx scripts/verify-acquisition-isolated.ts --team-coordinator-only --browser",

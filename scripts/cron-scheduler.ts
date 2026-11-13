@@ -33,11 +33,11 @@ export function startCronScheduler(options: { port: number; secret: string; orig
       active.add(job.id);
       const attemptStarted = now();
       work.push((async () => {
-        let healthy = false, domainFailure = false, retryAfter = 0;
+        let healthy = false, domainFailure = false, retryAfter = 0, continueAfter = 0;
         try {
           const response = await fetcher(`${origin}/api/cron/${job.id}`, {
             method: job.method, redirect: "error", headers: cronRequestHeaders(origin, options.fallbackOrigin, options.secret),
-            signal: AbortSignal.any([controller.signal, AbortSignal.timeout(55_000)])
+            signal: AbortSignal.any([controller.signal, AbortSignal.timeout(330_000)])
           });
           const data: unknown = await response.json();
           // A second process can reach the same durable lease while the owner
@@ -48,9 +48,13 @@ export function startCronScheduler(options: { port: number; secret: string; orig
           domainFailure = !healthy && response.headers.get("x-hymn-cron-outcome") === "domain-failure";
           const retry = Number(response.headers.get("retry-after"));
           if (Number.isFinite(retry) && retry > 0) retryAfter = Math.min(retry * 1000, 86400000);
+          const continuation = Number(response.headers.get("x-hymn-cron-continue-after"));
+          if (healthy && Number.isFinite(continuation) && continuation > 0) {
+            continueAfter = Math.max(15_000, Math.min(continuation * 1000, job.seconds * 1000));
+          }
           if (!healthy) console.error("cron job requires attention", { job: job.id, httpStatus: response.status });
         } catch (error) {
-          if (!stopped) console.error("cron job unavailable; retry scheduled", { job: job.id, origin });
+          if (!stopped) console.error("cron job unavailable; retry scheduled", { job: job.id, origin, reason: error instanceof Error ? error.name : "NetworkError" });
           // Connection refused on loopback means the server is not listening where
           // we assumed (host-assigned port or socket). Switch to the public origin
           // once. A timeout is excluded: the app answered slowly, so it is reachable.
@@ -67,7 +71,7 @@ export function startCronScheduler(options: { port: number; secret: string; orig
           failures.set(job.id, count);
           const delay = onCadence ? job.seconds * 1000 : Math.min(job.seconds * 1000, 30_000 * 2 ** Math.min(count, 6));
           const nextStart = onCadence ? Math.max(now() + 1000, attemptStarted + delay) : now() + delay;
-          next.set(job.id, Math.max(nextStart + random() * Math.min(5000, delay / 10), now() + retryAfter));
+          next.set(job.id, healthy && continueAfter ? now() + continueAfter : Math.max(nextStart + random() * Math.min(5000, delay / 10), now() + retryAfter));
           active.delete(job.id);
         }
       })());
