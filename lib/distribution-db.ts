@@ -1566,7 +1566,7 @@ export async function updatePaidDistributionRelease(input: {
           return { title: track.trackTitle || `Track ${index + 1}`, trackNumber: track.trackNumber || index + 1, primaryArtist: track.primaryArtist || input.metadata.artistName, audioUrl: track.audioUrl || null, isrc: providerCorrection ? previous?.isrc ?? null : previous?.isrc ?? track.isrc ?? null, metadata: trackMetadata };
         }), saved.tracks);
         await syncReleaseContributions(tx, { actorUserId: input.userId, tracks: savedTracks.map((track, i) => ({ trackId: track.id, contributions: tracks[i].contributors ?? [] })) });
-        await tx.track.deleteMany({ where: { releaseId: input.releaseId, trackNumber: { notIn: tracks.map(track => track.trackNumber) } } });
+        await tx.track.deleteMany({ where: { releaseId: input.releaseId, id: { notIn: savedTracks.map(track => track.id) } } });
         if (providerCorrection) {
           const attempt = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId: input.releaseId, provider: "direnote", isCurrent: true } });
           if (attempt) await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: { ...(typeof attempt.corrections === "object" && attempt.corrections ? attempt.corrections : {}), status: "customer_resolved", artistResolvedAt: new Date().toISOString() } } });

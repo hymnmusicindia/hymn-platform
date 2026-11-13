@@ -181,7 +181,7 @@ export async function snapshotTrackContributions(submissionAttemptId: number, re
       role: item.role,
       creditedName: item.creditedName,
       providerRole: item.providerRole,
-      payload: { trackNumber: item.track.trackNumber, trackTitle: item.track.title, sequence: item.sequence }
+      payload: { originalTrackId: item.trackId, trackNumber: item.track.trackNumber, trackTitle: item.track.title, sequence: item.sequence }
     })),
     skipDuplicates: true
   });

@@ -3387,7 +3387,7 @@ model TrackContribution {
 model TrackContributionSnapshot {
   id                  Int                           @id @default(autoincrement())
   submissionAttemptId Int                           @map("submission_attempt_id")
-  trackId             Int                           @map("track_id")
+  trackId             Int?                          @map("track_id")
   partyId             Int                           @map("party_id")
   role                String
   creditedName        String                        @map("credited_name")
@@ -3395,7 +3395,7 @@ model TrackContributionSnapshot {
   payload             Json?
   submittedAt         DateTime                      @default(now()) @map("submitted_at")
   submissionAttempt   DistributionSubmissionAttempt @relation(fields: [submissionAttemptId], references: [id], onDelete: Cascade)
-  track               Track                         @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  track               Track?                        @relation(fields: [trackId], references: [id], onDelete: SetNull)
   party               ContributorParty              @relation(fields: [partyId], references: [id], onDelete: Restrict)
 
   @@unique([submissionAttemptId, trackId, partyId, role])

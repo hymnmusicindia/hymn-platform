@@ -64,8 +64,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }, select: { id: true, updatedAt: true } });
   if (Array.isArray((metadata as any).tracks)) {
     const tracks = (metadata as any).tracks as any[];
-    await saveReleaseTracks(tx, id, tracks.map((track, index) => ({ title: String(track.trackTitle || ""), trackNumber: index + 1, primaryArtist: String(track.primaryArtist || body.artistName || ""), audioUrl: typeof track.audioUrl === "string" ? track.audioUrl : null, metadata: track })), current.tracks);
-    await tx.track.deleteMany({ where: { releaseId: id, trackNumber: { gt: tracks.length } } });
+    const savedTracks = await saveReleaseTracks(tx, id, tracks.map((track, index) => ({ title: String(track.trackTitle || ""), trackNumber: index + 1, primaryArtist: String(track.primaryArtist || body.artistName || ""), audioUrl: typeof track.audioUrl === "string" ? track.audioUrl : null, metadata: track })), current.tracks);
+    await tx.track.deleteMany({ where: { releaseId: id, id: { notIn: savedTracks.map(track => track.id) } } });
   }
   return { conflict: false as const, updated };
   }, releaseSaveTransactionOptions);
