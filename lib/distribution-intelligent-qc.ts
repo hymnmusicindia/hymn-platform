@@ -10,6 +10,7 @@ import { localPrivateStorage } from './private-storage';
 import { verifyArtworkIntegrity, verifyAudioIntegrity } from './media-integrity';
 import { resolvePrivateReleaseArtworkUrl } from './release-asset-resolution';
 import type { Release } from './types';
+import { hasCurrentManualQcPass } from './distribution-workspace';
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const json = (value: unknown) => JSON.parse(JSON.stringify(value));
@@ -77,6 +78,9 @@ async function applyFormatting(release: Release, fixes: ReturnType<typeof techni
 
 async function checkRelease(releaseId: number, siteUrl: string) {
   let release=await getDetailedReleaseById(releaseId);if(!release||release.paymentStatus!=='paid')return false;
+  // A signed human approval is delivered by the manual/staff handoff. Do not
+  // replace it with the automatic hold that originally required that review.
+  if(hasCurrentManualQcPass(release) && validQcEvidence(release.metadata?.manualQc))return false;
   if(release.status==='changes_requested'&&!canResolveRequestedFormatting(release)){await recordQc(release,{revision:automaticQcRevision(release),snapshot:automationSensitiveSnapshot(release),status:'manual_review_required',reason:'The requested changes require customer action or a reviewer. No creative or rights changes were made.',issueCount:1});return false;}
   if(canResolveRequestedFormatting(release)) {
     const context=await automaticDeliveryContext(releaseId,release.userId);

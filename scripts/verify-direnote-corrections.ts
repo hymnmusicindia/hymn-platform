@@ -114,7 +114,9 @@ async function main() {
     assert.equal(notifications[0].href, "/dashboard/releases/19?tab=corrections");
     for (let cycle = 0; cycle < 10; cycle++) await syncDireNoteRelease(19);
     assert.equal(notifications.length, 1);
-    assert.equal(tasks.size, 1);
+    assert.equal([...tasks.values()].filter(task => task.type === 'DireNote Correction').length, 1, 'Repeated remarks create one correction task.');
+    assert.equal([...tasks.values()].filter(task => task.type === 'QC report integrity').length, 1, 'This fixture supplies no source UPC for the detailed QC report; retain one integrity review task.');
+    assert.equal(tasks.size, 2, 'Correction action and unverified-report evidence are separate, deduplicated tasks.');
     assert.equal(transitions, 1);
     assert.equal(notificationWrites, 1);
     const { updateDetailedReleaseStatus } = await import("../lib/distribution-db");

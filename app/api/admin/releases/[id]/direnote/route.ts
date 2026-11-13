@@ -45,6 +45,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdminPermission("distribution.submit");
   if ("error" in admin) return admin.error;
+  const reviewer = await requireAdminPermission("releases.review");
+  if ("error" in reviewer) return reviewer.error;
 
   const { id } = await params;
   const resolved = await getReleaseOrResponse(id);
@@ -52,6 +54,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const body = await request.json().catch(() => ({}));
   const action = String(body.action ?? "submit");
+  if (action === 'retry') {
+    const retryPermission = await requireAdminPermission('distribution.retry');
+    if ('error' in retryPermission) return retryPermission.error;
+  }
   const actorId = "sub" in admin ? admin.sub : null;
   const siteUrl = getPublicAppUrl(request.url);
   const adminConfirmedExistingArtists = Boolean(body.adminConfirmedExistingArtists);

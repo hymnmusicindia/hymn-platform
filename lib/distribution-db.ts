@@ -837,6 +837,14 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
           ...(review ? { rejectionReason: status === "rejected" ? review.reason : undefined, correctionReason: status === "changes_requested" ? review.reason : undefined, reviewIssues: reviewIssues as any, adminInternalNote: review.adminInternalNote || null, reviewedAt: new Date(), reviewedBy: review.reviewedBy ?? null } : {})
         } });
         if (changed.count !== 1) throw new Error("Release changed concurrently. Refresh and retry.");
+        if (status === 'approved' && options?.actorId != null && ['admin','team_member'].includes(options.actorType ?? '')) {
+          const row = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, select: { metadata: true } });
+          const metadata = row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata as Record<string, unknown> : {};
+          const { signQcEvidence } = await import('./distribution-qc-evidence');
+          const manualQc = { status: 'passed', releaseId, reviewedVersion: current.version + 1, reviewerUserId: options.actorId, actorType: options.actorType, reviewedAt: new Date().toISOString(), reason: note ?? 'Manual QC approved.' };
+          await tx.release.update({ where: { id: releaseId }, data: { metadata: JSON.parse(JSON.stringify({ ...metadata, manualQc: { ...manualQc, proof: signQcEvidence(manualQc) } })) } });
+          await tx.adminTask.updateMany({ where: { entityType: 'release', entityId: String(releaseId), status: { not: 'resolved' }, type: { in: ['Correction review','Distribution QC review'] } }, data: { status: 'resolved', resolvedAt: new Date(), resolutionNote: note ?? 'Manual QC approved this revision.' } });
+        }
         if (['approved','changes_requested','rejected','archived'].includes(status)) {
           const row = await tx.release.findUniqueOrThrow({where:{id:releaseId},select:{metadata:true}});
           const meta = row.metadata as Record<string,unknown>|null;

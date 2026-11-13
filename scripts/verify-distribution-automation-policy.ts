@@ -3,12 +3,28 @@ import { automaticQcRevision, automationSensitiveSnapshot, distributionAutomatio
 import { signQcEvidence, validQcEvidence, assertCurrentAutomaticQc } from '../lib/distribution-qc-evidence';
 import { canNotifyDireNoteHandoff, hasDireNoteAcceptanceEvidence } from '../lib/direnote-submission-evidence';
 import { releaseStatusEmail } from '../lib/email/templates/release-status-email';
-import { correctionReviewSummary, releaseBucket, automationSummary, isReleaseInHymnQcQueue, requiresManualDistributionReview } from '../lib/distribution-workspace';
+import { correctionReviewSummary, releaseBucket, automationSummary, isReleaseInHymnQcQueue, requiresManualDistributionReview, releaseReviewActions } from '../lib/distribution-workspace';
 import { adminReleaseStatusLabel, getReleaseStatusPresentation } from '../lib/release-status-presentation';
 import type { Release } from '../lib/types';
 
 const release = { id: 123, userId: 1, recordVersion: 2, status: 'under_review', paymentStatus: 'paid', releaseTitle: 'Original', artistName: 'Artist', ownershipConfirmed: true, noUnauthorizedSamples: true, collaboratorsCredited: true, platformCompliant: true, hymnNotLiable: true, agreedToTerms: true, falseMetadataAcknowledged: true, metadata: {}, tracks: [{ id: 12, trackTitle: 'Original', primaryArtist: 'Artist', explicitContent: false }] } as Release;
 const context = {accepted:false,uncertainAttempt:false,correctionResolved:false,openAmendment:false};
+for(const status of ['submitted','resubmitted','in_queue','in_qc_queue'] as Release['status'][])assert.equal(releaseReviewActions({...release,status}).startReview,true,status);
+for(const status of ['under_review','approved'] as Release['status'][])assert.equal(releaseReviewActions({...release,status}).approve,true,status);
+for(const status of ['draft','awaiting_payment','changes_requested','live','distributor_processing'] as Release['status'][])assert.equal(releaseReviewActions({...release,status}).approve,false,status);
+const approvedCorrection={...release,status:'approved' as const,direNoteStatus:'changes_required',metadata:{correctionReview:{status:'approved'}}};
+assert.equal(releaseReviewActions(approvedCorrection).approve,true,'A stale provider correction cannot hide approved delivery.');
+assert.equal(getReleaseStatusPresentation(approvedCorrection.status,approvedCorrection.direNoteStatus,approvedCorrection.metadata).label,'Corrections approved - awaiting delivery');
+assert.equal(releaseBucket(approvedCorrection),'delivery');
+assert.equal(correctionReviewSummary(approvedCorrection)?.label,'Corrections approved');
+for(const status of ['queued_for_distribution','delivery_failed'] as Release['status'][]){
+  const retry={...approvedCorrection,status};
+  assert.equal(releaseReviewActions(retry).retry,true,'A stale correction status must not hide recovery.');
+  assert.equal(getReleaseStatusPresentation(status,retry.direNoteStatus,retry.metadata).label,status==='delivery_failed'?'Delivery Needs Attention':'Queued for Partner Submission');
+}
+assert.equal(releaseReviewActions({...approvedCorrection,releaseSource:'ADMIN_MANUAL'}).approve,false,'Imported catalogue records are not new submissions.');
+assert.equal(releaseReviewActions({...release,status:'approved',direNoteStatus:'live'}).approve,false,'A stale local status cannot expose a second send for a live provider release.');
+assert.equal(releaseReviewActions({...release,status:'approved',liveAt:new Date().toISOString()}).approve,false,'Live recordings use amendments.');
 assert.equal(distributionAutomationDecision(release,context).eligible,true);
 for(const field of ['ownershipConfirmed','noUnauthorizedSamples','collaboratorsCredited','platformCompliant','hymnNotLiable','agreedToTerms','falseMetadataAcknowledged'])assert.equal(distributionAutomationDecision({...release,[field]:false},context).eligible,false,field);
 for(const status of ['draft','awaiting_payment','live','partially_live','delivery_failed','distributor_changes_required'] as Release['status'][])assert.equal(distributionAutomationDecision({...release,status},context).eligible,false,status);

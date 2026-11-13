@@ -417,7 +417,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     if(await automaticReleaseRiskHold(releaseId,latest.userId))throw new Error('A new high-risk alert requires review before automatic delivery.');
   }
   if (!options.retry && release.status === "under_review") {
-    await updateDetailedReleaseStatus(releaseId, "approved", "HYMN review approved for DireNote submission.");
+    await updateDetailedReleaseStatus(releaseId, "approved", "HYMN review approved for DireNote submission.", undefined, options.actorId != null && !options.automaticQcRevision ? { actorType: 'admin', actorId: options.actorId } : undefined);
   }
 
   if (amendment && previousAttempt?.state !== 'submitted') throw new Error('Reconcile the previous provider submission before sending a post-release amendment.');

@@ -2,11 +2,37 @@ import type { Release } from './types';
 import { effectiveReleaseStatus } from './release-status-presentation';
 
 export type ReleaseBucket = 'drafts' | 'review' | 'corrections' | 'delivery' | 'live' | 'exceptions';
+
+export function hasCurrentManualQcPass(release: Release) {
+  const review = release.metadata?.manualQc as { status?: string; releaseId?: number; reviewedVersion?: number } | undefined;
+  return release.status === 'approved' && review?.status === 'passed' && review.releaseId === release.id && Number.isInteger(release.recordVersion) && review.reviewedVersion === release.recordVersion;
+}
+
+/** Shared by the catalogue inspector and QC queue. Readiness and permissions
+ * disable actions; they must never make an eligible review silently disappear. */
+export function releaseReviewActions(release: Release) {
+  const status = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
+  const imported = release.releaseSource === 'ADMIN_MANUAL';
+  const acknowledged = Boolean(release.liveAt) || ['sent', 'sent_to_distributor', 'distributor_processing', 'processing', 'delivered', 'scheduled', 'awaiting_live_confirmation', 'partially_live', 'live', 'distributed'].includes(String(release.direNoteStatus ?? '').trim().toLowerCase());
+  const reviewable = !imported && !acknowledged;
+  const startReview = reviewable && ['submitted', 'resubmitted', 'in_queue', 'in_qc_queue', 'failed'].includes(status);
+  return {
+    status, startReview,
+    approve: reviewable && ['under_review', 'approved'].includes(status),
+    retry: reviewable && ['failed', 'delivery_failed', 'queued_for_distribution'].includes(status),
+    returnToQc: !imported && status === 'delivery_failed',
+    requestChanges: reviewable && ['submitted', 'in_queue', 'in_qc_queue', 'under_review', 'approved'].includes(status),
+    reject: reviewable && ['submitted', 'in_queue', 'in_qc_queue', 'under_review', 'approved'].includes(status),
+    markLive: ['sent', 'sent_to_distributor', 'scheduled', 'processing', 'distributor_processing', 'awaiting_live_confirmation', 'partially_live', 'delivered'].includes(status),
+    awaitingCustomer: ['changes_requested', 'distributor_changes_required'].includes(status)
+  };
+}
 export function requiresManualDistributionReview(release: Release) {
   const status = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
   if (!['approved', 'queued_for_distribution'].includes(status)) return false;
   if (['sent', 'sent_to_distributor', 'processing', 'distributor_processing', 'delivered', 'scheduled', 'awaiting_live_confirmation', 'partially_live', 'live', 'distributed'].includes(String(release.direNoteStatus ?? '').toLowerCase())) return false;
   if (release.adminQcReviewRequired) return true;
+  if (hasCurrentManualQcPass(release)) return false;
   const qc = release.metadata?.autoQc as { status?: string; policyVersion?: number; rightsReview?: string } | undefined;
   const correction = release.metadata?.correctionReview as { status?: string } | undefined;
   const correctionReadyForPartner = qc?.policyVersion === 4 && qc.status === 'passed' && qc.rightsReview === 'distribution_partner';
@@ -34,7 +60,8 @@ export function newestReleaseFirst(a: Release, b: Release) {
 }
 export function correctionReviewSummary(release: Release) {
   const marker=release.metadata?.correctionReview as {status?:string}|undefined;
-  if(marker?.status!=='pending'||!['under_review','resubmitted','approved'].includes(release.status.toLowerCase()))return null;
+  if(!['pending','approved'].includes(marker?.status??'')||!['under_review','resubmitted','approved','queued_for_distribution','delivery_failed'].includes(release.status.toLowerCase()))return null;
+  if(marker?.status==='approved')return {label:'Corrections approved',detail:'HYMN approved the updated package. Partner receipt is not yet confirmed.',delivery:'Approved package awaiting delivery'};
   const qc=release.metadata?.autoQc as {status?:string;policyVersion?:number;rightsReview?:string}|undefined;
   if(qc?.policyVersion===4 && qc.status==='passed' && qc.rightsReview==='distribution_partner')return {label:'Corrections ready for delivery',detail:'HYMN technical checks passed. The updated evidence will be sent for detailed partner QC.',delivery:'Updated package awaiting delivery'};
   const rights=/non.?exclusive|ai.generated/i.test(String(release.contentType||''))||release.reviewIssues?.type==='rights_ownership'||release.tracks?.some(track=>track.isCover);
@@ -47,7 +74,9 @@ export function automationSummary(release: Release) {
   if (bucket === 'drafts') return { label: 'Not submitted', tone: 'muted', detail: 'The artist controls this draft.' };
   if (bucket === 'corrections') return {label:'Corrections needed',tone:'warning',detail:reason||'Open the current correction request before this release can continue.'};
   if(bucket==='live')return {label:'Monitoring',tone:'success',detail:'Current store availability takes precedence over historical automatic QC notes.'};
+  if(['failed','delivery_failed'].includes(release.status))return {label:'Delivery needs attention',tone:'warning',detail:'Review the saved submission outcome before retrying. A QC pass does not confirm partner receipt.'};
   if(['sent','sent_to_distributor','processing','distributor_processing','delivered','scheduled','awaiting_live_confirmation'].includes(release.status.toLowerCase()))return {label:'Delivery acknowledged',tone:'success',detail:'The provider acknowledged the current delivery. Earlier automatic QC holds are historical; monitor the current provider review and store status.'};
+  if(hasCurrentManualQcPass(release))return {label:'Manual QC passed',tone:'success',detail:'A reviewer approved this revision. Earlier automatic QC notes are historical; delivery readiness is checked again before sending.'};
   const correction=correctionReviewSummary(release);
   if(correction)return {label:correction.label,tone:'warning',detail:correction.detail};
   if (qc?.status === 'passed') return { label: 'Checks passed', tone: 'success', detail: reason || 'Technical checks passed. Delivery safeguards remain active.' };

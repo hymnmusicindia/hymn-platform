@@ -2,6 +2,7 @@
 import {displayDateTime} from "@/lib/display-date-time";
 import { useAdminReleaseFeed } from "./use-admin-release-feed";
 import { DistributionReleaseCatalogue as AdminReleaseCatalogue } from "./distribution-release-catalogue";
+import { DistributionReleaseActions } from "./distribution-release-actions";
 import { DistributionReviewQueue } from "./distribution-review-queue";
 import { DistributionOperationsHeader } from "./distribution-operations-header";
 import { DistributionAutomationInsight } from "./distribution-automation-insight";
@@ -618,7 +619,11 @@ export function AdminControlCenter({
       : requestedSelectedRelease ?? releases[0] ?? null;
   const selectedReleaseStatus = selectedRelease ? effectiveReleaseStatus(selectedRelease.status, selectedRelease.direNoteStatus, selectedRelease.metadata) : null;
   const readinessReleaseId = selectedRelease?.id ?? null;
-  const canSyncSelectedReleaseWithDireNote = Boolean(selectedRelease?.upcCode || selectedRelease?.direNoteStatus || selectedRelease?.tracks?.some(track => track.isrc));
+  const readinessRevision = JSON.stringify(selectedRelease);
+  const [readinessReload, setReadinessReload] = useState(0);
+  const [readinessError, setReadinessError] = useState("");
+  const [actionReleaseId, setActionReleaseId] = useState<number | null>(null);
+  const actionRelease = releases.find(release => release.id === actionReleaseId) ?? null;
   const [feedback, setFeedback] = useState<string | null>(null);
   const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
   const [persistedTasks, setPersistedTasks] = useState<PersistedAdminTask[]>([]);
@@ -699,14 +704,16 @@ export function AdminControlCenter({
     let active = true;
     const controller = new AbortController();
     setDireNoteReadiness(null);
+    setReadinessError("");
     setReleaseAudit([]);
     if (!readinessReleaseId) return;
     fetch(`/api/admin/releases/${readinessReleaseId}/audit`, { signal: controller.signal, cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => { if (active) setReleaseAudit(Array.isArray(data?.logs) ? data.logs : []); }).catch(() => { if (active) setReleaseAudit([]); });
-    fetch(`/api/admin/releases/${readinessReleaseId}/direnote/readiness`, { signal: controller.signal, cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
-      if (active) setDireNoteReadiness(data?.releaseId === readinessReleaseId && Array.isArray(data.issues) ? { ...data, warnings: Array.isArray(data.warnings) ? data.warnings : [] } : null);
-    }).catch(() => { if (active) setDireNoteReadiness(null); });
+    fetch(`/api/admin/releases/${readinessReleaseId}/direnote/readiness`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]), cache: "no-store" }).then(async response => { if (!response.ok) throw Error("Delivery readiness could not be loaded. Recheck before sending."); return response.json(); }).then((data) => {
+      if (data?.releaseId !== readinessReleaseId || typeof data.ready !== 'boolean' || !Array.isArray(data.issues)) throw Error('Invalid delivery readiness result.');
+      if (active) setDireNoteReadiness({ ...data, warnings: Array.isArray(data.warnings) ? data.warnings : [] });
+    }).catch(() => { if (active) { setDireNoteReadiness(null); setReadinessError("Delivery readiness is unavailable. Recheck before sending."); } });
     return () => { active = false; controller.abort(); };
-  }, [readinessReleaseId, releases]);
+  }, [readinessReleaseId, readinessRevision, readinessReload]);
   useEffect(() => {
     if (activeTab !== "producers") return;
     fetch("/api/admin/producers", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => setProducerManagement(Array.isArray(data?.producers) ? data.producers : [])).catch(() => setProducerManagement([]));
@@ -811,10 +818,6 @@ export function AdminControlCenter({
     { label: "Open support tickets", count: openSupportTickets, urgency: openSupportTickets ? "Attention" : "Clear", oldest: oldestWaiting(supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).map((ticket) => ticket.createdAt)), tab: "support" as AdminTab },
     { label: "Beats awaiting approval", count: pendingBeatReviews, urgency: pendingBeatReviews ? "High" : "Clear", oldest: oldestWaiting(beats.filter((beat) => beat.status === "PENDING_REVIEW").map((beat) => beat.createdAt)), tab: "operations" as AdminTab },
   ];
-  const direNoteCooldownSeconds = selectedRelease
-    ? Math.max(0, Math.ceil(((direNoteCooldowns[selectedRelease.id] ?? 0) - cooldownClock) / 1000))
-    : 0;
-  const direNoteCooldownLabel = `${Math.floor(direNoteCooldownSeconds / 60)}:${String(direNoteCooldownSeconds % 60).padStart(2, "0")}`;
   const queueReleases = useMemo(() => releases.filter((release) => {
     const query = moduleSearch.trim().toLowerCase();
     const searchable = [release.releaseTitle, release.trackName, release.artistName, release.upcCode, release.ownerEmail, ...(release.tracks ?? []).map((track) => track.isrc)].filter(Boolean).join(" ").toLowerCase();
@@ -987,7 +990,11 @@ export function AdminControlCenter({
             : [];
           const reason = [data.error, ...issueMessages].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(" ") || "Could not update release.";
           setFeedback(reason);
-          if (isDireNoteAction) setDireNoteResult({ type: "error", title: "Distribution submission failed", message: reason });
+          if (data.release) setReleases(items => items.map(item => item.id === id ? data.release : item));
+          if (isDireNoteAction) {
+            if (response.status < 500) setDireNoteCooldowns(current => ({ ...current, [id]: data.retryAfterSeconds ? Date.now() + Number(data.retryAfterSeconds) * 1000 : 0 }));
+            setDireNoteResult({ type: "error", title: "Distribution submission failed", message: reason });
+          }
           return;
         }
         setReleases((items) => items.map((item) => (item.id === id ? data.release : item)));
@@ -1120,7 +1127,9 @@ export function AdminControlCenter({
     });
   }
 
-  function openReview(action: "rejected" | "changes_requested") {
+  function openReview(action: "rejected" | "changes_requested", release: Release) {
+    setActionReleaseId(release.id);
+    setCatalogOpen(false);
     const defaults = action === "changes_requested" ? correctionDefaults(direNoteReadiness?.issues ?? []) : null;
     setReviewAction(action);
     setReviewReason(defaults?.reason ?? "");
@@ -1133,11 +1142,11 @@ export function AdminControlCenter({
   }
 
   function submitReleaseReview() {
-    if (!selectedRelease || !reviewAction || !reviewReason.trim() || !reviewIssueType || (reviewIssueType === "metadata" && !Object.keys(reviewFields).length)) return;
+    if (!actionRelease || !reviewAction || !reviewReason.trim() || !reviewIssueType || (reviewIssueType === "metadata" && !Object.keys(reviewFields).length)) return;
     startTransition(async () => {
       setReviewError("");
       try {
-        const response = await fetch(`/api/admin/update-status/${selectedRelease.id}`, {
+        const response = await fetch(`/api/admin/update-status/${actionRelease.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1151,7 +1160,7 @@ export function AdminControlCenter({
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) { setReviewError(data.error || "Could not send the correction request."); return; }
-        setReleases((items) => items.map((item) => item.id === selectedRelease.id ? data.release : item));
+        setReleases((items) => items.map((item) => item.id === actionRelease.id ? data.release : item));
         setFeedback(reviewAction === "rejected" ? "Release rejected with a saved reason." : "Corrections requested and sent to the artist.");
         setReviewAction(null);
         if (reviewAction === "changes_requested") {
@@ -1208,6 +1217,12 @@ export function AdminControlCenter({
       setSupportTickets((items) => items.map((item) => item.id === ticketId ? data.ticket : item));
       setFeedback(`Ticket updated: ${data.ticket.subject}`);
     });
+  }
+
+  function renderReleaseActions(release: Release) {
+    return <DistributionReleaseActions release={release} readiness={direNoteReadiness} readinessError={readinessError} onRefreshReadiness={() => setReadinessReload(value => value + 1)} busy={isPending || isSubmittingToDireNote} cooldownSeconds={Math.max(0, Math.ceil(((direNoteCooldowns[release.id] ?? 0) - cooldownClock) / 1000))} hasPermission={hasPermission}
+      onStatus={(status, confirm) => { setActionReleaseId(release.id); if (confirm) { setCatalogOpen(false); setConfirmStatusAction(status); } else updateReleaseStatus(release.id, status); }}
+      onReview={action => openReview(action, release)} onSync={() => syncDireNoteRelease(release.id)} onArchive={() => archiveRelease(release)} />;
   }
 
   return (
@@ -1305,6 +1320,7 @@ export function AdminControlCenter({
           <SurfaceSection title={activeTab === "delivery" ? "Delivery Details" : "Catalog Details"} description="Distribution state, identifiers, stores, links, and reporting for the selected release.">
             {selectedCatalogRelease ? <div className="grid gap-5"><DistributionAutomationInsight release={selectedCatalogRelease}/>
               <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold">{selectedCatalogRelease.releaseTitle || selectedCatalogRelease.trackName}</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{selectedCatalogRelease.artistName} · {selectedCatalogRelease.releaseType.toUpperCase()} · Release {selectedCatalogRelease.releaseDate || "—"}</p></div><StatusPill label={adminReleaseStatusLabel(selectedCatalogRelease.status, selectedCatalogRelease.direNoteStatus, selectedCatalogRelease.metadata)} active /></div>
+              {renderReleaseActions(selectedCatalogRelease)}
               <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Catalog sections">{(["overview", "tracks", "distribution", "identifiers", "stores", "promolink", "earnings", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setCatalogTab(tab)} className={catalogTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={catalogTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "identifiers" ? "UPC / ISRC" : tab}</button>)}</nav>
               {catalogTab === "overview" ? <div className="grid gap-5"><div className="grid gap-5 rounded-2xl border p-5 sm:grid-cols-[10rem,1fr]" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{selectedCatalogRelease.artworkUrl ? <img src={artworkPreviewUrl(selectedCatalogRelease.artworkUrl, 320)} alt={selectedCatalogRelease.releaseTitle} className="aspect-square w-full rounded-2xl object-cover" /> : <div className="aspect-square rounded-2xl border border-dashed" style={{ borderColor: "var(--border)" }} />}<div className="grid content-start gap-3 sm:grid-cols-2">{[["Title", selectedCatalogRelease.releaseTitle], ["Artist", selectedCatalogRelease.artistName], ["Label", selectedCatalogRelease.labelName || selectedCatalogRelease.labelDisplayName], ["Language", selectedCatalogRelease.language], ["Genre", [selectedCatalogRelease.primaryGenre, selectedCatalogRelease.secondaryGenre].filter(Boolean).join(" / ")], ["Release type", selectedCatalogRelease.releaseType], ["UPC", releaseUpcLabel(selectedCatalogRelease)], ["Current stage", adminReleaseStatusLabel(selectedCatalogRelease.status, selectedCatalogRelease.direNoteStatus, selectedCatalogRelease.metadata)], ["Release date", selectedCatalogRelease.releaseDate], ["Submitted", selectedCatalogRelease.submittedAt ? new Date(selectedCatalogRelease.submittedAt).toLocaleString("en-IN") : "—"]].map(([label, value]) => <div key={String(label)}><p className="text-xs font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--text-soft)" }}>{label}</p><p className="mt-1 text-sm font-semibold">{value || "—"}</p></div>)}</div></div><div className="grid gap-2"><p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-soft)" }}>Tracks and ISRCs</p>{(selectedCatalogRelease.tracks ?? []).map(track => <div key={track.id} className="summary-card"><span><strong>{track.trackNumber}. {track.trackTitle}</strong><br /><small>{track.primaryArtist}</small></span><strong className="font-mono text-xs">{track.isrc || "ISRC pending"}</strong></div>)}</div></div> : null}
               {catalogTab === "tracks" ? <div className="grid gap-3">{(selectedCatalogRelease.tracks ?? []).map((track) => <article key={track.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{track.trackNumber}. {track.trackTitle}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{track.primaryArtist} · ISRC {track.isrc || "Pending"}</p></div><StatusPill label={track.explicitContent ? "Explicit" : "Clean"} active={track.explicitContent} /></div>{track.audioUrl ? <audio controls preload="metadata" className="mt-3 w-full" src={track.audioUrl} /> : null}{effectiveReleaseStatus(selectedCatalogRelease.status, selectedCatalogRelease.direNoteStatus, selectedCatalogRelease.metadata) === "changes_requested" ? <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--border)" }}><button type="button" disabled={!hasPermission("releases.review") || correctionEmailTrackId !== null} onClick={() => void sendCorrectionEmail(selectedCatalogRelease.id, track.id)} className="btn-outline pressable disabled:opacity-45">{correctionEmailTrackId === track.id ? "Sending correction email…" : "Email artist about correction"}</button><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Sends the saved correction request and records the action in the release audit.</p></div> : null}</article>)}</div> : null}
@@ -1315,7 +1331,7 @@ export function AdminControlCenter({
               {catalogTab === "promolink" ? <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{typeof selectedCatalogRelease.metadata?.promolinkUrl === "string" ? <a href={selectedCatalogRelease.metadata.promolinkUrl} target="_blank" rel="noreferrer" className="btn-primary inline-flex">View Promolink</a> : <p className="text-sm" style={{ color: "var(--text-muted)" }}>Promolink will appear after the release is scheduled or live.</p>}</div> : null}
               {catalogTab === "earnings" ? <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{selectedCatalogRelease.analytics ? <div className="grid gap-3 sm:grid-cols-2">{Object.entries(selectedCatalogRelease.analytics).filter(([, value]) => typeof value === "number").map(([label, value]) => <div key={label} className="summary-card"><span>{label.replace(/([A-Z])/g, " $1")}</span><strong>{Number(value).toLocaleString("en-IN")}</strong></div>)}</div> : <p className="text-sm leading-6" style={{ color: "var(--text-muted)" }}>Earnings usually take around 1.5 months to reflect after platform reporting and distributor processing.</p>}</div> : null}
               {catalogTab === "activity" ? <div className="grid gap-2">{releaseAudit.map((event) => <div key={event.id} className="summary-card"><span><strong>{event.action.replace(/_/g, " ")}</strong><br /><small>{new Date(event.createdAt).toLocaleString("en-IN")}</small></span><span>Recorded</span></div>)}{releaseAudit.length === 0 ? <EmptyState copy="No catalog activity has been recorded yet." /> : null}</div> : null}
-              <div className="flex flex-wrap gap-2">{["scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "sent"].includes(selectedCatalogRelease.status) ? <button type="button" disabled={isPending} onClick={() => {setCatalogOpen(false);setConfirmStatusAction("live");}} className="btn-primary pressable">Mark Live</button> : null}<button type="button" onClick={() => setCatalogTab("stores")} className="btn-outline pressable">Update Store Status</button>{selectedCatalogRelease.analytics ? <button type="button" onClick={() => setCatalogTab("earnings")} className="btn-outline pressable">View Earnings</button> : null}</div>
+              <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setCatalogTab("stores")} className="btn-outline pressable">Update Store Status</button>{selectedCatalogRelease.analytics ? <button type="button" onClick={() => setCatalogTab("earnings")} className="btn-outline pressable">View Earnings</button> : null}</div>
             </div> : <EmptyState copy="Select a catalog release to manage its distribution details." />}
           </SurfaceSection></AdminCenteredDialog>}
         </div>
@@ -1421,18 +1437,7 @@ export function AdminControlCenter({
                   ) : null}
                 </div> : null}
                 <ReleaseSubmissionHistory key={selectedRelease.id} releaseId={selectedRelease.id} admin />
-                <div className="sticky bottom-3 z-10 grid gap-3 rounded-2xl border p-3 shadow-xl sm:grid-cols-2 xl:grid-cols-3" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
-                  {["submitted", "in_queue", "failed", "draft"].includes(selectedReleaseStatus ?? "") ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => updateReleaseStatus(selectedRelease.id, "under_review")} className="btn-outline pressable disabled:opacity-45">Start Review</button> : null}
-                  {selectedReleaseStatus === "under_review" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission("releases.review") || !hasPermission("distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission("releases.review") || !hasPermission("distribution.submit") ? "Requires release review and distribution submit permissions" : undefined} onClick={() => setConfirmStatusAction("approved")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Approving & Sending..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Approve & Send to DireNote"}</button> : null}
-                  {["failed", "delivery_failed", "queued_for_distribution"].includes(selectedReleaseStatus ?? "") ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission("distribution.retry")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission("distribution.retry") ? "Requires distribution.retry permission" : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Submitting to DireNote..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Retry Send"}</button> : null}
-                  {selectedReleaseStatus === "delivery_failed" ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => setConfirmStatusAction("in_qc_queue")} className="btn-outline pressable disabled:opacity-45">Return to QC</button> : null}
-                  <button type="button" disabled={isPending || !hasPermission("releases.read") || !canSyncSelectedReleaseWithDireNote} title={!hasPermission("releases.read") ? "Requires releases.read permission" : !canSyncSelectedReleaseWithDireNote ? "Available once DireNote has assigned a UPC or an ISRC exists for this release." : undefined} onClick={() => syncDireNoteRelease(selectedRelease.id)} className="btn-outline pressable disabled:opacity-45">Sync with DireNote</button>
-                  {["sent", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered"].includes(selectedReleaseStatus ?? "") ? <button type="button" disabled={isPending || !hasPermission("distribution.confirm_status")} title={!hasPermission("distribution.confirm_status") ? "Requires distribution.confirm_status permission" : undefined} onClick={() => setConfirmStatusAction("live")} className="btn-primary pressable disabled:opacity-45">Mark Live</button> : null}
-                  {["submitted", "in_queue", "under_review", "approved"].includes(selectedReleaseStatus ?? "") ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("changes_requested")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--money)" }}>Request Metadata Changes</button> : null}
-                  {["submitted", "in_queue", "under_review", "approved"].includes(selectedReleaseStatus ?? "") ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("rejected")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--danger)" }}>Reject Release</button> : null}
-                  <button type="button" disabled={isPending || !hasPermission("releases.override")} title={!hasPermission("releases.override") ? "Requires releases.override permission" : undefined} onClick={() => archiveRelease(selectedRelease)} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--danger)" }}>Archive Release</button>
-                  {selectedReleaseStatus === "changes_requested" ? <div className="rounded-full border px-4 py-2 text-center text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Awaiting user correction</div> : null}
-                </div>
+                {renderReleaseActions(selectedRelease)}
                 {reviewTab === "tracks" ? <div className="grid gap-3">
                   {(selectedRelease.tracks ?? []).map((track) => (
                     <details key={track.id} className="surface-list-item p-4" open={(selectedRelease.tracks?.length ?? 0) === 1}>
@@ -1686,26 +1691,27 @@ export function AdminControlCenter({
         {key:"document",label:"Document",render:row=>row.item.licenseUrl?<a href={row.item.licenseUrl} className="btn-outline">Open agreement</a>:<StatusPill label="Document unavailable"/>}
       ]}/></SurfaceSection>:null}
       {activeTab === "promotions" || activeTab === "fraud" ? <SurfaceSection title={activeTab==="promotions"?"Promotion operations":"Fraud investigations"}><a className="btn-primary" href={activeTab==="promotions"?"/admin/campaigns":"/admin/fraud"}>Open {activeTab==="promotions"?"campaign workspace":"investigation workspace"}</a></SurfaceSection>:null}
-      {confirmStatusAction && selectedRelease ? (
+      {confirmStatusAction && actionRelease ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
           <section role="dialog" aria-modal="true" aria-label="Confirm Action" className="w-full max-w-md rounded-[1.5rem] border p-5 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <h2 className="text-xl font-semibold text-center" style={{ color: "var(--text)" }}>Are you sure?</h2>
+            <p className="mt-2 text-center font-semibold">{adminReleaseTitle(actionRelease)}</p>
             <p className="mt-3 text-center text-sm" style={{ color: "var(--text-muted)" }}>
               {confirmStatusAction === "live"
                 ? "Only continue if platform or store availability is confirmed. This does not claim availability on every platform."
                 : confirmStatusAction === "in_qc_queue"
                   ? "This stops automatic retry for this failed handoff and returns the release to HYMN QC. The DireNote attempt and failure history are retained for review."
-                : selectedReleaseStatus === "under_review"
-                    ? "This approves HYMN's metadata, artwork, audio, and rights review and immediately sends the release to DireNote. The customer is notified only after DireNote accepts it."
+                : confirmStatusAction === "approved"
+                    ? actionRelease.status === 'approved' ? "This sends the approved package to DireNote after a fresh delivery check. Partner receipt and store availability require separate confirmation." : "This approves HYMN's metadata, artwork, audio, and rights review and immediately sends the release to DireNote. Partner receipt and store availability require separate confirmation."
                     : "The DireNote readiness check must pass before this release is submitted for distribution."}
             </p>
             <div className="mt-6 flex gap-3 justify-center">
               <button type="button" onClick={() => setConfirmStatusAction(null)} className="btn-outline pressable px-4 py-2">Cancel</button>
               <button type="button" onClick={() => {
-                updateReleaseStatus(selectedRelease.id, confirmStatusAction);
+                updateReleaseStatus(actionRelease.id, confirmStatusAction);
                 setConfirmStatusAction(null);
               }} className="btn-primary pressable px-4 py-2">
-                Yes, {confirmStatusAction === "live" ? "Mark live" : confirmStatusAction === "in_qc_queue" ? "Return to QC" : selectedReleaseStatus === "under_review" ? "Approve & Send" : "Send"}
+                Yes, {confirmStatusAction === "live" ? "Mark live" : confirmStatusAction === "in_qc_queue" ? "Return to QC" : confirmStatusAction === "approved" ? "Approve & Send" : "Send"}
               </button>
             </div>
           </section>
@@ -1749,11 +1755,11 @@ export function AdminControlCenter({
           </section>
         </div>
       ) : null}
-      {reviewAction && selectedRelease ? (
+      {reviewAction && actionRelease ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-sm">
           <section role="dialog" aria-modal="true" aria-label="Release review reason" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[1.5rem] border p-5 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <div className="flex items-start justify-between gap-4">
-              <div><p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>{reviewAction === "rejected" ? "Reject Release" : "Request Metadata Changes"}</p><h2 className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{adminReleaseTitle(selectedRelease)}</h2></div>
+              <div><p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>{reviewAction === "rejected" ? "Reject Release" : "Request Metadata Changes"}</p><h2 className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{adminReleaseTitle(actionRelease)}</h2></div>
               <button type="button" onClick={() => setReviewAction(null)} className="btn-outline pressable px-3 py-2">Close</button>
             </div>
             <div className="mt-6 grid gap-5">

@@ -7,6 +7,10 @@ import { internalIdentities, matchesInternalIdentity, internalUserWhere } from '
 import { syncReleaseQcAssignments, readAssignedReleaseQc, reviewAssignedReleaseQc, deliverApprovedReleaseQc } from '../lib/team/release-qc';
 import { canReadAssignedQcAsset } from '../lib/team/release-qc-media';
 import { changeStaffTeamAccess } from '../lib/staff-team-access';
+import { getDetailedReleaseById } from '../lib/distribution-db';
+import { runIntelligentDistributionQc } from '../lib/distribution-intelligent-qc';
+import { hasCurrentManualQcPass, automationSummary, releaseReviewActions } from '../lib/distribution-workspace';
+import { validQcEvidence } from '../lib/distribution-qc-evidence';
 async function main() {
   assert.equal(process.env.DATABASE_URL, 'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
   assert.equal(process.env.EMAIL_ENABLED, 'false');
@@ -19,6 +23,7 @@ async function main() {
   async function member(name: string, roleId: string, role: 'ADMIN' | 'CUSTOMER' | 'PRODUCER' = 'CUSTOMER') { const user = await prisma.user.create({ data: { name, email: `${name.toLowerCase()}@staff.fixture.invalid`, googleId: name, role, mobile: name === 'Lavanya' ? '8851469308' : null } }); return prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId }, include: { role: true } }); }
   const owner = await member('Founder', ownerRole.id, 'ADMIN'), tavish = await member('Tavish', qcRole.id), manha = await member('Manha', qcRole.id, 'PRODUCER'), lavanya = await member('Lavanya', researchRole.id), kira = await member('Kira', callerRole.id);
   const artist = await prisma.user.create({ data: { name: 'Artist', email: 'artist@staff.fixture.invalid', googleId: 'artist', mobile: '+919876543210' } });
+  await prisma.growthEvent.create({data:{key:`artist-profile:${artist.id}`,userId:artist.id,event:'artist_journey_profile',source:'artist_journey',properties:{contact:'CALL',mode:'ACTIVE',analytics:true}}});
   const staffCard = await prisma.teamClient.create({ data: { workspaceId: workspace.id, ownerId: owner.id, userId: lavanya.userId, name: 'Lavanya', email: 'lavanya@staff.fixture.invalid', phone: '+918851469308' } });
   const stale = await prisma.teamTask.create({ data: { workspaceId: workspace.id, creatorId: owner.id, ownerId: kira.id, clientId: staffCard.id, title: 'Service interest: Lavanya', eventKey: 'support-call:fixture:lavanya', dueAt: now, followUpContext: { kind: 'SERVICE_INTEREST' } } });
   const event = await prisma.teamCalendarEvent.create({ data: { workspaceId: workspace.id, creatorId: owner.id, assigneeId: kira.id, clientId: staffCard.id, title: stale.title, followUpTaskId: stale.id, startsAt: now, kind: 'FOLLOW_UP' } });
@@ -52,9 +57,21 @@ async function main() {
   await assert.rejects(reviewAssignedReleaseQc(other, decision), /assigned/);
   await assert.rejects(reviewAssignedReleaseQc(reviewer, { ...decision, releaseVersion: first.version + 1 }), /changed/);
   await assert.rejects(reviewAssignedReleaseQc(reviewer, { ...decision, checklistConfirmed: false }), /Complete all QC checks/);
+  await prisma.release.update({where:{id:first.id},data:{metadata:{language:'Hindi',autoQc:{status:'manual_review_required',reason:'Manual evidence review required'}}}});
+  await prisma.adminTask.create({data:{eventKey:`release:${first.id}:qc-review:fixture`,entityType:'release',entityId:String(first.id),type:'Distribution QC review',priority:'high',title:'Review evidence',body:'Review the attached evidence.',href:'/admin'}});
   await reviewAssignedReleaseQc(reviewer, decision);
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: first.id } })).status, 'APPROVED');
   assert.equal((await prisma.teamTask.findUniqueOrThrow({ where: { id: task.id } })).status, 'COMPLETED');
+  const approved = (await getDetailedReleaseById(first.id))!;
+  assert.equal(hasCurrentManualQcPass(approved),true);
+  assert.equal(validQcEvidence(approved.metadata?.manualQc),true,'Human approval evidence must be signed by the server.');
+  assert.equal(hasCurrentManualQcPass({...approved,recordVersion:approved.recordVersion!+1}),false,'A different revision cannot inherit manual QC.');
+  assert.equal(hasCurrentManualQcPass({...approved,id:approved.id+1}),false,'Another release cannot inherit manual QC evidence.');
+  assert.equal(automationSummary(approved).label,'Manual QC passed');
+  assert.equal(releaseReviewActions(approved).approve,true,'An approved release retains its operator send action.');
+  assert.equal((await prisma.adminTask.findUniqueOrThrow({where:{eventKey:`release:${first.id}:qc-review:fixture`}})).status,'resolved');
+  assert.equal(await runIntelligentDistributionQc(first.id,'https://hymn.fixture'),false,'Manual delivery must not inherit automatic approval or rerun the earlier automatic hold.');
+  assert.deepEqual((await getDetailedReleaseById(first.id))!.metadata,approved.metadata,'An automatic QC cycle must preserve the human decision.');
   let submits = 0;
   const fakeSubmit = async () => { submits++; return { submitted: true, validation: { ok: true, issues: [], warnings: [] } }; };
   await Promise.all([deliverApprovedReleaseQc(1, task.id, fakeSubmit as never), deliverApprovedReleaseQc(1, task.id, fakeSubmit as never)]);
@@ -88,6 +105,18 @@ async function main() {
   await assert.rejects(changeStaffTeamAccess(owner.userId, grant), /changed/);
   await assert.rejects(changeStaffTeamAccess(owner.userId, { ...grant, memberId: owner.id, expectedRoleId: ownerRole.id }), /Protected/);
   assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: manha.userId } })).role, 'PRODUCER', 'Team QC does not overwrite the producer account type.');
+  const operatorSent=await release('Operator sent after staff QC');
+  await teamWrite(owner,(tx,a)=>syncReleaseQcAssignments(tx,a));
+  const operatorTask=await prisma.teamTask.findFirstOrThrow({where:{recordId:operatorSent.id,eventKey:{startsWith:'release-qc:'}}});
+  const operatorReviewer=await prisma.teamMember.findUniqueOrThrow({where:{id:operatorTask.ownerId},include:{role:true}});
+  await reviewAssignedReleaseQc(operatorReviewer,{...decision,taskId:operatorTask.id,taskVersion:operatorTask.version,releaseVersion:operatorSent.version});
+  const completed=await prisma.teamTask.findUniqueOrThrow({where:{id:operatorTask.id}});
+  await prisma.distributionSubmissionAttempt.create({data:{releaseId:operatorSent.id,isCurrent:true,state:'submitted',idempotencyKey:'manual-operator-fixture',payloadHash:'fixture',providerReference:'partner-receipt-1',startedAt:new Date(completed.completedAt!.getTime()+1)}});
+  await prisma.release.update({where:{id:operatorSent.id},data:{status:'DISTRIBUTOR_PROCESSING',version:{increment:1}}});
+  const beforeOperator=submits;
+  assert.equal((await deliverApprovedReleaseQc(1,operatorTask.id,fakeSubmit as never)).sent,1);
+  assert.equal(submits,beforeOperator,'A later staff delivery cycle must reconcile the operator send without sending again.');
+  assert.equal(((await prisma.teamTask.findUniqueOrThrow({where:{id:operatorTask.id}})).followUpContext as any).delivery,'sent');
   console.log('PASS staff identity exclusion and stale calendar cancellation; genuine customer signals; balanced QC tasks; self/cross-assignment denial; private media scope; stale/revoked review denial; atomic customer correction mail; resubmission rounds; one delivery claim; protected role grants. No external distribution or emails sent.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

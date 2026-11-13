@@ -6,7 +6,7 @@ import styles from './distribution-operations.module.css';
 export function DistributionAutomationInsight({ release }: { release: Release }) {
   const summary = automationSummary(release);
   const correction=correctionReviewSummary(release);
-  const historical=summary.label==='Delivery acknowledged'||summary.label==='Monitoring';
+  const historical=summary.label==='Delivery acknowledged'||summary.label==='Monitoring'||summary.label==='Manual QC passed'||summary.label==='Corrections approved';
   const qc = release.metadata?.autoQc as { checkedAt?: string; checks?: { label: string; ready: boolean }[]; issues?: { field: string; message: string }[]; fixes?: { field: string; before: string; after: string }[]; revision?: string; changeKind?: string } | undefined;
   const checks=Array.isArray(qc?.checks)?qc.checks.filter(check=>check&&typeof check.label==='string'):[];
   const issues=Array.isArray(qc?.issues)?qc.issues.filter(issue=>issue&&typeof issue.field==='string'&&typeof issue.message==='string'):[];

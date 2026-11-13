@@ -43,7 +43,13 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
 };
 export function pendingCorrectionReview(status: string, providerStatus?: string | null, metadata?: Record<string, unknown> | null) {
   const marker = metadata?.correctionReview as { status?: string } | undefined;
-  if (marker?.status !== "pending" || !["under_review", "resubmitted", "approved"].includes(status.toLowerCase()) || !isDireNoteCorrectionStatus(providerStatus)) return null;
+  if (!["pending", "approved"].includes(marker?.status ?? "") || !["under_review", "resubmitted", "approved", "queued_for_distribution", "delivery_failed"].includes(status.toLowerCase()) || !isDireNoteCorrectionStatus(providerStatus)) return null;
+  if (status.toLowerCase() === 'queued_for_distribution') return map.queued_for_distribution;
+  if (status.toLowerCase() === 'delivery_failed') return map.delivery_failed;
+  if (marker?.status === "approved") return {
+    label: 'Corrections approved - awaiting delivery', description: 'HYMN approved the correction response. Partner receipt of the updated package has not yet been confirmed.',
+    tone: 'progress' as const, step: 2, nextAction: 'Track corrected delivery'
+  };
   const qc = metadata?.autoQc as { changeKind?: string; status?: string; policyVersion?: number; rightsReview?: string } | undefined;
   if (qc?.policyVersion === 4 && qc.status === 'passed' && qc.rightsReview === 'distribution_partner') return {
     label: 'Corrections ready for delivery', description: 'HYMN technical checks passed. The updated package is awaiting delivery for detailed partner QC.',
@@ -77,6 +83,7 @@ export function isDireNoteCorrectionStatus(providerStatus?: string | null) {
 export function effectiveReleaseStatus(status: string, providerStatus?: string | null, metadata?: Record<string, unknown> | null) {
   const localStatus = status.toLowerCase();
   if (["draft", "awaiting_payment", "live", "partially_live", "taken_down", "takedown_requested", "takedown_processing", "archived"].includes(localStatus)) return localStatus;
+  if (pendingCorrectionReview(status, providerStatus, metadata)) return localStatus;
   if (metadata && isDireNoteCorrectionStatus(providerStatus) && !pendingCorrectionReview(status, providerStatus, metadata) && !["draft", "awaiting_payment"].includes(localStatus)) return "changes_requested";
   // A user's successful correction submission advances the HYMN workflow while
   // HYMN can still report the correction from the previous submission.
@@ -90,7 +97,7 @@ export function effectiveReleaseStatus(status: string, providerStatus?: string |
  * customer surfaces cannot drift by each maintaining their own formatter. */
 export function adminReleaseStatusLabel(status: string, providerStatus?: string | null, metadata?: Record<string, unknown> | null) {
   const pending = pendingCorrectionReview(status, providerStatus, metadata);
-  if (pending) return pending.label === 'Corrections ready for delivery' ? pending.label : "Correction review required";
+  if (pending) return ['queued_for_distribution','delivery_failed'].includes(status.toLowerCase()) || pending.label === 'Corrections ready for delivery' || pending.label === 'Corrections approved - awaiting delivery' ? pending.label : "Correction review required";
   const effectiveStatus = effectiveReleaseStatus(status, providerStatus, metadata);
   if (effectiveStatus === "changes_requested" && isDireNoteCorrectionStatus(providerStatus)) return "Correction Required";
   const labels: Record<string, string> = {
