@@ -551,7 +551,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote accepted the ingest job.");
       await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote accepted the ingest job.");
       await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.ingestJobId ?? parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, providerStatus: parsed.ingestJobStatus ?? "queued", responseRedacted: { ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "queued", pollAfterSeconds: parsed.pollAfterSeconds ?? 60, ...(options.correctionReingest ? { identifierPolicy: "replace" } : {}), ...(amendment ? { amendmentRequestId: amendment.request.id } : {}) } });
-      return { release: await prisma.release.findUnique({ where: { id: releaseId } }), validation, submitted: true, duplicate: false, retryable: false, warnings: validation.warnings };
+      return { release: await getDetailedReleaseById(releaseId), validation, submitted: true, duplicate: false, retryable: false, warnings: validation.warnings };
     }
     const automaticStatus = "sent_to_distributor" as const;
     const assignedTrackIsrcs = parsed.trackIsrcs;

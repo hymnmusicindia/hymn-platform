@@ -176,7 +176,13 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
     if (release.upc !== displayedUpc) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: displayedUpc ?? "awaiting_assignment", source: "submission_attempt" } });
     const metadata = release.metadata && typeof release.metadata === "object" && !Array.isArray(release.metadata) ? release.metadata : {};
     const direNote = metadata.direNote && typeof metadata.direNote === "object" && !Array.isArray(metadata.direNote) ? metadata.direNote : {};
-    await tx.release.update({ where: { id: release.id }, data: { upc: displayedUpc, direNoteStatus: "processing", metadata: { ...metadata, upcCode: displayedUpc, direNote: { ...direNote, currentAttemptId: id, ...(replaceIdentifiers ? { reconciliationInProgress: true, identifierAssignmentPending: assignmentPending } : {}) } } } });
+    const replacesCurrent = Boolean(current && current.id !== id);
+    // Acceptance supersedes the previous review, not just its identifiers.
+    // The previous attempt retains its full correction and provider history.
+    const correctionReview = metadata.correctionReview && typeof metadata.correctionReview === 'object' && !Array.isArray(metadata.correctionReview) ? metadata.correctionReview : null;
+    const activeMetadata = replacesCurrent ? { ...metadata, correctionReason: null, rejectionReason: null, reviewIssues: null, direnoteValidationErrors: [], ...(correctionReview ? { correctionReview: { ...correctionReview, status: 'delivered', attemptId: id, deliveredAt: new Date().toISOString() } } : {}) } : metadata;
+    const activeProvider = replacesCurrent ? { ...direNote, status: 'processing', release: null, lastSyncedAt: null, correctionMessages: [], correctionEventKey: null, appliedCorrectionFingerprint: null, qcSourceAttemptId: null, qcSourceUpc: null } : direNote;
+    await tx.release.update({ where: { id: release.id }, data: { upc: displayedUpc, direNoteStatus: "processing", ...(replacesCurrent ? { correctionReason: null, rejectionReason: null, reviewIssues: Prisma.DbNull } : {}), metadata: { ...activeMetadata, upcCode: displayedUpc, direNote: { ...activeProvider, currentAttemptId: id, ...(replaceIdentifiers ? { reconciliationInProgress: true, identifierAssignmentPending: assignmentPending } : {}) } } } });
     for (const item of Array.isArray(input.trackIdentifiers) ? input.trackIdentifiers : []) {
       const identifier = item as { id: number; isrc: string | null };
       const track = release.tracks.find(row => row.id === identifier.id);
@@ -210,6 +216,7 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
         data: { isCurrent: false, providerStatus: "superseded", corrections: { ...correction, status: "superseded", resubmittedAt: new Date().toISOString(), supersededByAttemptId: id } }
       });
       await tx.adminTask.updateMany({ where: { eventKey: { startsWith: `release:${release.id}:direnote:correction:${previous.id}:` }, status: { not: "resolved" } }, data: { status: "resolved", resolvedAt: new Date(), resolutionNote: "Corrections re-ingested; monitoring the new submission attempt." } });
+      await tx.adminTask.updateMany({ where: { eventKey: `qc-report-integrity:${release.id}:${previous.id}`, status: { not: 'resolved' } }, data: { status: 'resolved', resolvedAt: new Date(), resolutionNote: 'Previous submission superseded by an accepted replacement. Its QC evidence remains in submission history.' } });
     }
     return tx.distributionSubmissionAttempt.update({ where: { id }, data: { ...input, isCurrent: true, state: "submitted", providerStatus: input.providerStatus ?? "processing", completedAt: new Date() } });
   }, { timeout: 30_000 });

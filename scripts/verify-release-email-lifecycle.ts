@@ -7,7 +7,7 @@ import { meaningfulDraftTitle } from "../lib/draft-policy";
 import { GET as draftReminderCron } from "../app/api/cron/draft-reminders/route";
 import { GET as releaseEmailCron } from "../app/api/cron/release-emails/route";
 const DAY = 86400000;
-assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
+assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:554(?:39|4[0-9])\/direnote_virtual/);
 async function main() {
   process.env.CRON_SECRET = "fixture-cron";
   process.env.DRAFT_REMINDERS_ENABLED = "true";
@@ -72,6 +72,16 @@ async function main() {
   await prisma.release.update({ where: { id: regressed.id }, data: { status: "QUEUED_FOR_DISTRIBUTION" } });
   assert.equal((await deliverReleaseOutbox([regressed.id], 5, async () => { throw new Error("A stale partner-acceptance notice must not be sent."); })).cancelled, 1, "The outbox must recheck current status before sending an old acceptance notice.");
   assert.equal((await prisma.emailLog.findFirstOrThrow({ where: { entityId: String(regressed.id), template: "release_sent_to_distributor" } })).status, "cancelled");
+  const staleCorrection = await create('Approved correction retains stale local projection');
+  await prisma.release.update({where:{id:staleCorrection.id},data:{status:'CHANGES_REQUESTED',metadata:{correctionReview:{status:'approved'}}}});
+  assert.equal(await queueReleaseStatusUpdate(prisma,staleCorrection.id,'changes_requested'),undefined,'Approved corrections must not enqueue old correction mail even with a stale local status.');
+  await enqueueRenderedEmail(prisma,{eventKey:'stale-correction-mail',to:user.email,userId:user.id,releaseId:staleCorrection.id,template:'release_changes_requested',expectedStatus:'CHANGES_REQUESTED',subject:'Old correction',html:'Old',text:'Old'});
+  const cancelledCorrection=await deliverReleaseOutbox([staleCorrection.id],5,async()=>{throw Error('Stale correction must never reach SMTP.');});
+  assert.equal(cancelledCorrection.cancelled,1);
+  assert.equal(cancelledCorrection.failed,0);
+  await prisma.distributionSubmissionAttempt.create({data:{releaseId:staleCorrection.id,state:'submitted',isCurrent:true,idempotencyKey:'fresh-current-correction',payloadHash:'fresh-current-correction',corrections:{status:'customer_action_required'}}});
+  assert.ok(await queueReleaseStatusUpdate(prisma,staleCorrection.id,'changes_requested'),'A genuine new correction on the current attempt must still notify the customer.');
+
   const scheduled = await create("Approved schedule");
   await prisma.release.update({ where: { id: scheduled.id }, data: { status: "SCHEDULED", direNoteStatus: "scheduled", metadata: { releaseTiming: "schedule_release" } } });
   const scheduledLogId = await queueReleaseStatusUpdate(prisma, scheduled.id, "scheduled");

@@ -264,6 +264,13 @@ async function main() {
   assert.equal(attempts[0].upc, oldUpc);
   assert.equal(attempts[1].isCurrent, true);
   assert.equal(attempts[1].upc, newUpc);
+  const activeReview=(await getDetailedReleaseById(release.id))!;
+  assert.equal(activeReview.correctionReason, null, 'Accepted replacement must not retain an actionable correction reason.');
+  assert.equal(activeReview.reviewIssues, null);
+  assert.deepEqual((activeReview.metadata!.direNote as any).correctionMessages, []);
+  assert.equal((activeReview.metadata!.direNote as any).status, 'processing');
+  assert((attempts[0].corrections as any).fields.length > 0, 'Previous review evidence remains in submission history.');
+
   assert.deepEqual((await prisma.track.findMany({ where: { releaseId: release.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), newIsrcs);
   assert.equal((await prisma.externalIdentifierHistory.findFirst({ where: { releaseId: release.id, identifierType: "upc", previousValue: oldUpc, canonicalValue: newUpc } })) !== null, true);
   assert.equal((attempts[0].payloadRedacted as any).tracks[1].trackLanguage, "Hindi");

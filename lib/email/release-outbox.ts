@@ -8,6 +8,14 @@ import { readReleaseQcReport } from '@/lib/direnote-qc-store';
 import { canNotifyDireNoteHandoff } from '@/lib/direnote-submission-evidence';
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 
+async function correctionAlreadyResolved(db: any, release: { id: number; metadata: unknown } | null) {
+  if (!release || !['pending', 'approved', 'delivered'].includes(object(object(release.metadata).correctionReview).status)) return false;
+  const current = db.distributionSubmissionAttempt ? await db.distributionSubmissionAttempt.findFirst({ where: { releaseId: release.id, provider: 'direnote', isCurrent: true }, select: { corrections: true } }) : null;
+  // A genuine new review on the current attempt remains actionable, even if a
+  // legacy correction marker has not caught up with that provider decision.
+  return object(current?.corrections).status !== 'customer_action_required';
+}
+
 export async function enqueueRenderedEmail(db: any, input: { eventKey: string; template: string; to: string; userId: number; releaseId: number; subject: string; html: string; text: string; expectedStatus: string; draftEditedAt?: string; providerApproved?: boolean; correctionBinding?:string; correctionAttemptId?:number; qcReportFetchedAt?:string }) {
   const data = { toEmail: input.to, userId: input.userId, template: input.template, entityType: "release", entityId: String(input.releaseId), subject: input.subject, provider: "smtp", payload: { channel: "release_outbox", qcPolicyVersion: 2, qcReportFetchedAt: input.qcReportFetchedAt ?? null, html: input.html, text: input.text, expectedStatus: input.expectedStatus, draftEditedAt: input.draftEditedAt ?? null, providerApproved: input.providerApproved === true,correctionBinding:input.correctionBinding??null,correctionAttemptId:input.correctionAttemptId??null } };
   const log = await db.emailLog.upsert({ where: { eventKey: input.eventKey }, create: { ...data, eventKey: input.eventKey, status: "pending" }, update: {} });
@@ -41,6 +49,7 @@ export async function queueReleaseStatusUpdate(db: any, releaseId: number, statu
   const release = await db.release.findUnique({ where: { id: releaseId }, include: { user: { select: { id: true, email: true, name: true, status: true } } } });
   if (!release || release.archivedAt || release.user.status !== "ACTIVE") return undefined;
   const meta = object(release.metadata), provider = object(meta.direNote);
+  if (event === 'release_changes_requested' && await correctionAlreadyResolved(db, release)) return undefined;
   const releaseTiming = String(meta.releaseTiming ?? "quick_release");
   const providerScheduleApproved = ["scheduled", "ready for distribution", "approved for distribution", "release date approved"].includes(String(release.direNoteStatus ?? "").toLowerCase().replaceAll("_", " "));
   if (event === "release_scheduled" && (releaseTiming !== "schedule_release" || !providerScheduleApproved)) return undefined;
@@ -74,6 +83,10 @@ export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, del
     if (!(await prisma.emailLog.updateMany({ where: { id: job.id, status: "pending" }, data: { status: "sending", payload: { ...payload, claimedAt: new Date().toISOString() } } })).count) continue;
     processed++;
     const release = await prisma.release.findUnique({ where: { id: Number(job.entityId) }, include: { user: { select: { email: true, status: true } } } });
+    if (job.template === 'release_changes_requested' && await correctionAlreadyResolved(prisma, release)) {
+      await prisma.emailLog.update({ where: { id: job.id }, data: { status: 'cancelled', errorMessage: 'The correction response is already submitted, approved or delivered. Historical correction mail is no longer actionable.' } });
+      cancelled++; continue;
+    }
     const currentProviderStatus = String(release?.direNoteStatus ?? "").toLowerCase().replaceAll("_", " ");
     if(job.template==='release_changes_requested' && payload.qcReportFetchedAt){
       const report=await readReleaseQcReport(Number(job.entityId));
