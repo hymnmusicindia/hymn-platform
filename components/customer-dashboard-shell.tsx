@@ -14,6 +14,7 @@ import {WorkspaceLoading} from "@/components/workspace-loading";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { WorkspaceRecords } from "@/components/workspace-records";
+import { StudioReleaseCards } from "@/components/studio-release-cards";
 import { SupportWorkspace } from "@/components/support-workspace";
 import { HymnStudioFrame } from "@/components/hymn-studio-frame";
 import { HymnStudioHome, type StudioProjectSummary } from "@/components/hymn-studio-home";
@@ -523,13 +524,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
               </button>
             ))}
           </div>
-          <WorkspaceRecords rows={filteredReleases} rowKey={release=>release.id} searchText={release=>`${releaseTitle(release)} ${release.artistName} ${release.status} ${release.upcCode}`} noun="releases" columns={[
-            {key:"release",label:"Release",primary:true,value:release=>releaseTitle(release),render:release=><div className="record-identity">{release.artworkUrl&&<img src={artworkPreviewUrl(release.artworkUrl, 320)} alt=""/>}<div><strong>{releaseTitle(release)}</strong><small>{release.artistName} / {release.releaseType}</small>{release.status==="draft"&&<small>{release.draftCompletionPercent??0}% complete</small>}</div></div>},
-            {key:"status",label:"Status",value:release=>release.status,render:release=><StatusPill label={release.status}/>},
-            {key:"payment",label:"Payment",render:release=>release.paymentStatus||"Not recorded"},
-            {key:"date",label:"Release timing",render:release=>release.releaseTiming === "quick_release" ? "As soon as possible after approval" : formatDate(release.releaseDate)},
-            {key:"action",label:"Action",render:release=>release.status==="draft"?<Link className="btn-outline" href={`/distribution/start?edit=${release.id}`}>Continue draft</Link>:<Link className="btn-outline" href={`/dashboard/releases/${release.id}`}>Manage release</Link>}
-          ]}/>
+          <StudioReleaseCards releases={filteredReleases}/>
         </Panel>
       ) : null}
 

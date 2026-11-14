@@ -11,6 +11,7 @@ import { Disc3, Gift, Pencil, Settings, X } from "lucide-react";
 import { amendmentStatusLabel } from '@/lib/release-amendment-presentation';
 import type { Release } from "@/lib/types";
 import { showFirstReleaseBadge } from "@/lib/first-release-flow";
+import styles from './release-summary-card.module.css';
 import { useSubscriptionLabel } from "@/components/subscription-label-context";
 import {
   getReleasePortalBadgeStyle,
@@ -23,12 +24,14 @@ export function ReleaseSummaryCard({
   release,
   href,
   actionLabel = "Manage",
-  selected = false
+  selected = false,
+  compact = false
 }: {
   release: Release;
   href: string;
   actionLabel?: string;
   selected?: boolean;
+  compact?: boolean;
 }) {
   const title = release.releaseTitle?.trim() || release.trackName || "Untitled release";
   const stage = getReleasePortalStage(release);
@@ -83,7 +86,7 @@ export function ReleaseSummaryCard({
 
   return (
     <article
-      className="release-summary-tile group flex h-full w-full max-w-[282px] flex-col rounded-[9px] border p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+      className={`release-summary-tile group flex h-full w-full max-w-[282px] flex-col rounded-[9px] border p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg ${compact ? styles.compact : ''}`}
       style={{
         borderColor: selected ? "var(--accent)" : "var(--border)",
         background: "var(--card)",
@@ -97,7 +100,7 @@ export function ReleaseSummaryCard({
             src={artworkPreviewUrl(release.artworkUrl, 320)}
             alt={`${title} artwork`}
             fill
-            sizes="(max-width: 640px) 46vw, (max-width: 1280px) 25vw, 240px"
+            sizes={compact ? '(max-width: 480px) 80vw, 200px' : '(max-width: 640px) 46vw, (max-width: 1280px) 25vw, 240px'}
             className="object-cover transition duration-300 group-hover:scale-[1.015]"
             unoptimized
           />
