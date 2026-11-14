@@ -27,7 +27,8 @@ export function StoreChoice({name, checked, disabled = false, onChange, included
   const Tag = included ? 'div' : 'label';
   return <Tag className={styles.row} data-included={included || undefined} data-disabled={disabled || undefined}>
     <span className={styles.logo} data-brand={keys[name]} aria-hidden="true">
-      {source && !failed ? <img src={source} alt="" width={24} height={24} loading="lazy" onError={()=>setFailed(true)} /> : <Music2 size={19}/>}
+      {name === "Instagram / Facebook" ? <><img src="/assets/store-logos/symbol-instagram.png" alt="" width={24} height={24} /><img src="/assets/store-logos/symbol-facebook.png" alt="" width={24} height={24} /></> : source && !failed ? <img className={name === "TikTok" ? styles.tiktokLight : undefined} src={source} alt="" width={24} height={24} loading="lazy" onError={()=>setFailed(true)} /> : <Music2 size={19}/>}
+      {name === "TikTok" && !failed ? <img className={styles.tiktokDark} src="/assets/store-logos/tiktok-dark.svg" alt="" width={24} height={24} /> : null}
     </span>
     <span className={styles.name}>{label}</span>
     {!included ? <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} aria-label={label}/> : null}

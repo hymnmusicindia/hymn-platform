@@ -1,0 +1,16 @@
+.root { position:fixed; right:max(24px,env(safe-area-inset-right)); bottom:max(20px,env(safe-area-inset-bottom)); z-index:60; font-family:"HYMN Manrope",Arial,sans-serif; font-size:12px; line-height:1.6; color:var(--text-muted); }
+.status { display:flex; align-items:center; gap:8px; min-height:36px; padding:6px 12px; border:1px solid var(--border); border-radius:30px; color:inherit; background:var(--bg); box-shadow:0 4px 18px #0001; font:inherit; }
+.root[data-state="error"] { color:var(--danger,#e5484d); }
+.icon { display:flex; animation:arrive .22s ease-out; }
+.spinner { animation:spin 1s linear infinite; }
+.failure { position:relative; }
+.details { display:none; position:absolute; right:0; bottom:calc(100% + 8px); width:min(320px,calc(100vw - 40px)); padding:18px; border:1px solid var(--border); border-radius:12px; color:var(--text); background:var(--card); box-shadow:0 12px 40px #0003; }
+.failure:hover .details,.failure:focus-within .details,.failure[data-expanded] .details { display:block; }
+.details::after { content:""; position:absolute; top:100%; right:0; height:12px; width:100%; }
+.details p { margin:8px 0; overflow-wrap:anywhere; }
+.details button { font:inherit; color:var(--text); text-decoration:underline; text-underline-offset:4px; min-height:36px; }
+.srOnly { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+@keyframes spin { to { transform:rotate(360deg); } }
+@keyframes arrive { from { opacity:0; transform:scale(.7); } to { opacity:1; transform:scale(1); } }
+@media(max-width:600px) { .root { right:16px; bottom:max(12px,env(safe-area-inset-bottom)); } }
+@media(prefers-reduced-motion:reduce) { .icon,.spinner { animation:none; } }

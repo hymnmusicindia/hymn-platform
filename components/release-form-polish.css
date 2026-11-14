@@ -1,0 +1,30 @@
+@font-face { font-family:"HYMN Manrope"; src:url("/fonts/manrope-variable.ttf") format("truetype"); font-weight:200 800; font-style:normal; font-display:swap; }
+html body :is(.release-journey-intro,.release-toolbar,.release-workflow.release-workflow.release-workflow) {
+  font-family:"HYMN Manrope",Arial,sans-serif!important;
+  text-shadow:none!important;
+}
+html body :is(.release-journey-intro,.release-toolbar,.release-workflow.release-workflow.release-workflow) :is(button,input,select,textarea,h1,h2,h3,h4,label,p,span,strong) {
+  font-family:inherit!important; text-shadow:none!important; -webkit-text-stroke:0!important;
+}
+html body .release-workflow.release-workflow.release-workflow :is(input,select,textarea) { font-weight:500!important; letter-spacing:normal!important; }
+html body .release-workflow.release-workflow.release-workflow :is(label,button) { font-weight:600; }
+html body .release-journey-intro.release-journey-intro.release-journey-intro {
+  height:auto!important; min-height:0!important; padding-bottom:0!important;
+}
+html body .release-journey-intro.release-journey-intro .release-journey-intro-body {
+  display:flex!important; justify-content:center!important; align-items:center!important;
+  box-sizing:border-box; min-height:var(--release-entry-space,calc(100svh - 160px))!important;
+  padding:48px 16px!important; margin:0 auto!important;
+}
+html body .release-workflow.release-workflow.release-workflow.release-workflow.release-workflow.release-workflow:has(.release-artist-stage) .release-workflow-content {
+  min-height:var(--release-entry-space,calc(100svh - 240px))!important;
+  box-sizing:border-box; justify-content:center!important; padding-block:32px!important;
+}
+html body :is(.hymn-portal-root,.hymn-landing,.landing-workspace,.landing-canvas,.landing-page-content):has(.release-artist-stage) {
+  overflow:visible!important; height:auto!important;
+}
+html body :is(.hymn-portal-root,.hymn-landing):has(.release-journey-intro) { min-height:calc(100svh - var(--release-site-header-height,64px))!important; height:auto!important; }
+@media(max-height:640px) {
+  html body .release-journey-intro.release-journey-intro .release-journey-intro-body { padding-block:24px!important; }
+  html body .release-workflow.release-workflow.release-workflow.release-workflow.release-workflow.release-workflow:has(.release-artist-stage) .release-workflow-content { padding-block:16px!important; }
+}

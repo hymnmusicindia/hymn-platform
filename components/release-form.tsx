@@ -8,6 +8,8 @@ import { IncludedStores } from "./distribution/included-stores";
 import { ReleaseAmendmentConfirmation } from './release-amendment-confirmation';
 import { activeAmendmentStatuses } from '@/lib/release-amendment-presentation';
 import "./release-welcome.css";
+import "./release-form-polish.css";
+import { SaveIndicator } from "./distribution/save-indicator";
 import "./release-sheet.css";
 import "./release-editor-layout.css";
 import "./release-mobile.css";
@@ -1074,6 +1076,7 @@ export function ReleaseForm({
   const [mobileStepMenuOpen, setMobileStepMenuOpen] = useState(false);
   const [expandedTrack, setExpandedTrack] = useState(correctionTrackIndex ?? 0);
   const [artistRemovalCandidateId, setArtistRemovalCandidateId] = useState<number | null>(null);
+  const [artistRemovingId, setArtistRemovingId] = useState<number | null>(null);
   const [trackArtistRemovalCandidate, setTrackArtistRemovalCandidate] = useState<string | null>(null);
   const audioPreviewObjectUrlsRef = useRef<Set<string>>(new Set());
   const [draggedTrackIndex, setDraggedTrackIndex] = useState<number | null>(null);
@@ -1098,6 +1101,7 @@ export function ReleaseForm({
   const [autosaveStatus, setAutosaveStatus] = useState<"waiting" | "saving" | "saved" | "error">(
     initialRelease ? "saved" : "waiting",
   );
+  const [autosaveError, setAutosaveError] = useState<string | null>(null);
   const [draftConflict, setDraftConflict] = useState(false);
   const draftVersionRef = useRef<string | null>(initialRelease?.draftVersion ?? null);
   const allowReloadRef = useRef(false);
@@ -1589,6 +1593,7 @@ export function ReleaseForm({
     setAutosaveStatus("waiting");
     const timer = window.setTimeout(() => {
       if (savingReleaseRef.current) return;
+      setAutosaveError(null);
       setAutosaveStatus("saving");
       autosavePendingRef.current = autosavePendingRef.current.catch(() => undefined).then(() => fetch(`/api/distribution/drafts/${draftReleaseId}`, {
         signal: AbortSignal.timeout(45000),
@@ -1604,7 +1609,11 @@ export function ReleaseForm({
           lastSavedFingerprintRef.current = reviewMetadataFingerprint;
           setAutosaveStatus("saved");
         })
-        .catch((error) => { setAutosaveStatus("error"); if (error instanceof Error) setStatus(error.message); });
+        .catch((error) => {
+          setAutosaveError(error instanceof Error ? error.message : "Could not save your changes. Please try again.");
+          setAutosaveStatus("error");
+          if (error instanceof Error) setStatus(error.message);
+        });
     }, 1200);
     return () => window.clearTimeout(timer);
   }, [artistProfilesLoaded, autosaveEligible, autosaveSnapshot, draftConflict, draftReleaseId, reviewMetadataFingerprint, submittedRelease, submitting, initialRelease]);
@@ -1616,6 +1625,7 @@ export function ReleaseForm({
       await saveDraftRelease();
       return true;
     }
+    setAutosaveError(null);
     setAutosaveStatus("saving");
     try {
       const response = await fetch(`/api/distribution/drafts/${draftReleaseId}`, { signal: AbortSignal.timeout(45000), method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }) });
@@ -1627,6 +1637,7 @@ export function ReleaseForm({
       setAutosaveStatus("saved");
       return true;
     } catch (error) {
+      setAutosaveError(error instanceof Error ? error.message : "Could not save your changes. Please try again.");
       setAutosaveStatus("error");
       if (error instanceof Error) setStatus(error.message);
       return false;
@@ -2598,6 +2609,7 @@ export function ReleaseForm({
     try {
       if (!initialRelease || initialRelease.status === "draft") {
         const id = await ensureUploadDraft();
+        setAutosaveError(null);
         setAutosaveStatus("saving");
         autosavePendingRef.current = autosavePendingRef.current.catch(() => undefined).then(async () => {
           const response = await fetch(`/api/distribution/drafts/${id}`, {
@@ -2616,6 +2628,7 @@ export function ReleaseForm({
         setAutosaveStatus("saved");
       }
     } catch (error) {
+      setAutosaveError(error instanceof Error ? error.message : "Could not save your changes. Please try again.");
       setAutosaveStatus("error");
       const message = error instanceof Error && error.name === "TimeoutError" ? "Saving took too long. Please try Continue again." : error instanceof Error ? error.message : "Could not save the selected artists. Try again.";
       setStatus(message);
@@ -2986,6 +2999,8 @@ export function ReleaseForm({
       return savedId;
     } catch (error) {
       if (forSubmission) throw error;
+      setAutosaveError(error instanceof Error ? error.message : "Could not save draft.");
+      setAutosaveStatus("error");
       setStatus(
         error instanceof Error ? error.message : "Could not save draft.",
       );
@@ -3380,6 +3395,39 @@ export function ReleaseForm({
   });
 
 
+  useEffect(() => {
+    if (artistRemovingId === null) return;
+    const timer = window.setTimeout(() => {
+      updatePrimaryArtistsForAllTracks(releaseArtistIds.filter(id => id !== artistRemovingId));
+      setArtistRemovalCandidateId(null);
+      setArtistRemovingId(null);
+    }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
+    return () => window.clearTimeout(timer);
+  }, [artistRemovingId, releaseArtistIds]);
+
+  useEffect(() => {
+    if (!journeyIntro && entryStage === null) return;
+    const frame = document.querySelector<HTMLElement>(journeyIntro ? ".release-journey-intro-body" : ".release-workflow-content");
+    if (!frame) return;
+    const measure = () => {
+      const top = frame.getBoundingClientRect().top + window.scrollY;
+      let bottom = 24;
+      for (let parent = frame.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+        const style = getComputedStyle(parent);
+        bottom += (parseFloat(style.paddingBottom) || 0) + (parseFloat(style.borderBottomWidth) || 0) + (parseFloat(style.marginBottom) || 0);
+      }
+      frame.style.setProperty("--release-entry-space", `${Math.max(0, window.innerHeight - top - bottom)}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    const header = document.querySelector(".release-navigation-header");
+    if (header) observer.observe(header);
+    window.addEventListener("resize", measure);
+    return () => { observer.disconnect(); window.removeEventListener("resize", measure); frame.style.removeProperty("--release-entry-space"); };
+  }, [journeyIntro, entryStage]);
+
+  const entryAvatarSize = Math.max(56, 112 - Math.max(0, releaseArtistIds.length - 1) * 12);
+
   if (amendmentReceipt && initialRelease) return <ReleaseAmendmentConfirmation releaseId={initialRelease.id} title={initialRelease.releaseTitle || initialRelease.trackName} request={amendmentReceipt} />;
   if (submittedRelease) {
     return (
@@ -3548,15 +3596,15 @@ export function ReleaseForm({
           const state = stepButtonStyles(index);
           return { id: index, label: stepMenuLabels[index] ?? steps[index], current: index === 7 ? reviewOpen : index === (entryStage ?? step), attention: state.hasCorrection || state.validity === "invalid" };
         })} onSelect={jumpToStep} disabled={submitting}/>
-          <div className="release-workspace-state" aria-live="polite">
-            <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : !autosaveEligible && hasUnsavedChanges ? "Unsaved changes" : autosaveLabel}</span>
-            {autosaveStatus === "error" && !draftConflict ? <button type="button" onClick={retryAutosave} disabled={submitting} className="release-workspace-review">Retry save</button> : null}
+          <div className="release-workspace-state">
+            <button type="button" onClick={saveDraftRelease} disabled={submitting} hidden={Boolean(initialRelease && initialRelease.status !== "draft")} className="release-workspace-review">Draft</button>
             {entryStage === null ? <button type="button" onClick={enterReviewMode} className="release-workspace-review">Review</button> : null}
           </div>
 
 
           <div className="release-journey-progress-track" role="progressbar" aria-label="Journey stages reached" aria-valuemin={0} aria-valuemax={menuStepIndexes.length} aria-valuenow={menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1}><span style={{ width: `${((menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1) / menuStepIndexes.length) * 100}%` }} /></div>
         </div></ReleaseNavigationSlot>
+        {autosaveEligible && (!initialRelease || initialRelease.status === "draft") && !submittedRelease && !submitting ? <SaveIndicator state={autosaveStatus} error={autosaveError} conflict={draftConflict} onRetry={() => void retryAutosave()} /> : null}
         <aside className="release-workflow-summary hidden lg:block" aria-label="Release summary">
           <div className="release-summary-card rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
             <div className="release-live-preview" aria-label="Release preview">
@@ -3590,13 +3638,13 @@ export function ReleaseForm({
             </div>
             <div ref={registerField("release-primary-artists")} className="release-focused-card">
               <div className="release-artist-avatar-picker">
-              {releaseArtistIds.length > 0 ? <div className="release-selected-artists" aria-label="Selected primary artists">
+              {releaseArtistIds.length > 0 ? <div className="release-selected-artists" aria-label="Selected primary artists" style={{ gridTemplateColumns: `repeat(${releaseArtistIds.length}, minmax(0, ${entryAvatarSize}px))`, width: `${releaseArtistIds.length * entryAvatarSize + Math.max(0, releaseArtistIds.length - 1) * 12}px` }}>
                 {releaseArtistIds.map((profileId, artistIndex) => {
                   const profile = knownProfiles[profileId];
                   if (!profile) return null;
                   const removalArmed = artistRemovalCandidateId === profileId;
-                  return <div key={profileId} className="release-primary-artist-sort-item">
-                    <button type="button" className={clsx("release-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}, primary artist ${artistIndex + 1}. Click to remove.`} onClick={() => { if (removalArmed) { updatePrimaryArtistsForAllTracks(releaseArtistIds.filter((id) => id !== profileId)); setArtistRemovalCandidateId(null); } else setArtistRemovalCandidateId(profileId); }}>
+                  return <div key={profileId} className={clsx("release-primary-artist-sort-item", artistRemovingId === profileId && "is-removing")}>
+                    <button type="button" className={clsx("release-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}, primary artist ${artistIndex + 1}. Click to remove.`} onClick={() => { if (removalArmed) { setArtistRemovingId(profileId); } else setArtistRemovalCandidateId(profileId); }}>
                       {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
                       <span className="release-selected-artist-remove" aria-hidden="true"><X /></span>
                     </button>
@@ -5061,7 +5109,6 @@ export function ReleaseForm({
         </section>) : null}</div>
         {entryStage === 0 ? <div className={layoutStyles.entryActions}><button type="button" onClick={continueFromMusic} disabled={tracks.some(track => track.audioUploadStatus === "uploading") || replacingAudioCount > 0}>{audioComplete ? "Continue to release information" : "Skip for now"}<ArrowRight size={16}/></button></div> : null}
             <div className={layoutStyles.sheetDraftAction}>
-          <button type="button" onClick={saveDraftRelease} disabled={submitting} hidden={Boolean(initialRelease && initialRelease.status !== "draft")} className="release-footer-action is-draft">Draft</button>
           {entryStage === null ? <button type="button" onClick={enterReviewMode} disabled={submitting} className={layoutStyles.sheetReviewAction}>Review release <ArrowRight size={16} aria-hidden="true" /></button> : null}
         </div>
         <ReleaseFieldErrors issues={validationIssues} shown={validationErrorKeys} fields={fieldRefs}/>

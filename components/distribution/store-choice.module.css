@@ -7,7 +7,7 @@
 .logo[data-brand="napster"] { background:#fff; border-radius:6px; }
 .name { flex:1; min-width:0; font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
 .row input { appearance:auto !important; position:static !important; opacity:1 !important; width:20px !important; height:20px !important; min-width:20px; margin:0 0 0 8px; flex-shrink:0; accent-color:var(--accent); cursor:inherit; }
-.row[data-disabled] .logo { opacity:.55; }
+
 .row[data-included] { cursor:default; }
 .row[data-included]:hover { background:transparent; }
 .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 12px; }
@@ -25,5 +25,8 @@
 .logo img { width:24px; height:24px; }
 .logo[data-brand="amazon"] { width:32px; }
 .logo[data-brand="amazon"] img { width:32px; }
-:global(html:not([data-theme="light"])) .logo[data-brand="snapchat"] img { filter:invert(1); }
-.logo[data-brand="tiktok"] { background:#fff; border-radius:50%; padding:3px; }
+
+.logo[data-brand="facebook"] { width:52px; display:flex; gap:4px; }
+.tiktokDark { display:none; }
+:global(html:not([data-theme="light"])) .tiktokLight { display:none; }
+:global(html:not([data-theme="light"])) .tiktokDark { display:block; }
