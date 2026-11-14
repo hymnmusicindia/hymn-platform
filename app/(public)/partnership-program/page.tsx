@@ -1,3 +1,4 @@
+import { PublicEntryHero, PublicEntryProof } from '@/components/public-entry-experience';
 import { publicPageMetadata } from "@/lib/seo";
 import { PartnershipLeadForm } from "@/components/partnership-lead-form";
 import { ChevronDown } from "lucide-react";
@@ -7,20 +8,15 @@ export const metadata: Metadata = publicPageMetadata("Music Partnership Program"
 
 export default function PartnershipProgramPage() {
   const sections = [
-    ["Catalog partnerships", "Bring an existing beat catalog or curated producer roster into HYMN with operational support."],
-    ["Distribution partnerships", "Coordinate release pipelines, asset intake, and status visibility across teams."],
-    ["Campaign partnerships", "Combine rollout execution, creative support, and audience-building strategy."]
+    ["Catalog partnerships", "Bring your beat catalogue or producer roster to HYMN and discuss the support your team needs."],
+    ["Distribution partnerships", "Plan releases across your roster with shared preparation, clear responsibilities and delivery updates."],
+    ["Campaign partnerships", "Explore creative campaigns and release rollouts that fit your artists and audience."]
   ] as const;
 
   return (
     <main className="shell py-12 sm:py-16">
-      <div className="max-w-4xl">
-        <h1 className="text-3xl font-semibold text-white sm:text-4xl lg:text-5xl">Build distribution, catalog, and campaign partnerships with HYMN.</h1>
-        <p className="mt-4 text-sm text-white/68 sm:text-base">
-          HYMN collaborates with producers, collectives, managers, labels, and brands through structured operating partnerships connected to the platform database and admin workflow.
-        </p>
-      </div>
-
+      <PublicEntryHero partnership eyebrow="HYMN MUSIC / PARTNERSHIPS" title="Build the next chapter. Together." description="Bring your artists, catalogue or community to HYMN. Let?s discuss a partnership around music, clear responsibilities and shared growth."/>
+      <PublicEntryProof offer={false}/>
       <div className="mt-8 grid gap-4 md:grid-cols-3 md:gap-6">
         {sections.map(([title, body]) => (
           <details key={`${title}-mobile`} className="ios-collapse rounded-[1.2rem] p-4 md:hidden">
@@ -43,7 +39,7 @@ export default function PartnershipProgramPage() {
         ))}
       </div>
 
-      <div className="mt-8 sm:mt-10">
+      <div id="partnership-enquiry" className="mt-8 scroll-mt-24 sm:mt-10"><h2 className="mb-6 text-2xl font-semibold">Tell us what you?re building.</h2>
         <PartnershipLeadForm />
       </div>
     </main>

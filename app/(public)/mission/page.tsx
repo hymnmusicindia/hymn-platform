@@ -1,3 +1,4 @@
+import { PublicEntryProof } from '@/components/public-entry-experience';
 import { publicPageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Image from "next/image";
@@ -78,6 +79,7 @@ export default function MissionPage() {
           <Link href="/services" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-bold" style={{ background: "var(--accent)", color: "var(--bg)" }}>Explore HYMN <ArrowRight className="h-4 w-4" /></Link>
         </div>
       </section>
+    <div className="shell pb-12"><PublicEntryProof/></div>
     </main>
   );
 }

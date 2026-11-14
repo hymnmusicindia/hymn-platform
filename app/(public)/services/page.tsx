@@ -1,3 +1,4 @@
+import { PublicEntryProof } from '@/components/public-entry-experience';
 import { publicPageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import Image from "next/image";
@@ -310,6 +311,7 @@ export default function ServicesPage() {
           </div>
         </div>
       </section>
+    <div className="shell pb-12"><PublicEntryProof/></div>
     </main>
   );
 }

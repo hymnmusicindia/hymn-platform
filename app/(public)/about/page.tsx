@@ -1,49 +1,10 @@
-import { publicPageMetadata } from "@/lib/seo";
-import { ChevronDown } from "lucide-react";
-import type { Metadata } from "next";
-
-export const metadata: Metadata = publicPageMetadata("About", "Meet HYMN Music, an India-based platform connecting independent artists and producers with distribution, beats, studio services, royalties and release support.", "/about");
-
-
-export default function AboutPage() {
-  const sections = [
-    ["Distribution", "Artists submit releases, upload assets, and track status changes from dashboard to admin review."],
-    ["Beat marketplace", "Customers can license beats with live order records, downloads, and payment verification."],
-    ["Producer operations", "Approved producers manage their own beat catalog, earnings, and sales history from a dedicated dashboard."]
-  ] as const;
-
-  return (
-    <main className="shell py-12 sm:py-16">
-      <div className="max-w-4xl">
-        <h1 className="text-3xl font-semibold text-white sm:text-4xl lg:text-5xl">HYMN combines label services, distribution ops, and beat commerce in one platform.</h1>
-        <p className="mt-4 text-sm text-white/68 sm:text-base">
-          The product is designed for artists, producers, managers, and operators who need a dark, premium workflow layer instead of disconnected static pages.
-        </p>
-      </div>
-
-      <div className="mt-8 grid gap-4 md:grid-cols-3 md:gap-6">
-        {sections.map(([title, body]) => (
-          <details key={`${title}-mobile`} className="ios-collapse rounded-[1.2rem] p-4 md:hidden">
-            <summary className="flex list-none items-center justify-between gap-3 text-base font-semibold text-white">
-              {title}
-              <ChevronDown className="ios-collapse-icon h-4 w-4 shrink-0 text-white/70" />
-            </summary>
-            <div className="ios-collapse-content">
-              <div className="ios-collapse-inner">
-                <p className="mt-3 text-sm text-white/65">{body}</p>
-              </div>
-            </div>
-          </details>
-        ))}
-        {sections.map(([title, body]) => (
-          <article key={`${title}-desktop`} className="hidden rounded-[2rem] border border-border bg-white/5 p-6 md:block">
-            <h2 className="text-2xl font-semibold text-white">{title}</h2>
-            <p className="mt-4 text-white/65">{body}</p>
-          </article>
-        ))}
-      </div>
-    </main>
-  );
-}
-
-
+import { publicPageMetadata } from '@/lib/seo';
+import Link from 'next/link';
+import { PublicEntryHero, PublicEntryProof } from '@/components/public-entry-experience';
+export const metadata = publicPageMetadata('About', 'Meet HYMN Music, an India-based platform for independent artists: distribution, beats, studio services and release support.', '/about');
+export default function AboutPage(){return <main className="shell py-12 sm:py-16">
+<PublicEntryHero eyebrow="MEET HYMN MUSIC" title="Independent music. Shared ambition." description="A home for artists, producers and the people behind the music. Release your records, discover licensed beats and find the finishing touch for your sound in one connected workspace."/>
+<PublicEntryProof/>
+<section className="my-12 grid gap-6 sm:grid-cols-3">{[{title:'Release your music',body:'Prepare a release, manage credits and rights, and follow delivery updates.',href:'/music-distribution'},{title:'Find your next sound',body:'Explore beats from producers, compare licences and choose what fits your project.',href:'/beat-store'},{title:'Finish your record',body:'Explore mixing and mastering services and work towards a release-ready sound.',href:'/studio'}].map(item=><Link href={item.href} key={item.href} className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-7"><h2 className="text-xl font-semibold">{item.title} ?</h2><p className="mt-4 text-sm leading-7 text-[var(--text-muted)]">{item.body}</p></Link>)}</section>
+<p className="text-sm leading-7 text-[var(--text-muted)]">Meet the people and purpose behind HYMN. <Link href="/mission" className="underline underline-offset-4">Read our mission and founder?s message</Link>, or <Link href="/contact" className="underline underline-offset-4">talk to our team</Link>.</p>
+</main>}

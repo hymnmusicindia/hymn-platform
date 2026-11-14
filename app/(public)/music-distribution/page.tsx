@@ -1,3 +1,4 @@
+import { PublicEntryHero, PublicEntryProof } from '@/components/public-entry-experience';
 import Link from 'next/link';
 import { ArrowRight, AudioLines, FileCheck2, Globe2, Wallet } from 'lucide-react';
 import { publicPageMetadata, jsonLd } from '@/lib/seo';
@@ -10,7 +11,9 @@ export default function MusicDistributionPage(){
   const schema={'@context':'https://schema.org','@type':'Service',name:'HYMN Music Distribution',serviceType:'Digital music distribution',url:`${origin}/music-distribution`,provider:{'@id':`${origin}/#organization`},description:'Digital music distribution, release preparation, delivery tracking and royalty reporting for independent artists.'};
   return <main className="shell py-12 sm:py-16"><script type="application/ld+json" dangerouslySetInnerHTML={{__html:jsonLd(schema)}}/>
     <nav aria-label="Breadcrumb" className="mb-8 text-sm text-[var(--text-muted)]"><Link href="/">HYMN Music</Link><span aria-hidden="true"> / </span><span>Music distribution</span></nav>
-    <header className="max-w-4xl"><p className="hymn-kicker">HYMN MUSIC DISTRIBUTION</p><h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-6xl">Your next release.<br/>One clear workspace.</h1><p className="mt-6 max-w-2xl text-base leading-8 text-[var(--text-muted)]">Bring your music to digital stores with HYMN. Prepare your audio and artwork, confirm artist credits and rights, and follow your release from submission through delivery updates.</p><div className="mt-8 flex flex-wrap gap-3"><Link href="/distribution/start" className="btn-primary">Start a release <ArrowRight size={16}/></Link><Link href="/faq" className="btn-outline">Explore distribution FAQs</Link></div></header>
+    <PublicEntryHero eyebrow="HYMN MUSIC / DISTRIBUTION" title="Your next release. A world of possibility." description="Bring your sound to digital stores with HYMN. Prepare your release, keep your rights and credits in order, and follow its journey from submission to delivery updates."/>
+    <PublicEntryProof/>
+
     <section aria-labelledby="distribution-workflow" className="my-14"><h2 id="distribution-workflow" className="text-2xl font-semibold">From finished track to release day</h2><div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[
       {Icon:AudioLines,title:'Prepare your release',body:'Upload your tracks and cover artwork. Add the title, artist names and recording credits.'},
       {Icon:FileCheck2,title:'Confirm your rights',body:'Provide accurate ownership and licence information. Respond to review requests in your workspace.'},
