@@ -41,6 +41,7 @@ const mocks = {
   '@/lib/release-track-save': { releaseSaveFailure: () => null },
   '@/lib/private-storage': {}, '@/lib/db': {}, '@/lib/distribution-asset-format': {},
   '@/lib/release-asset-resolution': {}, '@/lib/prisma': {},
+  '@/lib/release-attachment-validation': { validateReleaseDocument: async () => {} },
 };
 const { POST } = load('app/api/distribution/update-release/route.ts', mocks);
 const request = () => ({ formData: async () => new Map([['payload', JSON.stringify({ metadata })]]) });

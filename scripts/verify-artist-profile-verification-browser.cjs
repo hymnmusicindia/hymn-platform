@@ -57,6 +57,18 @@ const { chromium, expect } = require('@playwright/test');
       await page.screenshot({ path: path.join(out, `${width}-verification.png`), fullPage: true });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       const bounds = await dialog.boundingBox(); expect(bounds.x).toBeGreaterThanOrEqual(0); expect(bounds.width).toBeLessThanOrEqual(width);
+      await page.evaluate(() => {
+        const originalFetch = window.fetch.bind(window), timeout = AbortSignal.timeout.bind(AbortSignal);
+        AbortSignal.timeout = milliseconds => timeout(milliseconds === 45000 ? 25 : milliseconds);
+        window.hangArtistApproval = true;
+        window.fetch = (url, init) => window.hangArtistApproval && String(url).includes('/artist-verification') && JSON.parse(init.body).action === 'approve'
+          ? new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }))
+          : originalFetch(url, init);
+      });
+      await confirm.click();
+      await expect(dialog.getByText('Artist profile verification timed out. Retry this check before submitting.', { exact: true })).toBeVisible();
+      await expect(confirm).toBeEnabled();
+      await page.evaluate(() => { window.hangArtistApproval = false; });
       await confirm.click(); await expect(dialog).not.toBeVisible(); await expect(page.getByText('true', { exact: true })).toBeVisible(); expect(approvals).toBe(1);
       await page.getByRole('button', { name: 'Submit release', exact: true }).click(); await expect(dialog).toBeVisible();
       await page.keyboard.press('Escape'); await expect(dialog).not.toBeVisible(); await expect(page.getByText('false', { exact: true })).toBeVisible();

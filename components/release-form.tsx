@@ -58,6 +58,8 @@ import { CustomerOverlay } from "@/components/customer-overlay";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import NextImage from "next/image";
 import { useRouter } from "next/navigation";
+import { resolveReleaseArtistIds, replaceReleaseArtists } from "@/lib/release-artist-scope";
+import { submitCorrectionPackage } from "@/lib/client-correction-submit";
 import { artistCreditNames, artistSelectionIssue, selectedArtistCreditNames, restoreArtistProfileIds } from "@/lib/release-artist-validation";
 import { ArtistPicker } from "@/components/artist-picker";
 import { ArtistRoleHelp } from "@/components/artist-role-help";
@@ -1107,10 +1109,11 @@ export function ReleaseForm({
   const [knownProfiles, setKnownProfiles] = useState<
     Record<number, ArtistProfile>
   >({});
+  const [artistProfilesLoaded, setArtistProfilesLoaded] = useState(false);
   useEffect(() => {
-    fetch("/api/artists")
+    fetch("/api/artists", { signal: AbortSignal.timeout(15_000) })
       .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((data) => setKnownProfiles(Object.fromEntries(((data.artists ?? []) as ArtistProfile[]).map((profile) => [profile.id, profile]))))
+      .then((data) => { setKnownProfiles(Object.fromEntries(((data.artists ?? []) as ArtistProfile[]).map((profile) => [profile.id, profile]))); setArtistProfilesLoaded(true); })
       .catch(() => undefined);
   }, []);
   useEffect(() => {
@@ -1250,6 +1253,10 @@ export function ReleaseForm({
   const [tracks, setTracks] = useState<TrackDraft[]>(() =>
     createTracksFromRelease(initialRelease, audioLibraryPrefill),
   );
+  const [chosenReleaseArtistIds, setChosenReleaseArtistIds] = useState<number[] | null>(null);
+  const releaseArtistIds = useMemo(() => chosenReleaseArtistIds ?? resolveReleaseArtistIds(initialRelease?.artistName ?? "", Object.values(knownProfiles)), [chosenReleaseArtistIds, initialRelease?.artistName, knownProfiles]);
+  const primaryArtistName = chosenReleaseArtistIds === null && initialRelease ? initialRelease.artistName : releaseArtistIds.map(id => knownProfiles[id]?.name).filter(Boolean).join(", ");
+  const [releaseArtistQuery, setReleaseArtistQuery] = useState("");
   const [submittedRelease, setSubmittedRelease] = useState<Release | null>(
     !amendmentMode && initialRelease && (releaseAlreadyInReview(initialRelease.status) || returnedFromSubmission && isCompletedDistributionSubmission(initialRelease)) ? initialRelease : null,
   );
@@ -1451,10 +1458,7 @@ export function ReleaseForm({
   const autosaveSnapshot = useMemo(
     () => ({
       title: displayedReleaseTitle,
-      artistName: (tracks[0]?.primaryArtistIds ?? [])
-        .map((id) => knownProfiles[id]?.name)
-        .filter(Boolean)
-        .join(", "),
+      artistName: primaryArtistName,
       genre: release.primaryGenre,
       releaseDate: selectedReleaseDate,
       artworkUrl: persistedArtworkUrl ?? initialRelease?.artworkUrl ?? undefined,
@@ -1518,6 +1522,7 @@ export function ReleaseForm({
       initialRelease?.artworkUrl,
       displayedReleaseTitle,
       knownProfiles,
+      primaryArtistName,
       legal,
       platforms,
       readinessItems,
@@ -1575,7 +1580,7 @@ export function ReleaseForm({
   }, [autosaveEligible, campaignAttribution, displayedReleaseTitle, draftReleaseId, ensureUploadDraft, firstReleaseOffer, initialRelease, step]);
 
   useEffect(() => {
-    if (!autosaveEligible || !draftReleaseId || submitting || submittedRelease || draftConflict || (initialRelease && initialRelease.status !== "draft")) return;
+    if (!artistProfilesLoaded || !autosaveEligible || !draftReleaseId || submitting || submittedRelease || draftConflict || (initialRelease && initialRelease.status !== "draft")) return;
     setAutosaveStatus("waiting");
     const timer = window.setTimeout(() => {
       if (savingReleaseRef.current) return;
@@ -1597,7 +1602,7 @@ export function ReleaseForm({
         .catch((error) => { setAutosaveStatus("error"); if (error instanceof Error) setStatus(error.message); });
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [autosaveEligible, autosaveSnapshot, draftConflict, draftReleaseId, reviewMetadataFingerprint, submittedRelease, submitting, initialRelease]);
+  }, [artistProfilesLoaded, autosaveEligible, autosaveSnapshot, draftConflict, draftReleaseId, reviewMetadataFingerprint, submittedRelease, submitting, initialRelease]);
 
   async function retryAutosave() {
     if (initialRelease && initialRelease.status !== "draft") return false;
@@ -1755,33 +1760,32 @@ export function ReleaseForm({
     profilesFor(ids)
       .map((profile) => profile.name)
       .join(", ");
-  const primaryArtistName =
-    namesFor(tracks[0]?.primaryArtistIds ?? []);
   const updateTrack = (index: number, patch: Partial<TrackDraft>) =>
     setTracks((current) =>
       current.map((track, trackIndex) =>
         trackIndex === index ? { ...track, ...patch } : track,
       ),
     );
-  const updatePrimaryArtistsForAllTracks = (primaryArtistIds: number[]) =>
-    setTracks((current) => current.map((track) => ({
-      ...track,
-      primaryArtistIds,
-      primaryArtistQuery: "",
-    })));
+  const updatePrimaryArtistsForAllTracks = (next: number[]) => {
+    setChosenReleaseArtistIds(next);
+    setReleaseArtistQuery("");
+    setTracks(current => current.map(track => ({ ...track, primaryArtistIds: replaceReleaseArtists(track.primaryArtistIds, releaseArtistIds, next) })));
+  };
   const withProfileProducerCredit = (producers: ContributorDraft[], profile: ArtistProfile) => {
     const artistName = profile.isProducer ? (profile.producerArtistName?.trim() || profile.name.trim()) : "";
     if (!artistName || producers.some((producer) => producer.artistName.trim().toLowerCase() === artistName.toLowerCase())) return producers;
     const credit = { ...createContributor(), legalName: profile.producerLegalName?.trim() || "", artistName };
     return producers.length === 1 && !producers[0].legalName.trim() && !producers[0].artistName.trim() ? [credit] : [...producers, credit];
   };
-  const selectPrimaryArtistForAllTracks = (profile: ArtistProfile) =>
-    setTracks((current) => current.map((track) => ({
-      ...track,
-      primaryArtistIds: track.primaryArtistIds.includes(profile.id) ? track.primaryArtistIds : [...track.primaryArtistIds, profile.id],
-      primaryArtistQuery: "",
+  const selectPrimaryArtistForAllTracks = (profile: ArtistProfile) => {
+    const next = [...new Set([...releaseArtistIds, profile.id])];
+    setChosenReleaseArtistIds(next);
+    setReleaseArtistQuery("");
+    setTracks(current => current.map(track => ({ ...track,
+      primaryArtistIds: replaceReleaseArtists(track.primaryArtistIds, releaseArtistIds, next),
       producers: withProfileProducerCredit(track.producers, profile),
     })));
+  };
   const setTrackList = (updater: (current: TrackDraft[]) => TrackDraft[]) =>
     setTracks((current) =>
       updater(current).map((track, index) => ({
@@ -1793,7 +1797,7 @@ export function ReleaseForm({
     if (amendmentMode) { setStatus("Track count is locked for this amendment."); return; }
     if (singleReleaseGift) return;
     if (tracks.length >= 30) { setStatus("An Album can contain up to 30 tracks."); return; }
-    setTrackList((current) => [...current, { ...createTrack(current.length + 1), primaryArtistIds: current[0]?.primaryArtistIds ?? [] }]);
+    setTrackList((current) => [...current, { ...createTrack(current.length + 1), primaryArtistIds: [...releaseArtistIds] }]);
     setExpandedTrack(tracks.length);
   };
 
@@ -1818,7 +1822,7 @@ export function ReleaseForm({
   async function saveCurrentReleaseDefaults() {
     setPreferencesStatus("saving");
     try {
-      const response = await fetch("/api/distribution/preferences", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ defaultArtistProfileId: tracks[0]?.primaryArtistIds[0], preferredTitleLanguage: release.language, preferredGenre: release.primaryGenre, preferredSubgenre: release.secondaryGenre, rightsDefaults: { compositionOwner: release.copyrightOwner, masterRecordingOwner: release.publishingRights, defaultLabelName: release.recordLabelName, defaultCLineName: release.copyrightOwner, defaultPLineName: release.publishingRights } }) });
+      const response = await fetch("/api/distribution/preferences", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ defaultArtistProfileId: releaseArtistIds[0], preferredTitleLanguage: release.language, preferredGenre: release.primaryGenre, preferredSubgenre: release.secondaryGenre, rightsDefaults: { compositionOwner: release.copyrightOwner, masterRecordingOwner: release.publishingRights, defaultLabelName: release.recordLabelName, defaultCLineName: release.copyrightOwner, defaultPLineName: release.publishingRights } }) });
       if (!response.ok) throw new Error("Could not save defaults.");
       setPreferencesStatus("saved");
     } catch { setPreferencesStatus("error"); }
@@ -2045,7 +2049,7 @@ export function ReleaseForm({
     setStatus(null);
     setBatchUploading(true);
     const startsAt = reuseFirst ? 0 : tracks.length;
-    const newTracks = selected.map((_, offset) => startsAt + offset).filter((index) => index >= tracks.length).map((index) => ({ ...createTrack(index + 1), primaryArtistIds: tracks[0]?.primaryArtistIds ?? [] }));
+    const newTracks = selected.map((_, offset) => startsAt + offset).filter((index) => index >= tracks.length).map((index) => ({ ...createTrack(index + 1), primaryArtistIds: [...releaseArtistIds] }));
     if (newTracks.length) setTrackList((current) => [...current, ...newTracks]);
     try {
       await Promise.all(selected.map(async (file, offset) => {
@@ -2087,7 +2091,7 @@ export function ReleaseForm({
     const reuseFirst = matchingIndex < 0 && tracks.length === 1 && !tracks[0].existingAudioUrl && !tracks[0].audioFile && !tracks[0].audioPreviewUrl;
     const index = matchingIndex >= 0 ? matchingIndex : reuseFirst ? 0 : tracks.length;
     const trackId = session.clientTrackId || (index < tracks.length ? tracks[index].id : createId());
-    if (matchingIndex < 0 && !reuseFirst) setTrackList((current) => [...current, { ...createTrack(index + 1), id: trackId, primaryArtistIds: current[0]?.primaryArtistIds ?? [] }]);
+    if (matchingIndex < 0 && !reuseFirst) setTrackList((current) => [...current, { ...createTrack(index + 1), id: trackId, primaryArtistIds: [...releaseArtistIds] }]);
     else if (reuseFirst) updateTrack(0, { id: trackId });
     try {
       await handleAudioFile(index, file, { signal: new AbortController().signal, reportProgress: () => undefined }, session.clientTrackId || "");
@@ -2415,7 +2419,7 @@ export function ReleaseForm({
   const destinationsIssue = (): ValidationIssue | null =>
     destinationsIssues()[0] ?? null;
 
-  const primaryArtistProblem = artistSelectionIssue(namesFor(tracks[0]?.primaryArtistIds ?? []), tracks[0]?.primaryArtistIds ?? [], Object.values(knownProfiles), "primary", true);
+  const primaryArtistProblem = artistSelectionIssue(primaryArtistName, releaseArtistIds, Object.values(knownProfiles), "primary", true);
   const primaryArtistIssue: ValidationIssue | null = primaryArtistProblem ? { step: 1, key: "release-primary-artists", message: primaryArtistProblem } : null;
   const validationIssues = [
     primaryArtistIssue,
@@ -2705,9 +2709,11 @@ export function ReleaseForm({
       formData.append("sourceUpdatedAt", initialRelease?.draftVersion ?? "");
       if (amendmentSourceRevision) formData.append("sourceRevision", amendmentSourceRevision);
     }
+    if (!amendmentMode) return submitCorrectionPackage(checked.data.metadata, formData);
     const response = await fetch(amendmentMode ? "/api/distribution/amend-release" : "/api/distribution/update-release", {
       method: "POST",
       body: formData,
+      signal: AbortSignal.timeout(90_000),
     });
     const data = await response.json();
     if (!response.ok && amendmentMode && data.code === "AMENDMENT_ALREADY_ACTIVE" && data.request) return { ...data, existingAmendment: true };
@@ -2845,6 +2851,7 @@ export function ReleaseForm({
   }
 
   async function persistDraftRelease(forSubmission = false) {
+    if (!artistProfilesLoaded) { const message = "Artist profiles are still loading. Refresh and try again before saving."; if (forSubmission) throw new Error(message); setStatus(message); return; }
     if (draftConflict) { setStatus("This draft changed in another tab. Open the latest version before saving."); return; }
     if (savingReleaseRef.current && !forSubmission) return;
     savingReleaseRef.current = true;
@@ -3113,7 +3120,7 @@ export function ReleaseForm({
     if (!(await artistProfileVerification.verify(releaseId, ids))) throw new Error("Submission paused. Confirm the artist profiles when you are ready to continue.");
     // Refresh corrected card defaults without changing release audio or metadata.
     try {
-      const response = await fetch('/api/artists');
+      const response = await fetch('/api/artists', { signal: AbortSignal.timeout(8_000) });
       if (response.ok) { const data = await response.json(); setKnownProfiles(Object.fromEntries(((data.artists ?? []) as ArtistProfile[]).map(profile => [profile.id, profile]))); }
     } catch { /* The server-owned approval remains authoritative. */ }
   }
@@ -3177,7 +3184,7 @@ export function ReleaseForm({
       resumeUrl.searchParams.set("resume", String(reviewReleaseId));
       resumeUrl.searchParams.set("stage", "7");
       window.history.replaceState(window.history.state, "", resumeUrl);
-      const confirmationResponse = await fetch("/api/distribution/review-confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ releaseId: reviewReleaseId, metadataSnapshot: autosaveSnapshot }) });
+      const confirmationResponse = await fetch("/api/distribution/review-confirm", { signal: AbortSignal.timeout(45_000), method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ releaseId: reviewReleaseId, metadataSnapshot: autosaveSnapshot }) });
       const confirmation = await confirmationResponse.json().catch(() => ({}));
       if (!confirmationResponse.ok) {
         const details = Array.isArray(confirmation.errors) ? confirmation.errors.map((item: { message?: unknown }) => String(item?.message || "")).filter(Boolean) : [];
@@ -3200,6 +3207,7 @@ export function ReleaseForm({
       const orderResponse = await fetch(
         "/api/distribution/payment/create-order",
         {
+          signal: AbortSignal.timeout(45_000),
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(orderRequestPayload),
@@ -3326,7 +3334,9 @@ export function ReleaseForm({
       });
     } catch (error) {
       setStatus(
-        error instanceof Error ? error.message : "Something went wrong.",
+        error instanceof DOMException && ["TimeoutError", "AbortError"].includes(error.name)
+          ? "Submission confirmation timed out. Your saved release is safe. Check Your Releases before retrying; do not pay again."
+          : error instanceof Error ? error.message : "Something went wrong.",
       );
     } finally {
       savingReleaseRef.current = false;
@@ -3354,7 +3364,7 @@ export function ReleaseForm({
     return () => window.clearTimeout(timer);
   }, [journeyIntro, journeyExiting, submittedRelease, startReleaseJourney]);
 
-  const [entryStage, setEntryStage] = useState<1 | 0 | null>(() => initialRelease && tracks[0]?.primaryArtistIds.length ? (initialStage === 0 ? 0 : null) : 1);
+  const [entryStage, setEntryStage] = useState<1 | 0 | null>(() => initialRelease && initialRelease.artistName?.trim() ? (initialStage === 0 ? 0 : null) : 1);
   const [reviewOpen, setReviewOpen] = useState(false);
   const lastSheetStage = useRef(3);
   const sheetNavigation = useReleaseSheetNavigation({
@@ -3551,7 +3561,7 @@ export function ReleaseForm({
               <div className="min-w-0">
                 <span>Release preview</span>
                 <strong>{displayedReleaseTitle || "Untitled release"}</strong>
-                <p>{namesFor(tracks[0]?.primaryArtistIds ?? []) || tracks[0]?.primaryArtistQuery || "Artist not added"}</p>
+                <p>{namesFor(releaseArtistIds) || releaseArtistQuery || "Artist not added"}</p>
               </div>
             </div>
             <p className="mt-5 text-sm font-semibold">Your release</p>
@@ -3575,13 +3585,13 @@ export function ReleaseForm({
             </div>
             <div ref={registerField("release-primary-artists")} className="release-focused-card">
               <div className="release-artist-avatar-picker">
-              {(tracks[0]?.primaryArtistIds ?? []).length > 0 ? <div className="release-selected-artists" aria-label="Selected primary artists">
-                {(tracks[0]?.primaryArtistIds ?? []).map((profileId, artistIndex) => {
+              {releaseArtistIds.length > 0 ? <div className="release-selected-artists" aria-label="Selected primary artists">
+                {releaseArtistIds.map((profileId, artistIndex) => {
                   const profile = knownProfiles[profileId];
                   if (!profile) return null;
                   const removalArmed = artistRemovalCandidateId === profileId;
                   return <div key={profileId} className="release-primary-artist-sort-item">
-                    <button type="button" className={clsx("release-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}, primary artist ${artistIndex + 1}. Click to remove.`} onClick={() => { if (removalArmed) { updatePrimaryArtistsForAllTracks(tracks[0].primaryArtistIds.filter((id) => id !== profileId)); setArtistRemovalCandidateId(null); } else setArtistRemovalCandidateId(profileId); }}>
+                    <button type="button" className={clsx("release-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}, primary artist ${artistIndex + 1}. Click to remove.`} onClick={() => { if (removalArmed) { updatePrimaryArtistsForAllTracks(releaseArtistIds.filter((id) => id !== profileId)); setArtistRemovalCandidateId(null); } else setArtistRemovalCandidateId(profileId); }}>
                       {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
                       <span className="release-selected-artist-remove" aria-hidden="true"><X /></span>
                     </button>
@@ -3590,20 +3600,20 @@ export function ReleaseForm({
               </div> : null}
               <ArtistPicker
                 label="Add artist"
-                helper="Select the primary artists credited on this release"
-                valueIds={profilesFor(tracks[0]?.primaryArtistIds ?? [])}
-                query={tracks[0]?.primaryArtistQuery ?? ""}
+                helper="Album/release artists only. Add featured artists and other collaborators to their individual tracks."
+                valueIds={profilesFor(releaseArtistIds)}
+                query={releaseArtistQuery}
                 showRecentQuickAdd
                 hideSelectionChips
                 focused
                 required={showErrors && !primaryArtistComplete}
-                onQueryChange={(value) => updateTrack(0, { primaryArtistQuery: value })}
+                onQueryChange={setReleaseArtistQuery}
                 onSelect={(profile) => { upsertKnownProfile(profile); selectPrimaryArtistForAllTracks(profile); }}
                 onRemove={() => undefined}
               />
               </div>
             </div>
-            {primaryArtistIssue && (tracks[0]?.primaryArtistIds.length ?? 0) > 0 ? <p role="alert" className="mt-3 text-sm" style={{ color: "var(--danger)" }}>{primaryArtistIssue.message}</p> : null}
+            {primaryArtistIssue && (releaseArtistIds.length ?? 0) > 0 ? <p role="alert" className="mt-3 text-sm" style={{ color: "var(--danger)" }}>{primaryArtistIssue.message}</p> : null}
             {artistSaveError ? <p id="artist-save-error" className="release-artist-save-error" role="alert">{customerMessage(artistSaveError)}</p> : null}
             {primaryArtistComplete ? <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} aria-busy={stepTransitioning} aria-describedby={artistSaveError ? "artist-save-error" : undefined} aria-label="Continue to upload music" className="release-artist-next">{stepTransitioning ? <><LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> Saving artists...</> : <>Continue <ArrowRight size={20} aria-hidden="true" /></>}</button> : null}
           </section>) : null}

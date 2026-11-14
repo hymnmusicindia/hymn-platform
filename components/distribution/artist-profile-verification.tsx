@@ -9,10 +9,15 @@ import styles from './artist-profile-verification.module.css';
 type Artist = { artistCardId: number; name: string; fingerprint: string; spotifyUrl: string | null; appleUrl: string | null; youtubeUrl: string | null; instagramUrl: string | null };
 type Entry = Artist & { openedSpotifyUrl: string; approved: boolean; editing: Partial<Record<ArtistProfileLinkField, boolean>> };
 async function api(body: unknown) {
-  const response = await fetch('/api/distribution/artist-verification', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+  const response = await fetch('/api/distribution/artist-verification', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(45_000) });
   const data = await response.json();
   if (!response.ok) throw Error(data.error || 'Could not check artist profiles. Please retry.');
   return data as { artists: Artist[] };
+  } catch (error) {
+    if (error instanceof DOMException && ['TimeoutError', 'AbortError'].includes(error.name)) throw Error('Artist profile verification timed out. Retry this check before submitting.');
+    throw error;
+  }
 }
 
 export function useArtistProfileVerification() {
