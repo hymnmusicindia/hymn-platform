@@ -28,6 +28,7 @@ let session = { sub: 1 };
 let failNextRead = false;
 const mocks = {
   '@/lib/release-artist-verification': {assertReleaseArtistVerification:async()=>{},selectedReleaseArtistIds:()=>[],ArtistVerificationError:class extends Error{}},
+  '@/lib/correction-social-policy': { assertCorrectionSocialSelection: () => {} },
   '@/lib/policy-agreement': {requireCurrentPolicyAcceptance:async()=>null},
   'node:crypto': crypto,
   'next/server': { NextResponse: { json: (data, init) => new Response(JSON.stringify(data), init) } },

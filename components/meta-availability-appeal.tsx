@@ -1,15 +1,16 @@
 'use client';
+import { metaAppealUsed } from '@/lib/correction-social-policy';
 import { useState, type FormEvent } from 'react';
 import type { Release } from '@/lib/types';
 import { activeAmendmentStatuses, amendmentStatusLabel } from '@/lib/release-amendment-presentation';
 
-type AppealRequest = { id: number; requestType: string; status: string };
+type AppealRequest = { id: number; requestType: string; status: string; requestedChanges?: unknown };
 export function MetaAvailabilityAppeal({ release, requests, onCreated }: { release: Release; requests: AppealRequest[]; onCreated: (request: any) => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   if (!['live', 'partially_live'].includes(release.status)) return null;
   const active = requests.find(request => request.requestType === 'metadata_update' && activeAmendmentStatuses.includes(request.status));
-  const eligible = release.tracks?.filter(track => track.isrc) ?? [];
+  const eligible = release.tracks?.filter(track => track.isrc && !metaAppealUsed(requests, track.id)) ?? [];
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy || active) return;
     const form = event.currentTarget, fields = new FormData(form);
@@ -28,7 +29,7 @@ export function MetaAvailabilityAppeal({ release, requests, onCreated }: { relea
     <p className="mt-2 text-sm" style={{color:'var(--text-muted)'}}>Is your track live on Spotify but missing from Instagram or Facebook music? Submit a tracked appeal to HYMN. Choose one affected track per request.</p>
     <p className="mt-3 text-sm">A previous rejection such as NO CONTENT ID still requires review. An appeal does not override eligibility rules or guarantee delivery.</p>
     {active ? <p role="status" className="mt-4 text-sm font-semibold">Request #{active.id}: {amendmentStatusLabel(active.status)}. Follow or respond to your existing request in Request history below before submitting another.</p> : null}
-    {!release.upcCode || !eligible.length ? <p className="mt-4 text-sm">HYMN must confirm your release UPC and track ISRC before you can appeal.</p> : null}
+    {!release.upcCode || !eligible.length ? <p className="mt-4 text-sm">An appeal needs a confirmed UPC and ISRC and an unused allowance. If this recording already used its appeal, contact HYMN support about the existing case.</p> : null}
     <form onSubmit={submit} className="mt-5"><fieldset disabled={busy || Boolean(active) || !release.upcCode || !eligible.length} className="grid min-w-0 gap-4 sm:grid-cols-2">
       <label className="grid min-w-0 gap-2 text-sm">Affected track<select className="field" name="trackId" required>{eligible.map(track => <option key={track.id} value={track.id}>{track.trackNumber}. {track.trackTitle} - {track.isrc}</option>)}</select></label>
       <label className="grid min-w-0 gap-2 text-sm">Live Spotify track link<input className="field" type="url" name="spotifyTrackUrl" required placeholder="https://open.spotify.com/track/..." /></label>

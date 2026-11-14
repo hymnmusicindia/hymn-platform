@@ -1,3 +1,4 @@
+import { metaAppealUsed } from "./correction-social-policy";
 import { enqueueAmendmentUpdate, amendmentTransactionOptions } from './release-amendment-notifications';
 import { applyCompletedWizardAmendment } from './release-amendment-fulfillment';
 import { validateReleaseCorrection, applyCompletedSupportCorrection } from './release-support-corrections';
@@ -55,6 +56,14 @@ export async function createReleaseChangeRequest(input: { releaseId: number; use
     }
     return existing;
   }
+    if (support && correctionSchema.parse(support).action === 'request_meta_not_live') {
+      const correction = correctionSchema.parse(support);
+      const changes = input.requestedChanges as Record<string, any>;
+      const track = await tx.track.findFirst({ where: { id: correction.trackId, releaseId: release.id } });
+      if (!['LIVE','PARTIALLY_LIVE'].includes(release.status) || !track?.isrc || track.isrc !== changes.locked.isrc || release.upc !== changes.locked.upc) throw Error('The live recording changed. Refresh before appealing.');
+      const prior = await tx.releaseChangeRequest.findMany({ where: { releaseId: release.id, requestType: 'metadata_update' }, select: { requestedChanges: true } });
+      if (metaAppealUsed(prior, correction.trackId)) throw Error('This track has already used its Instagram / Facebook availability appeal. Contact HYMN support for the existing case.');
+    }
     const request = await tx.releaseChangeRequest.create({ data: { releaseId: input.releaseId, requestedByUserId: input.userId, requestType: input.requestType, reason: input.reason.trim(), desiredEffectiveAt: input.desiredEffectiveAt, requestedChanges: input.requestedChanges } });
     const event = await tx.releaseChangeRequestEvent.create({ data: { requestId: request.id, actorType: "user", actorId: input.userId, previousStatus: null, newStatus: "submitted", note: input.reason.trim(), metadata: { desiredEffectiveAt: input.desiredEffectiveAt?.toISOString() ?? null, requestedChanges: input.requestedChanges ?? null } } });
     await enqueueAmendmentUpdate(tx, request.id, event.id);

@@ -204,3 +204,61 @@ html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-focus
 @media(max-width:767px) {
   html body .workflow.workflow.workflow.workflow.entrySheet { padding:24px 16px!important; }
 }
+
+/* Entry is a centered composition, with document scrolling retained on short screens. */
+html body .workflow.workflow.workflow.workflow.entrySheet:has(:global(.release-artist-stage)) :global(.release-workflow-content) { min-height:calc(100svh - 238px)!important; justify-content:center; }
+html body :is(:global(.hymn-portal-root),:global(.hymn-landing)):has(.entrySheet) { min-height:calc(100svh - var(--release-site-header-height,64px))!important; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-editor-panels) { flex:1!important; justify-content:center; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-artist-stage) { display:flex!important; flex-direction:column; justify-content:center; align-items:center; gap:28px; text-align:center; padding:24px 0!important; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-focused-intro) { text-align:center; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-focused-intro) h2 { max-width:24ch; margin-inline:auto; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-focused-card) { width:auto; padding:0!important; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-artist-avatar-picker) { justify-content:center; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-selected-artists) { justify-content:center; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-selected-artist) { width:112px!important; height:112px!important; padding:0!important; border:0!important; border-radius:50%!important; background:transparent!important; box-shadow:none!important; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-selected-artist) img { width:100%!important; height:100%!important; object-fit:cover; border-radius:50%; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-artist-next) { align-self:center; justify-self:center; }
+html body .workflow.workflow.workflow.workflow.entrySheet :is(:global(.release-audio-stage),:global(.release-onboarding-assets),:global(.release-onboarding-audio)) { border:0!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; padding:0!important; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-audio-stage) { gap:28px; padding-block:28px!important; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-onboarding-header) { display:flex!important; flex-direction:column; align-items:center; gap:12px; text-align:center; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-onboarding-header) :global(.release-focused-intro) { width:100%; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-onboarding-header) p { width:100%; max-width:none; margin:10px auto 0; text-align:center; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-music-format) { align-self:center; font-size:12px; color:var(--text-muted); }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-onboarding-assets) { max-width:760px!important; margin-inline:auto; width:100%; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-batch-upload) { min-height:100px!important; padding:20px 24px!important; border-radius:12px!important; background:transparent!important; }
+html body .workflow.workflow.workflow.workflow.entrySheet .entryActions { justify-content:center; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-trigger),
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-trigger):hover { transform:none!important; overflow:visible!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-trigger)>div:first-child { padding-inline:4px; overflow:visible; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-trigger)>div:first-child::before { min-width:2ch; font-variant-numeric:tabular-nums; line-height:1.5; }
+html body .workflow.workflow.workflow.workflow :global(.upload-dropzone-icon-only) { width:100%!important; max-width:none!important; height:auto!important; min-height:76px!important; aspect-ratio:auto!important; padding:12px 18px!important; border-radius:12px!important; }
+html body .workflow.workflow.workflow.workflow :global(.upload-dropzone-icon-only)>div:first-of-type { min-height:48px!important; display:flex; flex-direction:row; justify-content:center; gap:14px; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.artwork-requirements) { padding:0!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-timing-selector) { display:grid; grid-template-columns:1fr; border:0; gap:0; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-timing-option) { border:0!important; border-bottom:1px solid var(--border)!important; border-radius:0!important; padding:18px 4px!important; background:transparent!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-timing-option)[aria-pressed=true] { border-bottom-color:var(--text)!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-timing-option) p { max-width:48ch; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-date-field) { margin-top:20px; padding:0!important; border:0!important; border-radius:0!important; background:transparent!important; }
+:global(html:not([data-theme="light"])) .workflow input[type="date"] { color-scheme:dark; }
+html body .workflow.workflow.workflow.workflow .deliveryTerritories { grid-column:auto; margin:20px 0 0; }
+html body .workflow.workflow.workflow.workflow .deliveryTerritories > div > div { padding:0!important; border:0!important; background:transparent!important; }
+html body .workflow.workflow.workflow.workflow :global(.territory-trigger) { min-height:64px; padding:12px!important; border-radius:12px!important; }
+@media(min-width:768px) {
+  html body .workflow.workflow.workflow.workflow :global(.release-artwork-stage) { grid-template-columns:240px minmax(0,1fr); align-items:start; }
+  html body .workflow.workflow.workflow.workflow :global(.artwork-requirements-header) { min-height:48px; height:48px; box-sizing:border-box; padding:0 0 16px!important; }
+  html body .workflow.workflow.workflow.workflow :global(.artwork-requirements-body) { padding-top:0!important; }
+  html body .workflow.workflow.workflow.workflow :global(.artwork-requirements-body)>:global(.grid) { height:192px; grid-template-rows:repeat(2,1fr); gap:0 16px; }
+  html body .workflow.workflow.workflow.workflow :global(.artwork-requirement-item) { display:flex; align-items:center; padding:12px 0; }
+  html body .workflow.workflow.workflow.workflow :global(.release-artwork-stage) button:is([aria-label="Replace cover artwork"],[aria-label="Upload cover artwork"]) { width:240px!important; max-width:240px!important; height:240px!important; }
+}
+@media(max-width:767px) {
+  html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-selected-artist) { width:96px!important; height:96px!important; }
+  html body .workflow.workflow.workflow.workflow.entrySheet:has(:global(.release-artist-stage)) :global(.release-workflow-content) { min-height:calc(100svh - 230px)!important; }
+}
+@media(max-height:700px) {
+  html body .workflow.workflow.workflow.workflow.entrySheet:has(:global(.release-artist-stage)) { padding:16px!important; }
+  html body .workflow.workflow.workflow.workflow.entrySheet:has(:global(.release-artist-stage)) :global(.release-workflow-content) { min-height:0!important; }
+  html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-artist-stage) { gap:16px; padding:12px 0!important; }
+  html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-focused-intro) h2 { font-size:28px; }
+  html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-selected-artist) { width:80px!important; height:80px!important; }
+}

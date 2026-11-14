@@ -1,3 +1,4 @@
+import { assertCorrectionSocialSelection } from "@/lib/correction-social-policy";
 import { assertReleaseArtistVerification, ArtistVerificationError, selectedReleaseArtistIds } from '@/lib/release-artist-verification';
 import { requireCurrentPolicyAcceptance } from "@/lib/policy-agreement";
 import { releaseSaveFailure } from "@/lib/release-track-save";
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     if (!existingRelease || existingRelease.userId !== session.sub) {
       return NextResponse.json({ error: "Release not found." }, { status: 404 });
     }
+    assertCorrectionSocialSelection(existingRelease, parsed.metadata);
     if (matchesReceivedCorrection(existingRelease, submissionKey)) return NextResponse.json({ release: existingRelease, alreadyReceived: true });
     const existingStatus = String(existingRelease.status ?? "").trim().toLowerCase();
     const existingPaymentStatus = String(existingRelease.paymentStatus ?? "").trim().toLowerCase();

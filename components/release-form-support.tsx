@@ -29,11 +29,13 @@ function ModalShell({
   open,
   onClose,
   maxWidthClass,
+  title = "Release settings",
   children
 }: {
   open: boolean;
   onClose: () => void;
   maxWidthClass: string;
+  title?: string;
   children: ReactNode;
 }) {
   const dialogRef = useAccessibleDialog(open, onClose);
@@ -47,7 +49,7 @@ function ModalShell({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Release settings" className={clsx("w-full", maxWidthClass)} onMouseDown={(event) => event.stopPropagation()}>
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={clsx("w-full", maxWidthClass)} onMouseDown={(event) => event.stopPropagation()}>
         {children}
       </section>
     </div></CustomerOverlay>
@@ -69,15 +71,10 @@ export function CountrySelector({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const regions = [
-    { name: "South Asia", countries: ["India", "Sri Lanka", "Pakistan", "Bangladesh"] },
-    { name: "Americas", countries: ["United States", "Canada", "Brazil", "Mexico"] },
-    { name: "Europe", countries: ["United Kingdom", "Germany", "France", "Netherlands"] },
-    { name: "Asia Pacific", countries: ["Australia", "Japan", "South Korea", "Singapore"] },
-    { name: "Middle East & Africa", countries: ["United Arab Emirates", "Saudi Arabia", "South Africa", "Nigeria"] }
-  ];
-  const normalizedQuery = query.trim().toLowerCase();
-  const visibleRegions = regions.map((region) => ({ ...region, countries: region.countries.filter((country) => country.toLowerCase().includes(normalizedQuery)) })).filter((region) => region.countries.length);
+  const countryCodes = "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split(" ");
+  const displayNames = new Intl.DisplayNames(['en'], { type: 'region' });
+  const countries = [...new Set([...countryCodes.map(code => displayNames.of(code) || code), ...selected])].sort((a,b) => a.localeCompare(b));
+  const visible = countries.filter(country => country.toLowerCase().includes(query.trim().toLowerCase()));
 
   function toggle(country: string) {
     onChange(selected.includes(country) ? selected.filter((item) => item !== country) : [...selected, country]);
@@ -88,31 +85,25 @@ export function CountrySelector({
       <button
         ref={registerField}
         type="button"
-        className={clsx("flex min-h-[64px] w-full items-center justify-between gap-4 rounded-2xl border px-4 text-left transition hover:-translate-y-0.5", showError ? "field-invalid" : "", shaking ? "field-shake" : "")}
+        className={clsx("territory-trigger flex min-h-[64px] w-full items-center justify-between gap-4 rounded-2xl border px-4 text-left transition hover:-translate-y-0.5", showError ? "field-invalid" : "", shaking ? "field-shake" : "")}
         style={{ borderColor: open || selected.length ? "var(--accent)" : "var(--border)", background: open || selected.length ? "var(--accent-soft)" : "var(--card)" }}
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
+        onClick={() => { setQuery(""); setOpen(true); }}
+        aria-haspopup="dialog" aria-expanded={open}
       >
         <span className="flex min-w-0 items-center gap-3"><span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--accent)" }}><Globe2 className="h-5 w-5" /></span><span className="min-w-0"><strong className="block text-sm" style={{ color: "var(--text)" }}>{selected.length === 0 ? "Worldwide delivery" : `${selected.length} countr${selected.length === 1 ? "y" : "ies"} restricted`}</strong><span className="mt-0.5 block truncate text-xs" style={{ color: "var(--text-muted)" }}>{selected.length === 0 ? "No country restrictions applied" : selected.join(", ")}</span></span></span>
         <span className="flex shrink-0 items-center gap-2 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>{open ? "Done" : "Choose"}<ChevronDown className={clsx("h-4 w-4 transition", open && "rotate-180")} /></span>
       </button>
-      {selected.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {selected.map((country) => (
-            <button key={country} type="button" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition hover:-translate-y-0.5" style={{ borderColor: "var(--accent)", background: "var(--accent-soft)", color: "var(--text)" }} onClick={() => toggle(country)} aria-label={`Remove ${country} from restricted countries`}>{country}<X className="h-3.5 w-3.5" /></button>
-          ))}
-          <button type="button" onClick={() => onChange([])} className="px-2 py-1 text-xs font-semibold" style={{ color: "var(--text-soft)" }}>Clear all</button>
-        </div>
-      ) : null}
-      {open ? (
-        <div className="mt-3 w-full overflow-hidden rounded-[1.4rem] border shadow-xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
-          <div className="border-b p-3" style={{ borderColor: "var(--border)" }}><label className="relative block"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-soft)" }} /><input className="field pl-10" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by country name" autoFocus /></label></div>
-          <div className="max-h-80 overflow-y-auto overscroll-contain p-3 sm:p-4">
-            {visibleRegions.map((region) => <section key={region.name} className="mb-5 last:mb-0"><div className="mb-2 flex items-center justify-between"><h4 className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>{region.name}</h4><span className="text-[11px]" style={{ color: "var(--text-soft)" }}>{region.countries.filter((country) => selected.includes(country)).length} selected</span></div><div className="grid gap-2 sm:grid-cols-2">{region.countries.map((country) => { const active = selected.includes(country); return <button key={country} type="button" aria-pressed={active} onClick={() => toggle(country)} className="flex min-h-11 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm transition hover:-translate-y-0.5" style={active ? { borderColor: "var(--accent)", background: "var(--accent-soft)", color: "var(--text)" } : { borderColor: "var(--border)", background: "var(--card)", color: "var(--text-muted)" }}><span>{country}</span><span className="inline-flex h-5 w-5 items-center justify-center rounded-full border" style={{ borderColor: active ? "var(--accent)" : "var(--border)", background: active ? "var(--accent)" : "transparent", color: active ? "var(--bg)" : "transparent" }}><Check className="h-3.5 w-3.5" /></span></button>; })}</div></section>)}
-            {!visibleRegions.length ? <div className="py-8 text-center"><Globe2 className="mx-auto h-7 w-7" style={{ color: "var(--text-soft)" }} /><p className="mt-3 text-sm font-semibold">No countries found</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Try a different search term.</p></div> : null}
+      <ModalShell open={open} onClose={() => setOpen(false)} maxWidthClass="max-w-xl" title="Delivery countries">
+        <div className="territory-dialog">
+          <header><div><h2>Delivery countries</h2><p>Deliver worldwide, or choose countries to exclude.</p></div><button type="button" onClick={() => setOpen(false)} aria-label="Close delivery countries"><X size={20}/></button></header>
+          <label className="territory-search"><Search size={18}/><input type="search" aria-label="Search countries" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search countries" /></label>
+          <div className="territory-country-list">
+            {visible.map(country => <label key={country}><span>{country}</span><input type="checkbox" aria-label={`Restrict ${country}`} checked={selected.includes(country)} onChange={() => toggle(country)}/></label>)}
+            {!visible.length ? <p role="status">No countries found. Try another name.</p> : null}
           </div>
+          <footer><span>{selected.length ? `${selected.length} excluded` : 'Worldwide delivery'}</span><button type="button" onClick={() => onChange([])}>Clear restrictions</button><button type="button" onClick={() => setOpen(false)}>Done</button></footer>
         </div>
-      ) : null}
+      </ModalShell>
     </div>
   );
 }

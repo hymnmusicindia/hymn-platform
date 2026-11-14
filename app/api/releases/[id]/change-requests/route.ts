@@ -14,7 +14,9 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
   const owned = await prisma.release.count({ where: { id: releaseId, userId: user.user.id } });
   if (!owned) return NextResponse.json({ error: "Release not found." }, { status: 404 });
   const requests = await prisma.releaseChangeRequest.findMany({ where: { releaseId }, orderBy: { submittedAt: "desc" }, take: 100, include: { events: { orderBy: { createdAt: "asc" }, select: { id: true, actorType: true, previousStatus: true, newStatus: true, note: true, createdAt: true } } } });
-  return NextResponse.json({ requests: requests.map(({ providerReference: _reference, reviewedByAdminId: _reviewer, ...item }) => { void _reference; void _reviewer; return item.requestType==='distribution_service'?customerServiceRequest(item):item; }) },{headers:{'Cache-Control':'private, no-store'}});
+  const appeals = await prisma.releaseChangeRequest.findMany({ where: { releaseId, requestedChanges: { path: ['supportCorrection', 'action'], equals: 'request_meta_not_live' } }, select: { requestedChanges: true } });
+  const metaAppealedTrackIds = [...new Set(appeals.map(item => (item.requestedChanges as {supportCorrection?:{trackId?:number}} | null)?.supportCorrection?.trackId).filter((id): id is number => Number.isSafeInteger(id)))];
+  return NextResponse.json({ metaAppealedTrackIds, requests: requests.map(({ providerReference: _reference, reviewedByAdminId: _reviewer, ...item }) => { void _reference; void _reviewer; return item.requestType==='distribution_service'?customerServiceRequest(item):item; }) },{headers:{'Cache-Control':'private, no-store'}});
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {

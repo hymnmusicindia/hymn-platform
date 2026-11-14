@@ -21,3 +21,9 @@
 .note { margin:12px 8px 0; color:var(--text-muted); font-size:11px; line-height:1.6; }
 @media(max-width:479px) { .grid { grid-template-columns:1fr; } }
 @media(prefers-reduced-motion:reduce) { .row { transition:none; } }
+
+.logo img { width:24px; height:24px; }
+.logo[data-brand="amazon"] { width:32px; }
+.logo[data-brand="amazon"] img { width:32px; }
+:global(html:not([data-theme="light"])) .logo[data-brand="snapchat"] img { filter:invert(1); }
+.logo[data-brand="tiktok"] { background:#fff; border-radius:50%; padding:3px; }

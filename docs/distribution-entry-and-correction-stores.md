@@ -1,0 +1,13 @@
+# Distribution entry and correction stores
+
+The artist entry screen centers larger circular profile images without a surrounding card. Its layout accounts for site and section navigation so normal desktop/mobile viewports fit without scrolling; short displays use smaller spacing and images, with document scrolling retained if needed for accessibility. The music entry uses one upload target. Track uploads are lean rectangles and track-number hover clipping is removed. Artwork matches the requirements header and lower divider on side-by-side layouts. Timing uses quieter selection rows and a clear date field.
+
+Territory selection sits below the social store group rather than a separate full-width row. It opens a keyboard-accessible dialog with a searchable ISO country list, exclusions, clear action and Done. Existing exclusions survive closing and reopening; saved `Worldwide excluding …` values resume without turning the prefix into a country name. The review summary shows the same exclusions as the submitted payload.
+
+Rejected, changes-requested and resubmitted releases cannot include social destinations or YouTube Content ID during correction submission. The client removes stale selections and disables the controls. The update API and the atomic paid-correction transaction independently enforce the restriction, including crafted requests. Normal music stores remain available. Live-release amendments are a separate workflow.
+
+The notice distinguishes the existing Instagram/Facebook availability appeal from support requests for TikTok, Snapchat or fingerprinting. One Meta appeal is allowed per track, after the recording is live on Spotify and has confirmed UPC/ISRC and Spotify evidence. A release lock protects the allowance check and creation. Exact retries of an active request return the existing receipt; completed/rejected/failed appeals consume the allowance. Review holds and partner eligibility are not bypassed. The support link opens an accessible dialog with release context and contact links.
+
+No schema migration is needed. No customer release or provider submission is automatically changed by this deployment.
+
+Verification: `scripts/verify-distribution-refinements-browser.cjs` exercises both themes at 320/390/768/1440px, centered entry and short viewport fitting, artwork geometry, timing, country search/selection/clear, real logo loading, hover behavior, lean upload targets, correction store locking, support dialog and review/consent navigation. `scripts/verify-correction-social-policy.cjs` covers server selection guards, per-track appeal limits, locking, retry receipts and ownership with an isolated transaction harness. Existing correction resubmission tests remain applicable.

@@ -1,6 +1,8 @@
 "use client";
 import {subscriptionPaymentFailureMessage} from "@/lib/subscription-recurrence";
 import { DistributionReferenceBrowser } from "./distribution-insights-panel";
+import { correctionSocialRestricted } from "@/lib/correction-social-policy";
+import { CorrectionStoreNotice } from "./distribution/correction-store-notice";
 import { StoreChoice } from "./distribution/store-choice";
 import { IncludedStores } from "./distribution/included-stores";
 import { ReleaseAmendmentConfirmation } from './release-amendment-confirmation';
@@ -547,7 +549,8 @@ function createInitialReleaseDraft(
     selectedCountries:
       territory === "Selected countries"
         ? (initialRelease.territory
-            ?.split(",")
+            ?.replace(/^Worldwide excluding\s+/i, "")
+            .split(",")
             .map((country) => country.trim())
             .filter(Boolean) ?? [])
         : [],
@@ -1172,6 +1175,7 @@ export function ReleaseForm({
     url.searchParams.set("stage", String(step));
     window.history.replaceState(window.history.state, "", url);
   }, [draftReleaseId, step]);
+  const socialCorrectionLocked = !amendmentMode && correctionSocialRestricted(initialRelease ?? {});
   const [socialConsentAccepted, setSocialConsentAccepted] = useState(
     () =>
       initialRelease?.monetisationAccepted ??
@@ -1246,10 +1250,11 @@ export function ReleaseForm({
     setYoutubeContentIdChannelUrl("");
   }, [contentIdEligibility.eligible, youtubeContentIdEnabled]);
   useEffect(() => {
-    if (contentIdEligibility.eligible) return;
+    if (contentIdEligibility.eligible && !socialCorrectionLocked) return;
+    setYoutubeContentIdEnabled(false);
     setSocialConsentAccepted(false);
     setPlatforms((current) => current.filter((item) => !socialPlatforms.some((platform) => platform.name === item)));
-  }, [contentIdEligibility.eligible]);
+  }, [contentIdEligibility.eligible, socialCorrectionLocked]);
   const [tracks, setTracks] = useState<TrackDraft[]>(() =>
     createTracksFromRelease(initialRelease, audioLibraryPrefill),
   );
@@ -1930,7 +1935,7 @@ export function ReleaseForm({
 
   function togglePlatform(platform: string, type: "store" | "social") {
     const active = platforms.includes(platform);
-    if (type === "social" && !socialConsentAccepted) {
+    if (type === "social" && (socialCorrectionLocked || !socialConsentAccepted)) {
       return;
     }
     setPlatforms((current) => {
@@ -4785,12 +4790,12 @@ export function ReleaseForm({
                       className="mt-2 text-xs leading-5"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      Earliest available<br /><strong style={{ color: "var(--text)" }}>{minimumScheduledDate}</strong>
+                      Earliest available<br /><strong style={{ color: "var(--text)" }}>{new Date(`${minimumScheduledDate}T12:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</strong>
                     </p>
                   </button>
                 </div>
                 {release.releaseTiming === "schedule_release" ? (
-                  <div className="mt-4 rounded-xl border p-4" style={{ borderColor: "var(--accent)", background: "var(--accent-soft)" }}>
+                  <div className="release-date-field mt-4">
                     {scheduledDateWasMoved ? <div className="mb-4 flex items-start gap-2 rounded-lg border p-3 text-sm leading-5" role="alert" style={{ borderColor: "var(--warning)", background: "var(--warning-soft)", color: "var(--text-muted)" }}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--warning)" }} /><p>Your previous release date is now too close for delivery. We moved it to the earliest available date, <strong style={{ color: "var(--text)" }}>{minimumScheduledDate}</strong>. Choose a later date if that works better.</p></div> : null}
                     <label
                       className="mb-2 block text-sm font-medium"
@@ -4821,7 +4826,7 @@ export function ReleaseForm({
                   </div>
                 ) : null}
                 <p className="mt-4 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
-                  Estimated HYMN review: {queue?.averageApprovalTime || "24-48 hours"}. Delivery begins after approval.
+                  Estimated HYMN review: {queue?.averageApprovalTime && !/not available|n\/a/i.test(queue.averageApprovalTime) ? queue.averageApprovalTime : "24–48 hours"}. Delivery begins after approval.
                 </p>
                 </div>
               </div>
@@ -4941,7 +4946,7 @@ export function ReleaseForm({
                     </div>
                     <button
                       type="button"
-                      disabled={!contentIdEligibility.eligible}
+                      disabled={socialCorrectionLocked || !contentIdEligibility.eligible}
                       className="group inline-flex min-h-10 items-center gap-3 border-0 bg-transparent px-0 py-2 text-left text-xs font-semibold transition"
                       style={{ color: socialConsentAccepted && contentIdEligibility.eligible ? "var(--text)" : "var(--text-muted)" }}
                       onClick={() => {
@@ -5001,12 +5006,13 @@ export function ReleaseForm({
                     {socialPlatforms.map((platform) => (
                       <StoreChoice key={platform.name} name={platform.name}
                         checked={platforms.includes(platform.name)}
-                        disabled={!socialConsentAccepted || !contentIdEligibility.eligible}
+                        disabled={socialCorrectionLocked || !socialConsentAccepted || !contentIdEligibility.eligible}
                         onChange={() => togglePlatform(platform.name, "social")} />
                     ))}
                   </div>
                 </div>
-                </div><div className={layoutStyles.deliveryTerritories}><div>
+                  {socialCorrectionLocked && initialRelease ? <CorrectionStoreNotice releaseId={initialRelease.id}/> : null}
+                  <div className={layoutStyles.deliveryTerritories}><div>
                   <div
                     ref={
                       registerField("country-selector") as (
@@ -5023,7 +5029,7 @@ export function ReleaseForm({
                       className="mb-2 block text-sm font-medium"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      Restricted Countries
+                      Delivery territories
                     </label>
                     <CountrySelector
                       selected={release.selectedCountries}
@@ -5048,7 +5054,8 @@ export function ReleaseForm({
                       }
                     />
                   </div>
-                </div></div>
+                  </div></div>
+                </div>
             </div>
           </section>
         </section>) : null}</div>
@@ -5124,7 +5131,7 @@ export function ReleaseForm({
             <div className="record-review-details">{[
               {title:"Release details",stage:2,rows:[["Genre",release.primaryGenre],["Subgenre",release.secondaryGenre],["Language",release.language],["Mood",release.mood]]},
               {title:"Rights & ownership",stage:5,rows:[["Copyright",release.copyrightOwner],["Recording rights",release.publishingRights],["Content ownership",release.contentType],["Rights proof",release.licenseReceiptUrl ? "Attached" : "Not attached"]]},
-              {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],...(contentIdAccessStatus === "approved" && youtubeContentIdEnabled ? [["Existing Content ID access","Enabled"]] : []),["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
+              {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",territoryValue],...(contentIdAccessStatus === "approved" && youtubeContentIdEnabled ? [["Existing Content ID access","Enabled"]] : []),["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
             ].map(group => <section key={group.title}><header><h3>{group.title}</h3><button type="button" onClick={() => goToStep(group.stage)}>Edit →</button></header><dl>{group.rows.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl></section>)}</div>
             {validationIssues.length > 0 ? <section className="record-review-issues"><h3>A few details need your attention</h3>{validationIssues.map(issue => <button type="button" key={`${issue.key}-${issue.trackIndex}`} onClick={() => triggerFieldFocus(issue)}><span>{customerMessage(issue.message)}</span><span aria-hidden="true">→</span></button>)}</section> : <p className="record-review-ready"><CheckCircle2 size={18} /> All required release details are complete.</p>}
                   {isPaidReleaseResubmission ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">No additional payment</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your existing release entitlement covers these corrections. Submit the updated release for review.</p></section> : subscriptionCovered && youtubeContentIdAddOnAmount > 0 ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">Content ID access request</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your plan covers the release distribution. Pay ₹{youtubeContentIdAddOnAmount.toLocaleString("en-IN")} once for account-wide Content ID access; it remains off during HYMN’s review.</p><div className="payment-total mt-4 flex items-end justify-between border-t pt-4" style={{ borderColor: "var(--border)" }}><span className="font-semibold">Due today</span><span className="text-2xl font-semibold" style={{ color: "var(--accent)" }}>₹{distributionCheckoutAmount.toLocaleString("en-IN")}</span></div></section> : !subscriptionCovered ? <section className="payment-summary p-5 md:p-7">

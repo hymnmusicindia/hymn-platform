@@ -1,3 +1,4 @@
+import { assertCorrectionSocialSelection } from "./correction-social-policy";
 import mysql from "mysql2/promise";
 import { AdminStoreStatus, DistributionLog, DistributionQueueEntry, DistributionQueueLog, DistributionQueueStage, ReleaseAuditLog, DistributionOrder, DistributionQueueSummary, Release, ReleaseStatus, ReleaseTrack, StoreStatus, StoreStatusHistoryEntry, Subscription, SubscriptionPlan, UserStoreStatus } from "@/lib/types";
 import { getTrackPricingQuote, getUgcAddonPrice, getYoutubeContentIdAddonPrice } from "@/lib/distribution-pricing";
@@ -1533,6 +1534,7 @@ export async function updatePaidDistributionRelease(input: {
           ? await tx.distributionOrder.findFirst({ where: { razorpayOrderId: input.verifiedOrderId, userId: input.userId, paymentStatus: "paid", fulfilledAt: { not: null }, OR: [{ releaseId: input.releaseId }, { releaseId: null }] } })
           : null;
         if (saved.userId !== input.userId || !["DRAFT", "AWAITING_PAYMENT", "CHANGES_REQUESTED", "REJECTED", "RESUBMITTED"].includes(saved.status) || (saved.paymentStatus !== "paid" && !verifiedCheckout)) throw new Error("This release is no longer open for paid corrections.");
+        assertCorrectionSocialSelection(saved, input.metadata);
         const providerCorrection = saved.status === "CHANGES_REQUESTED" && Boolean(saved.direNoteStatus);
         if (providerCorrection) {
           const originalTrackIds = saved.tracks.map(track => track.id);

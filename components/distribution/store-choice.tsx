@@ -21,11 +21,13 @@ export function StoreChoice({name, checked, disabled = false, onChange, included
   const [failed,setFailed]=useState(false);
   const asset=sources.assets.find(item=>item.key===keys[name]);
   const file=asset && 'file' in asset ? asset.file : undefined;
+  const refined: Record<string,string> = { 'Apple Music':'/assets/store-logos/symbol-apple.png', 'Amazon Music':'/assets/store-logos/amazon-music.svg', TikTok:'/assets/store-logos/tiktok-color.svg', Snapchat:'/assets/store-logos/snapchat-symbol.svg' };
+  const source=refined[name] ?? (file ? `/assets/store-logos/original/${file}` : undefined);
   const label=name==='150+ More Stores'?'Other supported stores':name;
   const Tag = included ? 'div' : 'label';
   return <Tag className={styles.row} data-included={included || undefined} data-disabled={disabled || undefined}>
     <span className={styles.logo} data-brand={keys[name]} aria-hidden="true">
-      {file && !failed ? <img src={`/assets/store-logos/original/${file}`} alt="" width={24} height={24} loading="lazy" onError={()=>setFailed(true)} /> : <Music2 size={19}/>}
+      {source && !failed ? <img src={source} alt="" width={24} height={24} loading="lazy" onError={()=>setFailed(true)} /> : <Music2 size={19}/>}
     </span>
     <span className={styles.name}>{label}</span>
     {!included ? <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} aria-label={label}/> : null}
