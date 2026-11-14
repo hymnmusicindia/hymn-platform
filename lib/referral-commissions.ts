@@ -3,10 +3,11 @@ import {referralEffectiveAt} from "./referral-consent-policy";
 import {lockReferralGraph} from "./referrals";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { commissionMinor, remainingCommissionMinor, REFERRAL_COMMISSION_RATES, REFERRAL_HOLD_DAYS, REFERRAL_MINIMUM_PAYOUT_MINOR, REFERRAL_NETWORK_RATES_BPS, type ReferralCommissionCategory } from "@/lib/referral-commission-policy";
+import { commissionMinor, remainingCommissionMinor, REFERRAL_COMMISSION_RATES, REFERRAL_HOLD_DAYS, REFERRAL_NETWORK_RATES_BPS, type ReferralCommissionCategory } from "@/lib/referral-commission-policy";
 import { netNetworkActive, netReferralAmounts, REFERRAL_NET_NETWORK_RATES_BPS, REFERRAL_NET_TOTAL_CAP_BPS } from '@/lib/referral-commission-policy';
 import { paymentRefundState, paymentDisputeState } from '@/lib/payment-refund-state';
 import { proportionalRefundMinor } from '@/lib/acquisition-revenue';
+import { partnershipMinimumPayout } from './partnerships';
 
 type Tx = Prisma.TransactionClient;
 export type CommissionSource = "distribution_order" | "checkout_order" | "subscription_payment" | "studio_payment";
@@ -57,6 +58,10 @@ export async function accrueReferralCommission(tx: Tx, source: CommissionSource,
   const netPolicy = Boolean(employeeAttribution || (program.netRevenueEffectiveAt && purchasedAt >= program.netRevenueEffectiveAt));
   const referral = await tx.referral.findFirst({ where: { referredUserId: userId,...referralEffectiveAt(purchasedAt) }, include: { owner: true, referredUser: true } });
   if (!referral || referral.status === "REJECTED" || referral.userId === userId || purchasedAt < referral.createdAt || referral.owner.status !== "ACTIVE" || referral.referredUser?.status !== "ACTIVE") return;
+  const partnership=await tx.partnershipInvitation.findUnique({where:{userId:referral.userId}});
+  // Earlier purchases retain their existing programme rights, even if they
+  // reconcile after the partnership begins or ends.
+  if(partnership?.acceptedAt && partnership.endedAt && purchasedAt>=partnership.endedAt)return;
   // Staff invitations use the employee ledger, never a second personal referral reward.
   if(await tx.teamMember.count({where:{userId:referral.userId,status:'ACTIVE',joinedAt:{lte:purchasedAt}}}))return;
   let netEvidence = null;
@@ -225,7 +230,8 @@ export async function requestReferralPayout(userId: number) {
     if (await tx.referralCommissionPayout.findFirst({ where: { userId, status: "REQUESTED" } })) throw new Error("A referral payout is already pending.");
     await refreshDueForOwner(tx, userId);
     const amountMinor = await cashBalance(tx, userId);
-    if (amountMinor < REFERRAL_MINIMUM_PAYOUT_MINOR) throw new Error(`At least Rs ${REFERRAL_MINIMUM_PAYOUT_MINOR / 100} in cleared commission is required.`);
+    const minimum=await partnershipMinimumPayout(tx,userId);
+    if (amountMinor <= 0 || amountMinor < minimum) throw new Error(minimum ? `At least Rs ${minimum / 100} in cleared commission is required.` : "A positive cleared commission balance is required.");
     const credential = user.payoutCredential;
     const destination = { method: credential.method, legalName: credential.legalName, upiIdMasked: credential.upiIdMasked, upiIdEncrypted: credential.upiIdEncrypted, bankAccountMasked: credential.bankAccountMasked, bankAccountEncrypted: credential.bankAccountEncrypted, accountHolderName: credential.accountHolderName, ifscMasked: credential.ifscMasked, ifscEncrypted: credential.ifscEncrypted };
     const payout = await tx.referralCommissionPayout.create({ data: { userId, amountMinor, destination } });

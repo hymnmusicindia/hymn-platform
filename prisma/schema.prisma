@@ -147,6 +147,7 @@ enum StudioPaymentPurpose {
 }
 
 model User {
+  partnershipInvitation PartnershipInvitation?
   teamMemberships TeamMember[]
   clientCards TeamClient[]
   consultationRequests ConsultationRequest[]
@@ -4213,6 +4214,33 @@ model TeamWeeklyReport {
   member TeamMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
   @@unique([memberId, weekStart])
   @@map("team_weekly_reports")
+}
+
+model PartnershipInvitation {
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  id String @id @default(uuid())
+  email String
+  name String
+  company String
+  tokenHash String @unique @map("token_hash")
+  agreementVersion String @map("agreement_version")
+  agreementHash String @map("agreement_hash")
+  status String @default("INVITED")
+  expiresAt DateTime @map("expires_at")
+  acceptedAt DateTime? @map("accepted_at")
+  userId Int? @unique @map("user_id")
+  subscriptionExpiresAt DateTime? @map("subscription_expires_at")
+  endedAt DateTime? @map("ended_at")
+  minimumPayoutMinor Int @default(0) @map("minimum_payout_minor")
+  mailStatus String @default("WAITING") @map("mail_status")
+  mailLockedAt DateTime? @map("mail_locked_at")
+  mailSentAt DateTime? @map("mail_sent_at")
+  mailAttempts Int @default(0) @map("mail_attempts")
+  mailAvailableAt DateTime @default(now()) @map("mail_available_at")
+  mailError String? @map("mail_error")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([mailStatus, mailAvailableAt])
+  @@map("partnership_invitations")
 }
 
 model ReferralMailJob {

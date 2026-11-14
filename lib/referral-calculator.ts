@@ -1,5 +1,5 @@
 import { commissionMinor, netReferralAmounts, REFERRAL_COMMISSION_RATES, REFERRAL_NETWORK_RATES_BPS, REFERRAL_NET_NETWORK_RATES_BPS, type ReferralCommissionCategory } from './referral-commission-policy';
-export type CalculatorPolicy = { enabled: boolean; mode: 'net' | 'legacy'; rateBps: number; networkEnabled: boolean };
+export type CalculatorPolicy = { enabled: boolean; mode: 'net' | 'legacy'; rateBps: number; networkEnabled: boolean; minimumPayoutMinor?: number };
 export type CalculatorPurchase = { id: string; category: ReferralCommissionCategory; quantity: number; baseMinor: number };
 export function referralScenario(friends: number, branching: number, purchases: CalculatorPurchase[], policy: CalculatorPolicy) {
   if (!Number.isInteger(friends) || friends < 0 || friends > 1000 || !Number.isInteger(branching) || branching < 0 || branching > 5) throw Error('Invalid referral scenario.');

@@ -1,6 +1,7 @@
 import { cronHandler } from "@/lib/cron/runtime";
 export const GET = cronHandler("referral-reconciliation", runJob);
 import { deliverReferralMail } from "@/lib/referral-mail";
+import { deliverPartnershipMail } from "@/lib/partnership-mail";
 import {prisma} from '@/lib/prisma';
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -11,12 +12,15 @@ async function runJob(request: Request) {
   if(!process.env.CRON_SECRET || expected.length!==actual.length || !timingSafeEqual(expected,actual)) return NextResponse.json({error:"Unauthorized."},{status:401});
   try {
     const deadline = Date.now() + 45000;
+    const partnershipMail=await deliverPartnershipMail(Date.now()+12000);
     const [result, mail] = await Promise.allSettled([reconcileReferralQualifications(Date.now() + 20000), deliverReferralMail(deadline)]);
     if (result.status === "rejected" || mail.status === "rejected") return NextResponse.json({ error: "Some referral work needs a retry. Completed work is safe to replay." }, { status: 503 });
     const review=await prisma.referralMailJob.count({where:{status:'REVIEW'}});
     const senderBlocked=mail.value.deferred&&Boolean(await prisma.referralMailJob.count({where:{status:'PENDING'}}));
-    const success=!review&&!senderBlocked;
-    return NextResponse.json({ ...result.value, mail: mail.value,mailAttention:{review,senderBlocked},success },{status:success?200:503});
+    const partnershipReview=await prisma.partnershipInvitation.count({where:{mailStatus:"REVIEW"}});
+    const partnershipSenderBlocked=partnershipMail.deferred&&Boolean(await prisma.partnershipInvitation.count({where:{mailStatus:"PENDING"}}));
+    const success=!review&&!senderBlocked&&!partnershipReview&&!partnershipSenderBlocked;
+    return NextResponse.json({ ...result.value, mail: mail.value,partnershipMail,mailAttention:{review,senderBlocked,partnershipReview},success },{status:success?200:503});
   }
   catch { return NextResponse.json({error:"Referral reconciliation failed; safe to retry."},{status:503}); }
 }

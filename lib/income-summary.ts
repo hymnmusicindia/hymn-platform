@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { INCOME_MINIMUM_INR, WALLET_SOURCES, walletIncomeBalances } from "@/lib/income-policy";
+import { partnershipMinimumPayout } from "@/lib/partnerships";
 import { PAYOUT_CONFIG } from "@/lib/payout/config";
 import { clearedReferralMinor } from "@/lib/referral-commissions";
 import type { IncomeSource, IncomeSummary } from './income-explorer';
@@ -25,7 +26,7 @@ export async function getIncomeSummary(userId:number): Promise<IncomeSummary> {
   const referralHeld=referralPayouts.filter(row=>row.status==="REQUESTED").reduce((sum,row)=>sum+row.amountMinor/100,0);
   const earned=commissions.filter(row=>row.status!=="EXCLUDED").reduce((sum,row)=>sum+(row._sum.netMinor??0)/100,0);
   const curatorAvailable=reviews.filter(row=>row.payoutStatus==="HELD"&&["NOT_A_FIT","SHORTLISTED"].includes(row.status)&&row.reviewedAt&&row.reviewedAt.getTime()<Date.now()-7*86400000).reduce((sum,row)=>sum+row.amountMinor/100,0);
-  sources.push({key:"referral",label:"Referral commissions",earned,available:Math.max(0,cleared/100-referralPaid-referralHeld),held:Math.max(0,earned-cleared/100)+referralHeld,paid:referralPaid,minimum:INCOME_MINIMUM_INR.referral,currency:"INR",route:"referral",requestPending:referralHeld>0});
+  sources.push({key:"referral",label:"Referral commissions",earned,available:Math.max(0,cleared/100-referralPaid-referralHeld),held:Math.max(0,earned-cleared/100)+referralHeld,paid:referralPaid,minimum:await partnershipMinimumPayout(prisma,userId)/100,currency:"INR",route:"referral",requestPending:referralHeld>0});
   sources.push({key:"curator",label:"Playlist curator reviews",earned:reviews.reduce((sum,row)=>sum+row.amountMinor/100,0),available:curatorAvailable,held:reviews.filter(row=>row.payoutStatus!=="PAID").reduce((sum,row)=>sum+row.amountMinor/100,0)-curatorAvailable,paid:reviews.filter(row=>row.payoutStatus==="PAID").reduce((sum,row)=>sum+row.amountMinor/100,0),minimum:INCOME_MINIMUM_INR.curator,currency:"INR",route:"curator"});
   return {sources,checkoutCredit:Number(credit?.referralCredits??0),reconciliationRequired:wallet.unresolved};
 }

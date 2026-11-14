@@ -48,6 +48,7 @@ export async function retryTransactionalEmail(logId: number) {
   const emailLog = (prisma as any).emailLog;
   const original = await emailLog.findUnique({ where: { id: logId } });
   if (!original) throw new Error("Email log not found.");
+  if (original.template.startsWith("partnership_")) throw Error("Review partnership delivery and SMTP acceptance before retrying; the agreement PDF must be preserved.");
   if (original.template === "subscription_receipt") throw Error("Use the subscription receipt outbox to preserve payment, PDF and duplicate checks.");
   if (original.status !== "failed") throw new Error("Only failed emails can be retried.");
   if(original.template==="beat_sample_agreement_request"){const beat=await prisma.beat.findUnique({where:{id:Number(original.entityId)},include:{user:true}});if(!beat||beat.user.status!=="ACTIVE"||beat.user.email.toLowerCase()!==original.toEmail.toLowerCase()||await prisma.storedAsset.count({where:{entityType:"BEAT",entityId:String(beat.id),category:"BEAT_SAMPLE_LICENSE",deletedAt:null}}))throw Error("Sample request recipient or evidence changed. Review before retrying.");}

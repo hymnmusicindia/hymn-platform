@@ -4,7 +4,10 @@
 // worker ran and every job depended on GitHub's unreliable schedule. Durable
 // leases in lib/cron/runtime.ts keep extra processes or fallback triggers from overlapping.
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs" || process.env.NODE_ENV !== "production") return;
+  // Keep Node-only cron imports inside a positive runtime branch so Next can
+  // remove them completely from its instrumentation edge bundle.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+  if (process.env.NODE_ENV !== "production") return;
   if (process.env.NEXT_PHASE === "phase-production-build") return;
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) { console.error("Scheduled automation unavailable: CRON_SECRET is missing."); return; }
@@ -31,4 +34,5 @@ export async function register() {
     console.log(`Central cron scheduler started with authenticated in-process handlers.`);
     void record("CRON_WORKER_STARTED", { origin, transport: "in-process", portEnv: process.env.PORT ?? null });
   }, 30_000).unref();
+  }
 }

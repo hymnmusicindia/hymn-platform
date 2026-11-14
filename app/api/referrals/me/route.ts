@@ -1,11 +1,12 @@
 import { clearedReferralMinor } from "@/lib/referral-commissions";
+import { partnershipMinimumPayout } from "@/lib/partnerships";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { createUniqueReferralCode } from "@/lib/referrals";
 import { referralPolicySnapshotSchema } from "@/lib/referral-reward-policy";
 import { getPublicAppUrl } from "@/lib/public-app-url";
-import { REFERRAL_COMMISSION_RATES, REFERRAL_HOLD_DAYS, REFERRAL_MINIMUM_PAYOUT_MINOR } from "@/lib/referral-commission-policy";
+import { REFERRAL_COMMISSION_RATES, REFERRAL_HOLD_DAYS } from "@/lib/referral-commission-policy";
 
 function maskEmail(value: string) {
   const [name, domain = ""] = value.split("@");
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
     commission: {
       pending: earned("PENDING"), held: earned("HELD") + Math.max(0, earned("AVAILABLE") - clearedMinor / 100), available: Math.max(0, balance), recovery: Math.max(0, -balance), paid, requested,
       total: commissionGroups.reduce((sum, row) => sum + (row._sum.netMinor || 0), 0) / 100,
-      minimumPayout: REFERRAL_MINIMUM_PAYOUT_MINOR / 100, holdDays: REFERRAL_HOLD_DAYS,
+      minimumPayout: await partnershipMinimumPayout(prisma,user.id) / 100, holdDays: REFERRAL_HOLD_DAYS,
       rates: Object.entries(REFERRAL_COMMISSION_RATES).map(([category, rate]) => ({ category, percent: netPolicy?.netRevenueEffectiveAt ? 2 : rate / 100, basis: netPolicy?.netRevenueEffectiveAt ? "verified eligible net revenue; configured rate frozen per purchase" : ["beats", "studio"].includes(category) ? "HYMN share" : "payment collected" })),
       history: commissionHistory.slice(0,25).map(row => ({ id: row.id, level: row.level, category: row.category, paid: row.paidMinor / 100, base: row.baseMinor / 100, rate: row.rateBps / 100, amount: row.netMinor / 100, originalAmount: row.originalMinor / 100, policyVersion: row.policyVersion, adjustments: row.adjustments.map(entry => ({ id: entry.id, amount: entry.amountMinor / 100, reason: entry.reason, createdAt: entry.createdAt.toISOString() })), status: row.status, eligibleAt: row.eligibleAt.toISOString(), createdAt: row.createdAt.toISOString() })),
       nextCursor: commissionHistory.length > 25 ? commissionHistory[24].id : null,

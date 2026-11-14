@@ -52,6 +52,7 @@ export function ReferralEarningsCalculator({ showLink = false }: { showLink?: bo
   }, [attempt]);
   const change = (key: string, patch: Partial<CalculatorPurchase>) => setPurchases(rows => rows.map(row => row.id === key ? { ...row, ...patch } : row));
   const result = policy ? referralScenario(friends, branching, purchases, policy) : null;
+  const minimum=policy?.minimumPayoutMinor ?? REFERRAL_MINIMUM_PAYOUT_MINOR;
   const networkRates = policy?.mode === 'net' ? REFERRAL_NET_NETWORK_RATES_BPS : REFERRAL_NETWORK_RATES_BPS;
   const selected = purchases.find(p => p.id === active), kind = kinds.find(k => k.id === active)!;
   const maxBase = selected?.category === 'one_time' ? 9900 : ['half_yearly', 'yearly', 'yearly_plus'].includes(selected?.category || '') ? (distributionPlanCards.find(p => p.key === selected?.category)?.price || 1999) * 100 : 1000000;
@@ -86,7 +87,7 @@ export function ReferralEarningsCalculator({ showLink = false }: { showLink?: bo
         <div className="earn-donut" style={{ background: `conic-gradient(${result.total ? segments.join(',') : '#405158 0% 100%'})` }}><div><span>Estimated earnings</span><output aria-live="polite">{money(result.total)}</output><small>{count(friends)} direct buyers</small></div></div>
         <div className="earn-split"><div><span>Direct</span><strong>{money(result.direct)}</strong></div><div><span>Network</span><strong>{money(result.network)}</strong></div></div>
         <div className="earn-breakdown">{kinds.map(k => <div key={k.id}><span><i style={{ background: k.color }}/>{k.name}</span><strong>{money(result.sources.find(s => s.id === k.id)!.total)}</strong></div>)}</div>
-        <div className="earn-payout-goal"><div><span>Withdrawal milestone</span><strong>{money(REFERRAL_MINIMUM_PAYOUT_MINOR)}</strong></div><div className="earn-goal-track"><span style={{ width: `${Math.min(100, result.total / REFERRAL_MINIMUM_PAYOUT_MINOR * 100)}%` }}/></div><small>{result.total >= REFERRAL_MINIMUM_PAYOUT_MINOR ? 'Your scenario reaches the minimum. Payment checks still apply.' : `${money(REFERRAL_MINIMUM_PAYOUT_MINOR - result.total)} to the minimum in this scenario.`}</small></div>
+        <div className="earn-payout-goal"><div><span>Withdrawal milestone</span><strong>{minimum===0?'No minimum':money(minimum)}</strong></div><div className="earn-goal-track"><span style={{ width: `${minimum===0?100:Math.min(100, result.total / minimum * 100)}%` }}/></div><small>{minimum===0?'Any positive cleared balance can be requested. Payment checks still apply.':result.total >= minimum ? 'Your scenario reaches the minimum. Payment checks still apply.' : `${money(minimum - result.total)} to the minimum in this scenario.`}</small></div>
         {showLink && <Link className="earn-start" href="/dashboard?tab=referral">Start with your link <ArrowUpRight size={16}/></Link>}
       </aside></div>
       <section className="earn-branches" aria-labelledby={`${id}-branches`}>
@@ -98,7 +99,7 @@ export function ReferralEarningsCalculator({ showLink = false }: { showLink?: bo
           </div><p>{policy.networkEnabled ? 'Rewards travel up the connected branch · up to 7 levels' : 'Your connections form branches · direct rewards only'}</p>
         </div>
       </section>
-      <footer className="earn-footer"><span><Repeat2 size={13}/> Eligible repeat purchases & renewals</span><span>{REFERRAL_HOLD_DAYS}-day hold</span><span>{money(REFERRAL_MINIMUM_PAYOUT_MINOR)} minimum withdrawal</span></footer>
+      <footer className="earn-footer"><span><Repeat2 size={13}/> Eligible repeat purchases & renewals</span><span>{REFERRAL_HOLD_DAYS}-day hold</span><span>{minimum===0?'No minimum withdrawal':`${money(minimum)} minimum withdrawal`}</span></footer>
       <details className="earn-method"><summary><Info size={13}/> How this estimate works</summary><div><p>These are editable examples, not actual customer purchases or promised income. {policy.mode === 'net' ? `The standard rate is ${policy.rateBps / 100}% of verified eligible HYMN net revenue after taxes, refunds, pass-through costs and fees.` : 'Category rates apply to eligible collected payments; marketplace rates use HYMN’s recorded share.'} Your connection’s saved terms and eligibility apply.</p><p>{policy.networkEnabled ? `Level 2 earns ${networkRates[1] / 100}% of the purchase’s direct commission; levels 3–7 earn ${networkRates[2] / 100}% each. These are shares of commission, not percentages of the order price. The original referrer keeps their direct commission.` : 'The current policy pays direct commissions only. The diagram shows connections; it does not add network earnings.'} All selected quantities apply per person; future renewals are counted only when you add them.</p><p>Only active, eligible connections and approved payments qualify. Self-purchases, free credits and royalties are excluded. Refunds and disputes can reduce earnings; a verified payout profile is required. Marketplace network estimates under legacy terms are excluded where the gross-payment cap cannot be verified.</p></div></details>
     </>}
   </section>;
