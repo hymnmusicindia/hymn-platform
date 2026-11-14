@@ -111,6 +111,20 @@ html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-artis
 }
 @media(prefers-reduced-motion:reduce) { .sheetSection { scroll-behavior:auto; } }
 
+html body .workflow.workflow.workflow.workflow.singleSheet .ownershipSection {
+  padding:clamp(24px,3vw,36px)!important;
+  border:0!important; border-left:3px solid var(--text)!important;
+  border-radius:0 12px 12px 0!important;
+  background:color-mix(in srgb,var(--text) 4%,var(--bg))!important;
+}
+.ownershipEligibility { margin:16px 0 0; padding-top:16px; border-top:1px solid var(--border); font-size:13px; line-height:1.8; color:var(--text-muted); }
+.ownershipSection { scroll-margin-top:180px; }
+.ugcEligibility { margin:0 0 20px; padding:16px 0; border-bottom:1px solid var(--border); font-size:13px; line-height:1.8; color:var(--text-muted); }
+.ugcEligibility strong { color:var(--text); font-weight:600; }
+.ugcEligibility p { margin:8px 0; }
+.ugcEligibility a { color:var(--text); text-decoration:underline; text-underline-offset:4px; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-ownership-support) > div { padding:24px 0!important; border:0!important; background:transparent!important; }
+
 html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-artwork-stage) button:is([aria-label="Replace cover artwork"],[aria-label="Upload cover artwork"]) {
   border:1px solid var(--border-strong)!important; border-radius:12px!important; background:var(--bg-soft)!important;
   padding:5px!important; outline:1px solid color-mix(in srgb,var(--border) 65%,transparent); outline-offset:3px;

@@ -1,4 +1,10 @@
 .backdrop { position:fixed; inset:0; z-index:1900; overflow:hidden; overscroll-behavior:contain; display:flex; align-items:center; justify-content:center; padding:32px 20px; background:#0009; backdrop-filter:blur(12px); }
+.letter.letter.letter :global(.record-review-ownership) { margin-block:24px; padding:22px 24px; border-left:3px solid var(--text); background:color-mix(in srgb,var(--text) 4%,var(--card)); border-radius:0 10px 10px 0; }
+.letter :global(.record-review-ownership) header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px; }
+.letter :global(.record-review-ownership) h3 { font-size:16px; font-weight:600; }
+.letter :global(.record-review-ownership) strong { display:block; font-size:18px; overflow-wrap:anywhere; }
+.letter :global(.record-review-ownership) p { margin-top:10px; font-size:13px; line-height:1.8; color:var(--text-muted); }
+.letter :global(.record-review-ownership) button { color:var(--text); font-size:12px; min-height:44px; text-decoration:underline; text-underline-offset:4px; }
 .letter { display:flex; flex-direction:column; width:min(100%,920px); max-height:100%; min-width:0; min-height:0; margin:auto; overflow:hidden; border:1px solid var(--border); border-radius:16px; background:var(--card); color:var(--text); box-shadow:0 28px 90px #0005; outline:none; }
 .toolbar { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 24px; border-bottom:1px solid var(--border); background:var(--card); }
 .content { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:24px 32px; }

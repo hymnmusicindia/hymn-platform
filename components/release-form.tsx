@@ -3,6 +3,7 @@ import {subscriptionPaymentFailureMessage} from "@/lib/subscription-recurrence";
 import { DistributionReferenceBrowser } from "./distribution-insights-panel";
 import { correctionSocialRestricted } from "@/lib/correction-social-policy";
 import { CorrectionStoreNotice } from "./distribution/correction-store-notice";
+import { ContentOwnershipChoice } from "./distribution/content-ownership-choice";
 import { StoreChoice } from "./distribution/store-choice";
 import { IncludedStores } from "./distribution/included-stores";
 import { ReleaseAmendmentConfirmation } from './release-amendment-confirmation';
@@ -4887,16 +4888,20 @@ export function ReleaseForm({
         </section>) : null}
 {entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="5" id="release-section-5" aria-label="Rights and delivery">
 <section className={clsx("release-rights-stage grid gap-5", stepMotion)}>
-            <StepIntro title="Ownership & rights" />
+            <div id="release-content-ownership" className={layoutStyles.ownershipSection} ref={registerField("content-type")}>
+              <ContentOwnershipChoice value={release.contentType} invalid={Boolean(showErrors && destinationsIssue()?.key === "content-type")} label={correctionLabel("Content Ownership", "content-type")} onChange={value => {
+                clearCorrectionField("content-type", "ownership-rights");
+                setRightsUploadError(null);
+                setRelease(current => ({ ...current, contentType: value }));
+              }} />
+              {release.contentType ? <p className={layoutStyles.ownershipEligibility} role="status">{contentIdEligibility.reason}</p> : null}
+            </div>
+            {release.contentType ? <div className="release-ownership-support">
             <div className="rounded-xl border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Master rights</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Rights &amp; permissions</p>
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-2 text-sm font-semibold">{correctionLabel("C-Line", "copyright-owner")}<input ref={registerField("copyright-owner")} className={fieldClass("copyright-owner", Boolean(showErrors && destinationsIssue()?.key === "copyright-owner"))} value={release.copyrightOwner} onChange={(event) => { clearCorrectionField("copyright-owner", "ownership-rights"); setRelease((current) => ({ ...current, copyrightOwner: event.target.value })); }} /><span className="text-xs font-normal" style={{ color: "var(--text-soft)" }}>Composition and release-metadata copyright owner.</span></label>
                 <label className="grid gap-2 text-sm font-semibold">{correctionLabel("P-Line", "publishing-rights")}<input ref={registerField("publishing-rights")} className={fieldClass("publishing-rights", Boolean(showErrors && destinationsIssue()?.key === "publishing-rights"))} value={release.publishingRights} onChange={(event) => { clearCorrectionField("publishing-rights", "ownership-rights"); setRelease((current) => ({ ...current, publishingRights: event.target.value })); }} /><span className="text-xs font-normal" style={{ color: "var(--text-soft)" }}>Owner of the master sound recording.</span></label>
-              </div>
-              <div className="mt-5 border-t pt-5" ref={registerField("content-type")} style={{ borderColor: "var(--border)" }}>
-                <SearchableSelect label="Content ownership" value={release.contentType} options={[...DIRENOTE_CONTENT_TYPES]} placeholder="Select content ownership" onChange={(value) => setRelease((current) => ({ ...current, contentType: value }))} />
-                {release.contentType ? <p className="mt-3 text-sm font-medium" style={{ color: contentIdEligibility.eligible ? "var(--success)" : "var(--text-muted)" }}>{contentIdEligibility.eligible ? "Eligible for YouTube Content ID." : contentIdEligibility.reason}</p> : null}
               </div>
               {false ? <details className="group mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }} open={rightsDocumentationOpen} onToggle={(event) => setRightsDocumentationOpen(event.currentTarget.open)}>
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.14em] [&::-webkit-details-marker]:hidden" style={{ color: "var(--text-soft)" }}><span>Rights documentation <span className="normal-case font-normal">· Optional</span></span><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></summary>
@@ -4915,8 +4920,10 @@ export function ReleaseForm({
                 <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm font-semibold"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={legalComplete} onChange={event => setReleaseRightsConfirmed(event.target.checked)} /><span>I confirm the rights, permissions and accuracy of this release.</span></label>
               </div>
             </div>
+            </div> : null}
           </section>
           <section className={clsx("release-delivery-stage grid gap-6", stepMotion)}>
+            <StepIntro title="Delivery & stores" />
             <div className={layoutStyles.deliveryGrid}>
               <div className={layoutStyles.deliveryStores}><div
                   ref={
@@ -4937,12 +4944,6 @@ export function ReleaseForm({
                 >
                   <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b pb-4" style={{ borderColor: "var(--border)" }}>
                     <div>
-                      <p
-                        className="text-[10px] font-semibold uppercase tracking-[0.18em]"
-                        style={{ color: "var(--text-soft)" }}
-                      >
-                        Music stores & streaming
-                      </p>
                       <h3
                         className="mt-1 text-xl font-semibold tracking-[-.025em]"
                         style={{ color: "var(--text)" }}
@@ -4979,12 +4980,6 @@ export function ReleaseForm({
                 >
                   <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b pb-4" style={{ borderColor: "var(--border)" }}>
                     <div>
-                      <p
-                        className="text-[10px] font-semibold uppercase tracking-[0.18em]"
-                        style={{ color: "var(--text-soft)" }}
-                      >
-                        Social Monetization
-                      </p>
                       <h3
                         className="mt-1 text-xl font-semibold tracking-[-.025em]"
                         style={{ color: "var(--text)" }}
@@ -5018,6 +5013,7 @@ export function ReleaseForm({
                         }
                       }}
                       aria-pressed={socialConsentAccepted}
+                      aria-describedby={!contentIdEligibility.eligible ? "ugc-ownership-eligibility" : undefined}
                     >
                       <span>Monetisation</span>
                       <span
@@ -5050,7 +5046,12 @@ export function ReleaseForm({
                     </button>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  {!contentIdEligibility.eligible ? <aside id="ugc-ownership-eligibility" className={layoutStyles.ugcEligibility}>
+                    <strong>{release.contentType ? `${release.contentType === "AI Generated" ? "AI-generated" : "Non-exclusively licensed"} recordings are not eligible` : "Choose content ownership first"}</strong>
+                    <p>{release.contentType ? `Your release is marked as ${release.contentType === "AI Generated" ? "AI-generated" : "non-exclusively licensed"}, so these social stores and fingerprinting options are unavailable through HYMN. These delivery options require original or exclusively licensed recordings to meet rights and fingerprinting eligibility requirements.` : "Select your recording’s ownership above to check eligibility for social stores and fingerprinting."}</p>
+                    <a href="#release-content-ownership">Review content ownership</a>
+                  </aside> : null}
+                  <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Social platform selection" aria-describedby={!contentIdEligibility.eligible ? "ugc-ownership-eligibility" : undefined}>
                     {socialPlatforms.map((platform) => (
                       <StoreChoice key={platform.name} name={platform.name}
                         checked={platforms.includes(platform.name)}
@@ -5174,10 +5175,15 @@ export function ReleaseForm({
               <div className="record-review-cover">{artworkPreview ? <img src={artworkPreview} alt={`${displayedReleaseTitle} artwork`} /> : <Disc3 aria-label="Artwork missing" />}</div>
               <div className="record-review-identity"><p>{releaseType.toUpperCase()} · {tracks.length} {tracks.length === 1 ? "TRACK" : "TRACKS"}</p><h3>{displayedReleaseTitle}</h3><span>{primaryArtistName || "Primary artist missing"}</span><dl><div><dt>{releaseDateSummaryTitle}</dt><dd>{releaseDateSummaryValue}</dd></div><div><dt>Label</dt><dd>{release.recordLabelName || "Not provided"}</dd></div></dl><button type="button" onClick={() => goToStep(4)}>Edit artwork →</button></div>
             </article>
+            <section className="record-review-ownership" aria-label="Content ownership summary">
+              <header><h3>Content Ownership</h3><button type="button" onClick={() => { goToStep(5); window.setTimeout(() => fieldRefs.current["content-type"]?.scrollIntoView({ behavior: "smooth", block: "center" }), 0); }}>Edit ownership</button></header>
+              <strong>{release.contentType || "Not selected"}</strong>
+              <p>{contentIdEligibility.reason}</p>
+            </section>
             <section className="record-review-tracks"><header><h3>The music</h3><button type="button" onClick={() => goToStep(3)}>Edit tracks & credits →</button></header>{tracks.map((track,index) => <div className="record-review-track" key={track.id}><span className="record-track-number">{String(index+1).padStart(2,"0")}</span><div><AudioWaveform src={track.existingAudioUrl || track.audioPreviewUrl} title={track.trackTitle || "Untitled track"} subtitle={[namesFor(track.primaryArtistIds) || track.primaryArtistQuery,track.duration,track.explicitContent ? "Explicit" : "Clean"].filter(Boolean).join(" · ")} compact /><div className="record-track-credits"><span><b>Songwriters</b> {track.songwriters.map(entry => entry.legalName || entry.artistName).filter(Boolean).join(", ") || "Not provided"}</span><span><b>Composers</b> {track.composers.map(entry => entry.legalName || entry.artistName).filter(Boolean).join(", ") || "Not provided"}</span><span><b>Producers</b> {track.producers.map(entry => entry.artistName || entry.legalName).filter(Boolean).join(", ") || "Not provided"}</span></div></div></div>)}</section>
             <div className="record-review-details">{[
               {title:"Release details",stage:2,rows:[["Genre",release.primaryGenre],["Subgenre",release.secondaryGenre],["Language",release.language],["Mood",release.mood]]},
-              {title:"Rights & ownership",stage:5,rows:[["Copyright",release.copyrightOwner],["Recording rights",release.publishingRights],["Content ownership",release.contentType],["Rights proof",release.licenseReceiptUrl ? "Attached" : "Not attached"]]},
+              {title:"Rights & ownership",stage:5,rows:[["Copyright",release.copyrightOwner],["Recording rights",release.publishingRights],["Rights proof",(requiresAiProof ? release.sunoReceiptUrl : release.licenseReceiptUrl) ? "Attached" : "Not attached"]]},
               {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",territoryValue],...(contentIdAccessStatus === "approved" && youtubeContentIdEnabled ? [["Existing Content ID access","Enabled"]] : []),["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
             ].map(group => <section key={group.title}><header><h3>{group.title}</h3><button type="button" onClick={() => goToStep(group.stage)}>Edit →</button></header><dl>{group.rows.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl></section>)}</div>
             {validationIssues.length > 0 ? <section className="record-review-issues"><h3>A few details need your attention</h3>{validationIssues.map(issue => <button type="button" key={`${issue.key}-${issue.trackIndex}`} onClick={() => triggerFieldFocus(issue)}><span>{customerMessage(issue.message)}</span><span aria-hidden="true">→</span></button>)}</section> : <p className="record-review-ready"><CheckCircle2 size={18} /> All required release details are complete.</p>}

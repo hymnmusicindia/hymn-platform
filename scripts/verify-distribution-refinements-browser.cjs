@@ -53,6 +53,22 @@ async function main() {
       await expect(page.getByRole('status').filter({hasText:/^Saved$/})).toBeVisible();
       console.log('PASS save indicator: actual failed autosave reason, hover/click details, retry and saved recovery');
     }
+    const ownership=page.getByRole('group',{name:/Content Ownership/});await expect(ownership).toBeVisible();
+    await ownership.getByRole('radio',{name:/AI-generated music/}).check();
+    await expect(page.locator('#ugc-ownership-eligibility')).toContainText('AI-generated recordings are not eligible');
+    for(const name of ['TikTok','Snapchat','Instagram / Facebook'])await expect(page.getByRole('checkbox',{name,exact:true})).toBeDisabled();
+    await expect(page.getByText('Generation receipt and original track/project link are required for distribution.',{exact:true})).toBeVisible();
+    await expect(page.locator('.release-ownership-support input[type="url"]')).toBeVisible();
+    await ownership.getByRole('radio',{name:/Non-exclusively licensed/}).check();
+    await expect(page.locator('#ugc-ownership-eligibility')).toContainText('Non-exclusively licensed recordings are not eligible');
+    await expect(page.getByText('HYMN requires your licence or beat agreement for non-exclusive content.',{exact:true})).toBeVisible();
+    await expect(page.getByText('Generation receipt and original track/project link are required for distribution.',{exact:true})).toHaveCount(0);
+    await ownership.getByRole('radio',{name:/Original \/ exclusively licensed/}).check();
+    await expect(page.getByText('This release is eligible for Content ID.',{exact:true})).toBeVisible();
+    await expect(page.locator('#ugc-ownership-eligibility')).toHaveCount(0);
+    await expect(page.getByText('Social Monetization',{exact:true})).toHaveCount(0);
+    await expect(page.getByText('Music stores & streaming',{exact:true})).toHaveCount(0);
+    if(width===1440||width===390)await ownership.locator('..').screenshot({path:path.join(out,`${theme}-${width}-ownership.png`)});
     await page.getByRole('button',{name:/Worldwide delivery/}).click();
     const countries = page.getByRole('dialog',{name:'Delivery countries',exact:true}); await expect(countries).toBeVisible();
     await countries.getByRole('searchbox',{name:'Search countries'}).fill('Zimbabwe');
@@ -89,7 +105,7 @@ async function main() {
     assert.notEqual(await bottomReview.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
     assert.equal(await bottomReview.getAttribute('type'),'button');
     await bottomReview.click();
-    const dialog=page.getByRole('dialog',{name:'Review your release',exact:true});
+    const dialog=page.getByRole('dialog',{name:'Review your release',exact:true});await expect(dialog.getByRole('region',{name:'Content ownership summary'})).toContainText('Original/Exclusive Licensed');
     if(!await dialog.isVisible()){console.log('review status',await page.locator('[role="alert"]').allTextContents(),await page.locator('.release-editor-status').innerText());}
     await expect(dialog).toBeVisible();await expect(dialog.getByText('Dreamy',{exact:true}).first()).toBeVisible();
     const reviewActions=dialog.locator('.review-submit-bar');
