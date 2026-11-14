@@ -1,3 +1,4 @@
+import { customerClientFields } from '@/lib/client-details';
 import 'server-only';
 import { supportDetails } from '@/lib/support';
 import { Prisma } from '@prisma/client';
@@ -39,9 +40,11 @@ async function supportCaller(tx: Prisma.TransactionClient, a: Actor, now = new D
 export async function accountCard(tx: Prisma.TransactionClient, a: Actor, user: { id: number; name: string; email: string; mobile: string | null }) {
   const linked = await tx.teamClient.findUnique({ where: { userId: user.id } });
   if (linked) return linked.workspaceId === a.workspaceId ? linked : null;
+  const profile=await tx.user.findUniqueOrThrow({where:{id:user.id},select:{onboardingPreferences:true}});
+  const profileFields=customerClientFields(profile.onboardingPreferences);
   const existing = await tx.teamClient.findFirst({ where: { workspaceId: a.workspaceId, mergedIntoId:null, OR: [{ additionalEmails:{has:user.email.toLowerCase()} },{ email: { equals: user.email, mode: 'insensitive' } }, { secondaryEmail: { equals: user.email, mode: 'insensitive' } }] } });
-  if (existing) return existing.userId && existing.userId !== user.id ? null : tx.teamClient.update({ where: { id: existing.id }, data: { userId: user.id, ...(!existing.phone && user.mobile ? { phone: user.mobile } : {}), version: { increment: 1 } } });
-  return tx.teamClient.create({ data: { workspaceId: a.workspaceId, ownerId: a.id, userId: user.id, name: user.name, email: user.email, phone: user.mobile || '' } });
+  if (existing) return existing.userId && existing.userId !== user.id ? null : tx.teamClient.update({ where: { id: existing.id }, data: { ...(Object.keys((existing.clientDetails as object)||{}).length===0?profileFields:{}), userId: user.id, ...(!existing.phone && user.mobile ? { phone: user.mobile } : {}), version: { increment: 1 } } });
+  return tx.teamClient.create({ data: { ...profileFields, workspaceId: a.workspaceId, ownerId: a.id, userId: user.id, name: user.name, email: user.email, phone: user.mobile || '' } });
 }
 async function emit(tx: Prisma.TransactionClient, a: Actor, client: { id: string; name: string; phone: string; status: string; userId?: number|null }, signal: Signal, now: Date) {
   if (client.status !== 'ACTIVE' || !whatsappNumber(client.phone)) return 0;

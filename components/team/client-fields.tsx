@@ -1,10 +1,11 @@
 "use client";
+import { ClientDetailsFields } from "../client-details-fields";
 import { useEffect, useState } from "react";
 import { CLIENT_INTERESTS } from "@/lib/team/client-interests";
 import styles from "./calendar.module.css";
 type Account = { email: string; name: string; avatar: string | null };
 type Api = <T>(resource: string, body?: unknown) => Promise<T>;
-export function TeamClientFields({ client, api }: { client?: { email: string; secondaryEmail?: string; interests?: string[]; state?: string; city?: string }; api: Api }) {
+export function TeamClientFields({ client, api }: { client?: { email: string; secondaryEmail?: string; interests?: string[]; state?: string; city?: string; clientDetails?: unknown }; api: Api }) {
   const [email, setEmail] = useState(client?.email || ""), [secondary, setSecondary] = useState(client?.secondaryEmail || "");
   const [accounts, setAccounts] = useState<Account[]>([]), [lookup, setLookup] = useState(""), [checked, setChecked] = useState(false);
   useEffect(() => {
@@ -20,6 +21,7 @@ export function TeamClientFields({ client, api }: { client?: { email: string; se
     <small>Matching does not change login details or grant account access. Secondary email is an alternate contact, not a second mailing recipient.</small>
     <fieldset className={styles.interests}><legend>Interested in (optional)</legend>{Object.entries(CLIENT_INTERESTS).map(([key, label]) => <label key={key}><input type="checkbox" name="interests" value={key} defaultChecked={client?.interests?.includes(key)}/><span>{label}</span></label>)}</fieldset>
     <div className={styles.formColumns}><label>State (optional)<input name="state" maxLength={100} defaultValue={client?.state}/></label><label>City (optional)<input name="city" maxLength={100} defaultValue={client?.city}/></label></div>
+    <ClientDetailsFields staff location={false} value={client?.clientDetails}/>
     <small>Introductions honour do-not-contact and existing unsubscribe preferences. Saving does not subscribe anyone to the newsletter.</small>
   </>;
 }

@@ -23,7 +23,7 @@ export async function lookupContacts(a:Actor, params:URLSearchParams) {
   const match=phone&&digits.length>=10?Prisma.sql`v.value=${needle}`:Prisma.join(needle.split(' ').map(token=>Prisma.sql`strpos(v.value,${token})>0`),' AND ');
   const cards=await prisma.$queryRaw<TeamClient[]>(Prisma.sql`
     SELECT c.id,c."workspaceId",c."ownerId",c."userId",c.name,c.phone,c.email,c."secondaryEmail",
-      c."additionalEmails",c."alternatePhones",c.interests,c.state,c.city,c.notes,c.status,c.version,
+      c."additionalEmails",c."alternatePhones",c.client_details AS "clientDetails",c.interests,c.state,c.city,c.notes,c.status,c.version,
       c.merged_into_id AS "mergedIntoId",c."createdAt",c."updatedAt"
     FROM team_clients c
     LEFT JOIN users u ON u.id=c."userId"

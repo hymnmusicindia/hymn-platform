@@ -2,7 +2,7 @@
 import { TeamClientFields } from './client-fields';
 import styles from './calendar.module.css';
 
-type Contact = { name: string; phone: string; email: string; secondaryEmail: string; interests: string[]; state: string; city: string; notes: string; notesVisible: boolean; status: string; alternatePhones?: string[]; additionalEmails?: string[] };
+type Contact = { name: string; phone: string; email: string; secondaryEmail: string; interests: string[]; state: string; city: string; clientDetails?: unknown; notes: string; notesVisible: boolean; status: string; alternatePhones?: string[]; additionalEmails?: string[] };
 type Api = <T>(resource: string, body?: unknown) => Promise<T>;
 export function ContactIntakeFields({ selected, api, canResearch, research, setResearch }: { selected: Contact | null; api: Api; canResearch: boolean; research: boolean; setResearch: (value: boolean) => void }) {
   return <>

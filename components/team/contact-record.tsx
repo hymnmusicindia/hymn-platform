@@ -1,5 +1,6 @@
 "use client";
 
+import { clientDetailsSummary } from '@/lib/client-details';
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Mail, MessageCircle, Phone, UserRound } from "lucide-react";
@@ -13,6 +14,7 @@ type Contact = {
   phone: string;
   email: string;
   status: string;
+  clientDetails?: unknown;
   owner: { id: string; name: string };
 };
 type HistoryItem = {
@@ -125,6 +127,7 @@ export function TeamContactRecord({
       <div>
         <p className={styles.eyebrow}>SHARED CONTACT RECORD</p>
         <h2 id="contact-record-title">{contact.name}</h2>
+          {clientDetailsSummary(contact.clientDetails).map(text=><p key={text}>{text}</p>)}
         <p>{contact.email || "No email"} · {contact.phone || "No phone"}</p>
       </div>
       <span className={styles.status} data-status={contact.status}>{contact.status.replaceAll("_", " ")}</span>

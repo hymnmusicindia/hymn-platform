@@ -1,9 +1,11 @@
+import { readClientDetails } from '@/lib/client-details';
 import "server-only";
 import { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { CLIENT_INTERESTS, type ClientInterest } from "./client-interests";
 
 type ClientAccount = {
+  onboardingPreferences?: unknown;
   id: number;
   name: string;
   email: string;
@@ -55,12 +57,16 @@ async function importAccounts(tx: Prisma.TransactionClient, workspaceId: string,
   const creates: Prisma.TeamClientCreateManyInput[] = [];
   let linked = 0;
   for (const account of accounts) {
+    const raw=account.onboardingPreferences as {clientDetails?:unknown}|null;
+    const details=readClientDetails(raw?.clientDetails);
+    const customerDetails=raw?.clientDetails?{clientDetails:{...details,source:"CUSTOMER"},city:details.city,state:details.state}:{};
     const existing = linkedCardByUser.get(account.id);
     if (existing) {
       const phone = normalisePhone(account.mobile);
       const interests = accountInterests(account);
       const notes = accountFootnote(account);
       const fields = {
+        ...(Object.keys((existing.clientDetails as object)||{}).length===0?customerDetails:{}),
         ...(!existing.phone && phone ? { phone } : {}),
         ...(!existing.email ? { email: account.email } : {}),
         ...(!existing.secondaryEmail && account.contactEmail && account.contactEmail.toLowerCase() !== account.email.toLowerCase() ? { secondaryEmail: account.contactEmail } : {}),
@@ -77,6 +83,7 @@ async function importAccounts(tx: Prisma.TransactionClient, workspaceId: string,
       await tx.teamClient.update({
         where: { id: contact.id },
         data: {
+          ...(Object.keys((contact.clientDetails as object)||{}).length===0?customerDetails:{}),
           userId: account.id,
           ...(contact.phone || !normalisePhone(account.mobile) ? {} : { phone: normalisePhone(account.mobile) }),
           ...(contact.secondaryEmail || !account.contactEmail || account.contactEmail.toLowerCase() === account.email.toLowerCase() ? {} : { secondaryEmail: account.contactEmail }),
@@ -102,6 +109,7 @@ async function importAccounts(tx: Prisma.TransactionClient, workspaceId: string,
       interests: accountInterests(account),
       state: "",
       city: "",
+      ...customerDetails,
       notes: accountFootnote({ onboardingPurpose: purpose, onboardingUserType: userType }),
       status: "ACTIVE"
     });
@@ -121,7 +129,7 @@ export async function importWorkspaceClientAccounts(workspaceId: string) {
     if (!owner) return 0;
     const accounts = await tx.user.findMany({
       where: { role: { in: [UserRole.CUSTOMER, UserRole.PRODUCER] }, status: { notIn: ["BANNED", "DELETION_SCHEDULED"] } },
-      select: { id: true, name: true, email: true, mobile: true, contactEmail: true, onboardingPurpose: true, onboardingUserType: true },
+      select: { id: true, name: true, email: true, mobile: true, contactEmail: true, onboardingPurpose: true, onboardingUserType: true, onboardingPreferences:true },
       orderBy: { id: "asc" }
     });
     const count = await importAccounts(tx, workspaceId, owner.id, accounts);
@@ -133,7 +141,7 @@ export async function importWorkspaceClientAccounts(workspaceId: string) {
 export async function ensureAccountClientCard(userId: number, options: { syncMobileToCard?: boolean; mobile?: string } = {}) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true, status: true, name: true, email: true, mobile: true, contactEmail: true, onboardingPurpose: true, onboardingUserType: true }
+    select: { id: true, role: true, status: true, name: true, email: true, mobile: true, contactEmail: true, onboardingPurpose: true, onboardingUserType: true, onboardingPreferences:true }
   });
   if (!user || (user.role !== UserRole.CUSTOMER && user.role !== UserRole.PRODUCER) || ["BANNED", "DELETION_SCHEDULED"].includes(user.status)) return null;
   const account = { ...user, mobile: options.mobile ?? user.mobile };

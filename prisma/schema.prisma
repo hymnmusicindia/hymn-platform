@@ -4344,6 +4344,7 @@ model TeamClient {
   additionalEmails String[] @default([])
   alternatePhones String[] @default([])
   mergedIntoId String? @map("merged_into_id")
+  clientDetails Json @default("{}") @map("client_details")
   interests String[] @default([])
   state String @default("")
   city String @default("")

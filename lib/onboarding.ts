@@ -29,15 +29,18 @@ export function validateOnboardingPreferences(value: unknown): OnboardingPrefere
 }
 
 export async function saveOnboardingPreferences(userId: number, input: OnboardingPreferences) {
-  const existing = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  return prisma.user.update({ where: { id: userId }, data: {
+  return prisma.$transaction(async tx => {
+  await tx.$queryRaw`SELECT id FROM users WHERE id=${userId} FOR UPDATE`;
+  const existing = await tx.user.findUniqueOrThrow({ where: { id: userId } });
+  return tx.user.update({ where: { id: userId }, data: {
     name: existing.name ? existing.name : input.name,
     mobile: existing.mobile ?? input.mobile, contactEmail: existing.contactEmail ?? input.contactEmail,
     dateOfBirth: new Date(`${input.dateOfBirth}T00:00:00.000Z`), preferredLanguage: input.preferredLanguage,
     onboardingPurpose: input.purpose, onboardingUserType: input.userType, referralSource: existing.referralSource ?? input.referralSource,
     onboardingReferralCode: existing.onboardingReferralCode ?? input.referralCode, onboardingCompletedAt: new Date(input.completedAt),
-    onboardingDone: true, onboardingPreferences: input
+    onboardingDone: true, onboardingPreferences: { ...(existing.onboardingPreferences && typeof existing.onboardingPreferences === "object" && !Array.isArray(existing.onboardingPreferences) ? existing.onboardingPreferences : {}), ...input }
   }});
+  });
 }
 
 export async function createBirthdayNotificationForUser(userId: number, now = new Date()) {

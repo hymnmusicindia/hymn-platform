@@ -1,3 +1,4 @@
+import { customerClientFields } from '@/lib/client-details';
 import 'server-only';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -45,7 +46,9 @@ export async function useExistingAccount(tx: Prisma.TransactionClient, a: Actor,
   const user = await tx.user.findUniqueOrThrow({ where: { id: account.id }, select: { contactEmail: true } });
   const cards = await matchingContacts(tx, a.workspaceId, { email: account.email, secondaryEmail: user.contactEmail || '', phone: account.phone });
   if (cards.length > 1 || cards.some(card => card.userId && card.userId !== account.id)) throw new TeamError('This account matches conflicting saved cards. Review and merge the correct cards first.', 409);
-  const card = cards[0] ? await tx.teamClient.update({ where: { id: cards[0].id }, data: { userId: account.id, phone: cards[0].phone || contactPhone(account.phone), email: cards[0].email || account.email, version: { increment: 1 } } }) : await tx.teamClient.create({ data: { workspaceId: a.workspaceId, ownerId: a.id, userId: account.id, name: account.name, email: account.email, phone: contactPhone(account.phone) } });
+  const customer=await tx.user.findUniqueOrThrow({where:{id:account.id},select:{onboardingPreferences:true}});
+  const profileFields=customerClientFields(customer.onboardingPreferences);
+  const card = cards[0] ? await tx.teamClient.update({ where: { id: cards[0].id }, data: { ...(Object.keys((cards[0].clientDetails as object)||{}).length===0?profileFields:{}), userId: account.id, phone: cards[0].phone || contactPhone(account.phone), email: cards[0].email || account.email, version: { increment: 1 } } }) : await tx.teamClient.create({ data: { ...profileFields, workspaceId: a.workspaceId, ownerId: a.id, userId: account.id, name: account.name, email: account.email, phone: contactPhone(account.phone) } });
   if (!cards[0]) await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'client.created', entityId: card.id, detail: { contactName: card.name, source: 'REGISTERED_ACCOUNT' } } });
   await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'client.account_linked', entityId: card.id, detail: { userId: account.id, contactName: card.name } } });
   return publicContact(a, card);

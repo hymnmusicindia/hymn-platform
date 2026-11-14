@@ -1,6 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
 
 export async function assertTeamSchemaReady(db: PrismaClient) {
+  const [clientContext] = await db.$queryRaw<Array<{ present: boolean }>>`
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public'
+      AND table_name='team_clients' AND column_name='client_details') AS present
+  `;
+  if (!clientContext?.present) throw new Error("Team Workspace migration required: apply 20261114140000_client_details before serving this application.");
   const columns = await db.$queryRaw<Array<{ column_name: string }>>`
     SELECT column_name FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'acquisition_leads'

@@ -1,0 +1,16 @@
+'use client';
+import {useEffect,useState} from 'react';
+type Quote={title:string;description:string;href:string};
+const money=(v:unknown)=>(typeof v==='number'||typeof v==='string'&&v.trim()!=='')&&Number.isFinite(Number(v))&&Number(v)>=0?`₹${Number(v).toLocaleString('en-IN')}`:null;
+export function CallServicePrices({service,query}:{service:string;query:string}){
+ const [quotes,setQuotes]=useState<Quote[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState(''),[retry,setRetry]=useState(0);
+ const endpoint=/\b(pric\w*|cost\w*|fees?)\b/i.test(query)?service==='BEAT_PURCHASE'?'/api/beats':service==='MIX_MASTER'?'/api/studio/engineers':null:null;
+ useEffect(()=>{if(!endpoint){setQuotes([]);setError('');return;}let live=true;const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),20000);setLoading(true);setError('');setQuotes([]);
+ void fetch(endpoint,{signal:controller.signal,cache:'no-store'}).then(async r=>{if(!r.ok)throw Error('Current listings are unavailable.');return r.json();}).then(data=>{if(!live)return;const rows:Quote[]=[];
+ if(endpoint==='/api/beats')for(const beat of Array.isArray(data.beats)?data.beats:[]){if(!beat||typeof beat.title!=='string')continue;const available=Array.isArray(beat.availableLicenses)?beat.availableLicenses:['mp3'];const prices=[['mp3','MP3',beat.price],['wav','WAV',beat.generalPrice],['stems','Stems',beat.stemPrice],['exclusive','Exclusive',beat.exclusivePrice]].filter(([key,,price])=>available.includes(key)&&money(price)).map(([,label,price])=>`${label}: ${money(price)}`);if(prices.length)rows.push({title:beat.title,description:prices.join(' · '),href:'/beat-store'});if(rows.length>=6)break;}
+ else for(const engineer of Array.isArray(data.engineers)?data.engineers:[]){for(const listing of Array.isArray(engineer.listings)?engineer.listings:[]){const price=money(listing.standardPrice);if(price)rows.push({title:`${engineer.professionalName||'Studio engineer'} · ${listing.title||'Mixing & mastering'}`,description:`${price}${Number.isFinite(listing.turnaroundDays)?` · ${listing.turnaroundDays} day turnaround`:''}. Confirm scope, availability and final checkout price.`,href:'/studio'});if(rows.length>=6)break;}if(rows.length>=6)break;}
+ setQuotes(rows);
+ }).catch(()=>{if(live)setError('Could not load current prices. Retry or open the service page before quoting.');}).finally(()=>{clearTimeout(timer);if(live)setLoading(false);});return()=>{live=false;clearTimeout(timer);controller.abort();};},[endpoint,retry]);
+ if(!endpoint)return null;
+ return <section aria-label="Current catalogue prices"><h4>Current listed prices · INR</h4>{loading?<p role="status">Loading current service listings…</p>:error?<p role="alert">{error} <button type="button" onClick={()=>setRetry(v=>v+1)}>Retry prices</button></p>:quotes.length?quotes.map((quote,i)=><article key={`${quote.title}-${i}`}><strong>{quote.title}</strong><p>{quote.description}</p><a href={quote.href} target="_blank" rel="noopener noreferrer">Review listing & terms ↗</a></article>):<p>No available priced listings were returned. Confirm availability with the team; do not invent a quote.</p>}<small>A sample of current public listings. Pricing and availability can change; use checkout for the final amount.</small></section>;
+}

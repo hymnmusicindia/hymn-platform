@@ -1,3 +1,4 @@
+import { isKnownMinor } from '@/lib/client-details';
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -29,7 +30,7 @@ async function ownTask(db: Pick<Prisma.TransactionClient, 'teamTask'>, a: Actor,
     throw new TeamError('Activity not found.', 404); return task; }
 async function contact(db: Pick<Prisma.TransactionClient, 'teamClient'>, a: Actor, id: string) { const row = await db.teamClient.findFirst({ where: { id, workspaceId: a.workspaceId, mergedIntoId: null } }); if (!row)
     throw new TeamError('Contact unavailable or merged. Open the retained contact.', 409); return row; }
-const summarySelect = { collaboratorIds: true, callPhase: true, callAttempts: true, conversationCount: true, id: true, title: true, description: true, ownerId: true, status: true, priority: true, dueAt: true, version: true, recordType: true, recordId: true, eventKey: true, clientId: true, followUpContext: true, checklist: true, approvalRequired: true, blocker: true, client: { select: { id: true, name: true, phone: true, email: true, interests: true, status: true } }, owner: { select: { id: true, user: { select: { name: true } }, jobTitle: true } } } satisfies Prisma.TeamTaskSelect;
+const summarySelect = { collaboratorIds: true, callPhase: true, callAttempts: true, conversationCount: true, id: true, title: true, description: true, ownerId: true, status: true, priority: true, dueAt: true, version: true, recordType: true, recordId: true, eventKey: true, clientId: true, followUpContext: true, checklist: true, approvalRequired: true, blocker: true, client: { select: { id: true, name: true, phone: true, email: true, clientDetails:true,city:true,state:true,interests: true, status: true } }, owner: { select: { id: true, user: { select: { name: true } }, jobTitle: true } } } satisfies Prisma.TeamTaskSelect;
 export async function stationRead(a: Actor, resource: string, p: URLSearchParams) {
     demand(a, 'clients.view');
     if (resource === 'workstation-members') {
@@ -38,12 +39,12 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
     }
     if (resource === 'workstation-contact') {
         const c = await contact(prisma, a, p.get('id') || '');
-        return { id: c.id, name: c.name, email: c.email, phone: c.phone, interests: c.interests, status: c.status };
+        return { id: c.id, name: c.name, email: c.email, phone: c.phone, interests: c.interests, status: c.status,clientDetails:c.clientDetails,city:c.city,state:c.state };
     }
     if (resource === 'workstation-activity') {
         const shared=p.get('team')==='1'&&mayHelp(a);
         const id=p.get('id')||'';
-        const include={client:{select:{id:true,name:true,phone:true,email:true,interests:true,status:true}}} satisfies Prisma.TeamTaskInclude;
+        const include={client:{select:{id:true,name:true,phone:true,email:true,clientDetails:true,city:true,state:true,interests:true,status:true}}} satisfies Prisma.TeamTaskInclude;
         const row=await prisma.teamTask.findFirst({where:{...taskScope(a),id},include})
             ||(shared?await prisma.teamTask.findFirst({where:{...sharedWorkScope(a),id},include}):null);
         if(!row)throw new TeamError('Activity not found.',404);
@@ -63,9 +64,9 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
             });
             client = accountContact;
         }
-        const [owner,profile,appointment] = await Promise.all([prisma.teamMember.findUnique({ where: { id: task.ownerId }, select: { jobTitle: true, user: { select: { name: true } } } }),client?.userId?prisma.user.findUnique({where:{id:client.userId},select:{onboardingUserType:true,onboardingPurpose:true,preferredLanguage:true}}):null,prisma.teamCalendarEvent.findUnique({where:{followUpTaskId:task.id},select:{id:true,googleMeetUrl:true,googleSyncStatus:true,kind:true,status:true}})]);
+        const [owner,profile,appointment] = await Promise.all([prisma.teamMember.findUnique({ where: { id: task.ownerId }, select: { jobTitle: true, user: { select: { name: true } } } }),client?.userId?prisma.user.findUnique({where:{id:client.userId},select:{onboardingUserType:true,onboardingPurpose:true,preferredLanguage:true,dateOfBirth:true}}):null,prisma.teamCalendarEvent.findUnique({where:{followUpTaskId:task.id},select:{id:true,googleMeetUrl:true,googleSyncStatus:true,kind:true,status:true}})]);
         const reports = client ? await prisma.teamAudit.findMany({ where: { workspaceId: a.workspaceId, entityId: { in: [client.id, ...(await prisma.teamClient.findMany({ where: { workspaceId: a.workspaceId, mergedIntoId: client.id }, select: { id: true } })).map(c => c.id)] }, action: { in: ['contact.call_report', 'contact.activity_report'] } }, orderBy: { createdAt: 'desc' }, take: 15 }) : [];
-        return { task: { ...task, owner }, appointment, activity: workActivity(task.followUpContext), client: client ? { id: client.id, name: client.name, email: client.email, phone: client.phone, interests: client.interests, status: client.status,registered:Boolean(client.userId),customerType:profile?.onboardingUserType||'',purpose:profile?.onboardingPurpose||'',preferredLanguage:profile?.preferredLanguage||'' } : null, ticket, history: reports.map(r => ({ id: r.id, createdAt: r.createdAt, ...obj(r.detail) })) };
+        return { task: { ...task, owner }, appointment, activity: workActivity(task.followUpContext), client: client ? { id: client.id, name: client.name, email: client.email, phone: client.phone, interests: client.interests, status: client.status,clientDetails:client.clientDetails,city:client.city,state:client.state,registered:Boolean(client.userId),isMinor:isKnownMinor(profile?.dateOfBirth),customerType:profile?.onboardingUserType||'',purpose:profile?.onboardingPurpose||'',preferredLanguage:profile?.preferredLanguage||'' } : null, ticket, history: reports.map(r => ({ id: r.id, createdAt: r.createdAt, ...obj(r.detail) })) };
     }
     if (resource === 'workstation-tickets') {
         if (!ticketAccess(a))

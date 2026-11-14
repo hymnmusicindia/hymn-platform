@@ -5,7 +5,7 @@ import {TeamClientFields} from './client-fields';
 import {contactIntakePayload} from '@/lib/team/contact-intake';
 import s from './work-station.module.css';
 
-type Contact={id:string;version:number;ownerId:string;name:string;phone:string;email:string;secondaryEmail:string;interests:string[];state:string;city:string;notes:string;notesVisible:boolean;status:string;alternatePhones?:string[];additionalEmails?:string[]};
+type Contact={id:string;version:number;ownerId:string;name:string;phone:string;email:string;secondaryEmail:string;interests:string[];state:string;city:string;clientDetails?:unknown;notes:string;notesVisible:boolean;status:string;alternatePhones?:string[];additionalEmails?:string[]};
 type Api=<T>(resource:string,body?:unknown)=>Promise<T>;
 export function ActivityContactEditor({api,clientId,actorId,onSaved}:{api:Api;clientId:string;actorId:string;onSaved:(contact:Contact)=>void}){
  const [contact,setContact]=useState<Contact|null>(null),[editing,setEditing]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(false);
