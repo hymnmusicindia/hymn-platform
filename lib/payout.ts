@@ -255,13 +255,14 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
   const currentMonthSplitRows = splitEarnings.filter((item: any) => monthKey(item.royaltyLineItem.statementMonth) === currentKey);
   const currentMonthSplitEarnings = money(currentMonthSplitRows.reduce((sum: number, item: any) => sum + toNumber(item.netShareAmount), 0));
   const currentMonthHeldAmount = money(currentMonthSplitRows.filter((item: any) => ["held", "pending_payout_details"].includes(item.status)).reduce((sum: number, item: any) => sum + toNumber(item.netShareAmount), 0));
-  const currentMonthPaidAmount = money(requests.filter((item: any) => item.status === "PAID" && item.paidAt && monthKey(item.paidAt) === currentKey).reduce((sum: number, item: any) => sum + toNumber(item.netAmount), 0));
+  const distributionRequests = requests.filter((item: any) => item.sourceType === "artist_royalty");
+  const currentMonthPaidAmount = money(distributionRequests.filter((item: any) => item.status === "PAID" && item.paidAt && monthKey(item.paidAt) === currentKey).reduce((sum: number, item: any) => sum + toNumber(item.netAmount), 0));
   const quarterRows = splitEarnings.filter((item: any) => item.royaltyLineItem.statementMonth >= currentQuarter.start && item.royaltyLineItem.statementMonth <= currentQuarter.end);
   const currentQuarterEarnings = money(quarterRows.reduce((sum: number, item: any) => sum + toNumber(item.netShareAmount), 0));
   const currentQuarterHeld = money(quarterRows.filter((item: any) => ["held", "pending_payout_details"].includes(item.status)).reduce((sum: number, item: any) => sum + toNumber(item.netShareAmount), 0));
-  const currentQuarterRequests = requests.filter((item: any) => item.requestedAt >= currentQuarter.start && item.requestedAt <= currentQuarter.end);
+  const currentQuarterRequests = distributionRequests.filter((item: any) => item.requestedAt >= currentQuarter.start && item.requestedAt <= currentQuarter.end);
   const currentQuarterPaid = money(currentQuarterRequests.filter((item: any) => item.status === "PAID").reduce((sum: number, item: any) => sum + toNumber(item.netAmount), 0));
-  const currentQuarterPending = money(currentQuarterRequests.filter((item: any) => ["REQUESTED", "APPROVED", "PROCESSING"].includes(item.status)).reduce((sum: number, item: any) => sum + toNumber(item.amount), 0));
+  const currentQuarterPending = money(currentQuarterRequests.filter((item: any) => ["REQUESTED", "UNDER_REVIEW", "APPROVED", "PROCESSING"].includes(item.status)).reduce((sum: number, item: any) => sum + toNumber(item.amount), 0));
   const payoutRequestsOpen = process.env.ALLOW_PAYOUT_REQUESTS_DURING_OPEN_QUARTER === "true" || Boolean(carryForward);
   const monthlyBreakdown = splitEarnings.map((item: any) => ({ id: item.id, month: monthLabel(item.royaltyLineItem.statementMonth), release: item.release?.title ?? "Release", track: item.track?.title ?? "Release level", platform: item.royaltyLineItem.platform, upc: item.royaltyLineItem.upc ?? "-", isrc: item.royaltyLineItem.isrc ?? "-", grossRevenue: toNumber(item.royaltyLineItem.grossRevenue), artistPool: toNumber(item.royaltyLineItem.netRevenue), sharePercent: toNumber(item.sharePercent), myEarnings: toNumber(item.netShareAmount), heldAmount: ["held", "pending_payout_details"].includes(item.status) ? toNumber(item.netShareAmount) : 0, paidAmount: 0, status: item.status }));
 

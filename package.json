@@ -65,6 +65,7 @@
     "test:acquisition": "tsx scripts/verify-acquisition-isolated.ts",
     "test:growth-integration": "tsx scripts/verify-growth-isolated.ts",
     "test:payout": "tsx scripts/verify-payout-domain.ts",
+    "test:income-explorer": "node --import tsx scripts/verify-income-policy.ts && node --conditions=react-server --import tsx scripts/verify-payout-domain.ts && node scripts/verify-income-history-route.cjs && node --import tsx scripts/verify-acquisition-isolated.ts --income-explorer-only && node scripts/verify-income-explorer-browser.cjs && node --import tsx scripts/verify-earnings.ts --isolated",
     "test:analytics": "tsx scripts/verify-analytics-domain.ts",
     "test:migration-safety": "tsx scripts/verify-migration-safety.ts",
     "test:audit-log-schema": "tsx scripts/verify-audit-log-schema.ts",

@@ -3,7 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import { FormEvent, useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ArrowUpRight, RefreshCw, X } from "lucide-react";
+import { ArrowUpRight, ChevronRight, RefreshCw, X } from "lucide-react";
 import { EarningsRecords, WithdrawalRecords } from "@/components/earnings-records";
 import { EarningsBalance, EarningsOverview } from "@/components/earnings-overview";
 import { IncomeSources } from "@/components/income-sources";
@@ -171,7 +171,12 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
       <header className={styles.heading}><div><h1>Earnings & payouts</h1><p>Your reported royalties, available funds and withdrawals, together.{refreshedAt ? ` Updated ${refreshedAt}.` : ""}</p></div><button className={styles.refresh} type="button" disabled={refreshing} onClick={()=>void refresh()}><RefreshCw size={14} aria-hidden="true"/>{refreshing ? "Refreshing..." : "Refresh balances"}</button></header>
       {refreshError ? <p className={styles.feedback} role="alert">{refreshError}</p> : null}
       <span className="sr-only" role="status">{refreshing ? "Refreshing balances" : refreshedAt ? `Balances refreshed at ${refreshedAt}` : "Balances loaded"}</span>
-      <IncomeSources/>
+      <IncomeSources onDistribution={()=>document.getElementById('distribution-payouts')?.scrollIntoView({behavior:'smooth'})} onMoneyChanged={()=>void refresh()}/>
+      <section id="distribution-payouts" aria-label="Distribution payouts" className={styles.distributionIntro}>
+        <div><span className={styles.kicker}>DISTRIBUTION PAYOUT WORKSPACE</span><h2>Royalties have their own rhythm.</h2><p>Track verified reports, your share and each payout through HYMN. Distribution partner reporting and settlement are handled separately from your other income.</p></div>
+        <div className={styles.distributionFlow} aria-label="Distribution payout journey"><span>Partner reports</span><ChevronRight size={14}/><span>Verified royalties</span><ChevronRight size={14}/><span>Quarterly payout</span></div>
+        <p>HYMN takes zero additional royalty commission. The distribution partner’s share is reflected in royalty reporting; the separate withdrawal fee is shown before you request payment.</p>
+      </section>
       <EarningsBalance summary={summary} onSection={selectTab} onWithdraw={()=>setModalOpen(true)}/>
       <nav className={styles.tabs} aria-label="Earnings and payout sections">
         {(["overview", "monthly", "quarterly", "statements", "requests", "details"] as const).map(tab=><button key={tab} type="button" onClick={()=>selectTab(tab)} aria-current={activeTab===tab ? "page" : undefined}>{({overview:"Overview",monthly:"Earnings history",quarterly:"Quarter summary",statements:"Statements",requests:"Withdrawals",details:"Payout details"})[tab]}</button>)}
