@@ -3675,7 +3675,7 @@ export function ReleaseForm({
 <header className="release-tracklist-heading">
               <div>
                 <h2>Track list</h2>
-                <p>{tracks.length} track{tracks.length === 1 ? "" : "s"}</p>
+                <p>{tracks.length} track{tracks.length === 1 ? "" : "s"} · Audio, artists and credits. Open a track to finish its details.</p>
               </div>
               <div>
                 <button type="button" onClick={() => setExpandedTrack(-1)} disabled={expandedTrack === -1}><ChevronUp /> Collapse all</button>
@@ -4396,7 +4396,7 @@ export function ReleaseForm({
           </section>
         </section>) : null}
 {entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="4" id="release-section-4" aria-labelledby="release-section-4-title">
-          <header className={layoutStyles.sheetHeading}><h2 id="release-section-4-title">Cover art</h2></header>
+          <header className={layoutStyles.sheetHeading}><h2 id="release-section-4-title">Cover art</h2><p>The first impression of your release. Upload your artwork and check the requirements below.</p></header>
           <section
             className={clsx(
               "release-artwork-stage grid items-start gap-5 lg:grid-cols-[minmax(300px,0.85fr),minmax(0,1.15fr)]",
@@ -4574,7 +4574,7 @@ export function ReleaseForm({
           </section>
         </section>) : null}
 {entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="2" id="release-section-2" aria-labelledby="release-section-2-title">
-          <header className={layoutStyles.sheetHeading}><h2 id="release-section-2-title">Release information</h2></header>
+          <header className={layoutStyles.sheetHeading}><h2 id="release-section-2-title">Release information</h2><p>Give your release its identity, then choose when listeners can discover it.</p></header>
 
 <section
             className={clsx(

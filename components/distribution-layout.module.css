@@ -81,8 +81,9 @@ html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-mobi
 html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-workflow-summary),
 html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-workflow-nav) { display:none!important; }
 html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-editor-panels) { display:flex!important; flex-direction:column; gap:40px; width:100%; }
-.sheetSection { width:100%; min-width:0; scroll-margin-top:160px; display:grid; gap:20px; padding-bottom:32px; border-bottom:1px solid var(--border); }
-.sheetHeading h2 { margin:0; color:var(--text); font-size:clamp(20px,2vw,26px); line-height:1.3; letter-spacing:-.02em; font-weight:600; }
+.sheetSection { width:100%; min-width:0; scroll-margin-top:160px; display:grid; gap:28px; padding-bottom:44px; border-bottom:1px solid var(--border); }
+.sheetHeading h2 { margin:0; color:var(--text); font-size:clamp(24px,2.4vw,32px); line-height:1.2; letter-spacing:-.035em; font-weight:600; }
+.sheetHeading p { max-width:62ch; margin:10px 0 0; font-size:14px; line-height:1.7; color:var(--text-muted); }
 html body .workflow.workflow.workflow.workflow.singleSheet .sheetSection > section { width:100%; min-width:0; margin:0; padding-block:0!important; grid-column:auto!important; grid-row:auto!important; animation:none!important; }
 html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-artist-stage) { min-height:0!important; }
 html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-focused-side-nav) { display:none!important; }
@@ -119,3 +120,87 @@ html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-artw
 }
 html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-existing-identifiers) { margin:0; padding:16px; border-radius:12px; }
 html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-save-defaults) { padding:14px 16px; gap:12px; border-radius:10px; }
+
+/* One open editorial surface. Keep boundaries on controls, not nested cards. */
+html body .workflow.workflow.workflow.workflow.singleSheet {
+  max-width:1120px!important;
+  margin-inline:auto;
+  padding:clamp(24px,4vw,56px)!important;
+  background:transparent!important;
+  border-radius:0!important;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-editor-panels) { gap:52px; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-tracklist-heading) { padding:0; margin:0; align-items:flex-start; gap:20px; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-tracklist-heading) h2 { font-size:clamp(24px,2.4vw,32px); letter-spacing:-.035em; line-height:1.2; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-tracklist-heading) p { margin-top:10px; font-size:14px; line-height:1.7; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-tracklist-stage) { gap:0; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-panel) {
+  padding:24px 0!important;
+  border:0!important;
+  border-bottom:1px solid var(--border)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-trigger) {
+  padding:8px 0!important; min-height:72px;
+  border:0!important; border-radius:0!important; background:transparent!important;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-trigger) h3 { font-size:17px; line-height:1.5; letter-spacing:-.015em; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-status) { font-size:12px; line-height:1.6; gap:8px; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.track-editor-fields) {
+  margin-top:24px; padding:28px 24px;
+  border:0; border-radius:16px;
+  background:color-mix(in srgb,var(--card) 48%,transparent);
+  gap:28px;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.track-editor-fields) > :global(.grid) { gap:24px; }
+html body .workflow.workflow.workflow.workflow.singleSheet :is(:global(.field),:global(.input)) {
+  min-height:52px!important; padding:14px 12px!important;
+  border-width:0 0 1px!important; border-radius:0!important;
+  background:transparent!important; box-shadow:none!important;
+  font-size:15px; line-height:1.6;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet textarea:global(.field) { min-height:120px!important; resize:vertical; }
+html body .workflow.workflow.workflow.workflow.singleSheet :is(:global(.field),:global(.input)):focus-visible {
+  background:var(--input)!important; outline:2px solid var(--focus)!important; outline-offset:3px;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :is(:global(.release-existing-identifiers),:global(.artwork-requirements),:global(.release-save-defaults)) {
+  padding:20px 0!important; border:0!important; border-radius:0!important;
+  background:transparent!important; box-shadow:none!important;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-rights-stage) > :global(.rounded-xl),
+html body .workflow.workflow.workflow.workflow.singleSheet :is(.deliveryStores,.deliveryOptions) > div {
+  padding:24px 0!important; border:0!important; border-radius:0!important; background:transparent!important;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-metadata-stage) { column-gap:40px; row-gap:28px; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-details-fields) { gap:28px; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-library-audio) {
+  padding:20px 0!important; border:0!important; border-top:1px solid var(--border)!important; border-radius:0!important;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-library-preview) { border:0!important; background:transparent!important; padding:12px 0!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-footer-mobile-actions) {
+  border:0!important; border-top:1px solid var(--border)!important; border-radius:0!important;
+  padding:16px 0 calc(16px + env(safe-area-inset-bottom))!important;
+  background:color-mix(in srgb,var(--bg) 94%,transparent)!important; backdrop-filter:blur(16px);
+}
+@media(max-width:767px) {
+  html body .workflow.workflow.workflow.workflow.singleSheet { padding:24px 16px!important; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-editor-panels) { gap:36px; }
+  .sheetSection { gap:22px; padding-bottom:32px; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-panel) { padding:18px 0!important; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :global(.track-editor-fields) { padding:22px 16px; margin-top:16px; gap:24px; border-radius:12px; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-trigger) { gap:10px; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-track-trigger) h3 { font-size:16px; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :is(:global(.field),:global(.input)) { font-size:16px!important; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-tracklist-heading) { flex-wrap:wrap; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-tracklist-heading) > div { min-width:0; max-width:100%; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-tracklist-heading) > div:last-child { width:100%; justify-content:space-between; }
+}
+html body .workflow.workflow.workflow.workflow.entrySheet { padding:clamp(24px,4vw,48px)!important; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-focused-card) {
+  border:0!important; background:transparent!important; box-shadow:none!important; padding:20px 0!important;
+}
+@media(max-width:767px) {
+  html body .workflow.workflow.workflow.workflow.entrySheet { padding:24px 16px!important; }
+}
