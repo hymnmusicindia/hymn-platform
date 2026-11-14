@@ -24,6 +24,18 @@ html body :is(.hymn-portal-root,.hymn-landing,.landing-workspace,.landing-canvas
   overflow:visible!important; height:auto!important;
 }
 html body :is(.hymn-portal-root,.hymn-landing):has(.release-journey-intro) { min-height:calc(100svh - var(--release-site-header-height,64px))!important; height:auto!important; }
+html body .release-workflow.release-workflow.release-workflow :is(.release-selected-artist,.release-track-selected-artist) > :is(img,.release-selected-artist-avatar) {
+  transition:opacity .16s ease,filter .16s ease;
+}
+html body .release-workflow.release-workflow.release-workflow :is(.release-selected-artist,.release-track-selected-artist).is-removal-armed > :is(img,.release-selected-artist-avatar) {
+  opacity:.6; filter:blur(1.5px);
+}
+html body .release-workflow.release-workflow.release-workflow .release-selected-artist-remove {
+  background:transparent!important; color:#dc143c!important;
+}
+@media(prefers-reduced-motion:reduce) {
+  html body .release-workflow.release-workflow.release-workflow :is(.release-selected-artist,.release-track-selected-artist) > :is(img,.release-selected-artist-avatar) { transition:none; }
+}
 @media(max-height:640px) {
   html body .release-journey-intro.release-journey-intro .release-journey-intro-body { padding-block:24px!important; }
   html body .release-workflow.release-workflow.release-workflow.release-workflow.release-workflow.release-workflow:has(.release-artist-stage) .release-workflow-content { padding-block:16px!important; }
