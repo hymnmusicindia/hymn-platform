@@ -1,3 +1,5 @@
+import { hasPartnerReleaseApproval, partnerEstimatedDate } from "./partner-release-approval";
+import { queuePartnerReleaseApproval } from "./release-partner-approval-notifications";
 import { completeArtistAmendment } from '@/lib/release-artist-amendment';
 import { artistIdentityFingerprint, cardIdentity, conflictsWithHistoricalIdentity, selectedReleaseArtistIds, snapshotMatchesCard } from '@/lib/release-artist-verification';
 import { prisma } from "@/lib/prisma";
@@ -665,7 +667,8 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     (previousStatus === "live" && aggregateStatus.canonical !== "live") ||
     (previousStatus === "partially_live" && !["live", "partially_live"].includes(aggregateStatus.canonical ?? "")) ||
     (previousStatus === "rejected" && ["live", "partially_live"].includes(aggregateStatus.canonical ?? ""));
-  const providerAccepted = retainedPendingReview || ["scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(aggregateStatus.provider) ||
+  const verifiedPartnerApproval = hasVerifiedProviderListing && !withdrawn && !providerCorrections.length && !explicitProviderStatus && hasPartnerReleaseApproval(remoteRelease, remoteTracks, payload);
+  const providerAccepted = verifiedPartnerApproval || retainedPendingReview || ["scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(aggregateStatus.provider) ||
     (hasVerifiedProviderListing && !providerCorrections.length && !explicitProviderStatus &&
       (String(remoteRelease.status ?? payload.status ?? '').trim().toLowerCase() === 'accepted' ||
         (remoteTracks.length > 0 && remoteTracks.every(track => /^(approved|accepted)$/i.test(String(track.status ?? '').trim())))));
@@ -711,7 +714,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         await tx.release.update({ where: { id: releaseId }, data: { metadata: json({ ...record(current.metadata), direNote: { ...record(record(current.metadata).direNote), appliedCorrectionFingerprint: correctionFingerprint } }) } });
       });
     } else {
-      await updateDetailedReleaseStatus(releaseId, aggregateStatus.canonical, `DireNote status confirmed: ${aggregateStatus.provider}.`, undefined, { manualOverride: true, actorType: "system", notify: !suppressAmendmentNotifications, persist: async tx => {
+      await updateDetailedReleaseStatus(releaseId, aggregateStatus.canonical, `DireNote status confirmed: ${aggregateStatus.provider}.`, undefined, { manualOverride: true, actorType: "system", notify: !suppressAmendmentNotifications && !(verifiedPartnerApproval && aggregateStatus.canonical === "scheduled"), persist: async tx => {
         const currentRevision = await tx.release.findUniqueOrThrow({where:{id:releaseId},select:{version:true}});
         if (currentRevision.version !== release.version) throw new Error("DIRENOTE_SYNC_DEFERRED: A newer release revision arrived before applying the provider decision.");
       } });
@@ -720,6 +723,9 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       }
       await resolveAdminTask(`release:${releaseId}:direnote:correction:${attempt.id}:${record(attempt.corrections).fingerprint}`, "DireNote no longer reports a correction requirement.");
     }
+  }
+  if (verifiedPartnerApproval && !staleRegression && !responseAwaitingReview && !suppressAmendmentNotifications) {
+    await queuePartnerReleaseApproval(releaseId, attempt.id, lookupUpc!, partnerEstimatedDate(remoteRelease, payload));
   }
   if (!customerWorkflow && aggregateStatus.canonical && aggregateStatus.canonical !== previousStatus && ["partially_live", "awaiting_live_confirmation"].includes(aggregateStatus.canonical)) {
     const copy = aggregateStatus.canonical === "partially_live"

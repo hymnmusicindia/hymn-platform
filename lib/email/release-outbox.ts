@@ -1,3 +1,4 @@
+import { PARTNER_APPROVAL_FORWARD_STATES } from "@/lib/partner-release-approval";
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getEmailClient, getEmailConfig } from "./email-client";
@@ -118,10 +119,12 @@ export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, del
     const forwardStatus = ["APPROVED", "QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "SCHEDULED", "LIVE"].includes(release?.status ?? "");
     const acceptedAttempt = job.template === "release_sent_to_distributor" && payload.correctionAttemptId ? await prisma.distributionSubmissionAttempt.findFirst({ where: { id: Number(payload.correctionAttemptId), releaseId: Number(job.entityId), isCurrent: true }, select: { id: true, state: true, isCurrent: true, idempotencyKey: true, providerReference: true, upc: true, responseRedacted: true } }) : null;
     const validHandoff = job.template === "release_sent_to_distributor" && canNotifyDireNoteHandoff(release?.status ?? "", acceptedAttempt);
+    const approvalAttempt = job.template === "release_partner_approved" && Number.isSafeInteger(payload.approvalAttemptId) && typeof payload.approvalUpc === "string" ? await prisma.distributionSubmissionAttempt.findFirst({ where: { id: payload.approvalAttemptId, releaseId: Number(job.entityId), provider: "direnote", isCurrent: true, upc: payload.approvalUpc }, select: { id: true } }) : null;
+    const validPartnerApproval = Boolean(approvalAttempt && release && release.userId === job.userId && release.upc === payload.approvalUpc && PARTNER_APPROVAL_FORWARD_STATES.includes(release.status) && !/rejected|changes|required|failed/.test(currentProviderStatus));
     const validMilestone = job.template === "release_approved_by_hymn" ? forwardStatus : validHandoff;
     const amendment = job.template === 'release_amendment_update' ? await prisma.releaseChangeRequest.findFirst({ where: { id: Number(payload.amendmentRequestId), releaseId: Number(job.entityId), requestedByUserId: job.userId ?? 0 } }) : null;
     const validAmendment = Boolean(amendment && String(object(amendment.requestedChanges).fingerprint ?? '') === String(payload.amendmentFingerprint ?? '') && (payload.amendmentStatus === 'submitted' || amendment.status === payload.amendmentStatus));
-    if (!release || release.archivedAt || (job.template === 'release_amendment_update' ? !validAmendment : job.template === 'release_sent_to_distributor' ? !validMilestone : !validSubmission && !validMilestone && release.status !== payload.expectedStatus) || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {
+    if (!release || release.archivedAt || (job.template === 'release_partner_approved' ? !validPartnerApproval : job.template === 'release_amendment_update' ? !validAmendment : job.template === 'release_sent_to_distributor' ? !validMilestone : !validSubmission && !validMilestone && release.status !== payload.expectedStatus) || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {
       await prisma.emailLog.update({ where: { id: job.id }, data: { status: "cancelled", errorMessage: "Release, owner or draft changed before delivery." } }); cancelled++; continue;
     }
     try {

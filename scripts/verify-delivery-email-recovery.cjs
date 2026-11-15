@@ -14,7 +14,13 @@ const db = {
     update: async ({where,data}) => Object.assign(logs.find(x=>x.id===where.id),data)
   }
 };
+const approvalSandbox={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/partner-release-approval.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,approvalSandbox);
+const evidenceSandbox={exports:{},require:()=>({validIsrc:s=>/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(s),validReleaseBarcode:s=>/^\d{12,14}$/.test(s)})};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/direnote-submission-evidence.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,evidenceSandbox);
 const mocks={
+ '@/lib/direnote-submission-evidence':evidenceSandbox.exports,
+ '@/lib/partner-release-approval':approvalSandbox.exports,
  'server-only':{}, '@/lib/prisma':{prisma:db},
  './email-client':{getEmailConfig:()=>({enabled:true,from:'fixture@example.test'}),getEmailClient:()=>({emails:{send:async()=>{deliveries++;return {data:{id:'fixture'},error:null};}}})},
  './templates/release-status-email':{releaseStatusEmail:(event,input)=>({subject:event,html:input.upc||'',text:input.upc||''})},
