@@ -3,6 +3,7 @@ import {subscriptionPaymentFailureMessage} from "@/lib/subscription-recurrence";
 import { DistributionReferenceBrowser } from "./distribution-insights-panel";
 import { correctionSocialRestricted } from "@/lib/correction-social-policy";
 import { CorrectionStoreNotice } from "./distribution/correction-store-notice";
+import { AudioBatchDrop } from "./distribution/audio-batch-drop";
 import { ContentOwnershipChoice } from "./distribution/content-ownership-choice";
 import { StoreChoice } from "./distribution/store-choice";
 import { IncludedStores } from "./distribution/included-stores";
@@ -68,6 +69,7 @@ import { submitCorrectionPackage } from "@/lib/client-correction-submit";
 import { artistCreditNames, artistSelectionIssue, selectedArtistCreditNames, restoreArtistProfileIds } from "@/lib/release-artist-validation";
 import { ArtistPicker } from "@/components/artist-picker";
 import { ArtistRoleHelp } from "@/components/artist-role-help";
+import { prepareAudioWaveformFile, seedAudioWaveform } from "@/lib/client-audio-waveform";
 import { AudioWaveform } from "@/components/audio-waveform";
 import { GenreSelector } from "@/components/genre-selector";
 import { MoodSelector } from "@/components/mood-selector";
@@ -1092,6 +1094,8 @@ export function ReleaseForm({
   const [status, setStatus] = useState<string | null>(null);
   const submissionFeedback = useOperationProgress(submitting, uploadProgress > 0 ? uploadProgress : undefined, submissionComplete, status ?? undefined);
   const [batchUploading, setBatchUploading] = useState(false);
+  const batchUploadLockRef = useRef(false);
+  const [trackDropTarget, setTrackDropTarget] = useState<{ index: number; edge: "before" | "after" } | null>(null);
   const replacingAudioRef = useRef(new Set<string>());
   const [replacingAudioCount, setReplacingAudioCount] = useState(0);
   const [trackListNotice, setTrackListNotice] = useState("");
@@ -1909,6 +1913,7 @@ export function ReleaseForm({
   function reorderTrack(from: number, to: number) {
     if (amendmentMode || batchUploading || replacingAudioRef.current.size || tracks.some(track => track.audioUploadStatus === "uploading")) return;
     if (from === to || from < 0 || to < 0 || from >= tracks.length || to >= tracks.length) return;
+    const focusedControl = document.activeElement instanceof HTMLElement && document.activeElement.closest(".release-managed-master") ? document.activeElement : null;
     setTrackList((current) => {
       const next = [...current];
       const [moved] = next.splice(from, 1);
@@ -1922,6 +1927,11 @@ export function ReleaseForm({
       return current;
     });
     setTrackListNotice(`Moved ${tracks[from].trackTitle || tracks[from].audioFileName || "track"} to position ${to + 1} of ${tracks.length}.`);
+    if (focusedControl) window.requestAnimationFrame(() => {
+      if (!focusedControl.isConnected) return;
+      focusedControl.focus({ preventScroll: true });
+      focusedControl.closest(".release-managed-master")?.scrollIntoView({ block: "nearest" });
+    });
   }
 
   async function replaceTrackAudio(trackId: string, file: File, signal: AbortSignal, reportProgress: (loaded: number, total: number) => void) {
@@ -1930,6 +1940,7 @@ export function ReleaseForm({
     if (!file.size) throw new Error("The selected file is empty.");
     const original = tracks.find(track => track.id === trackId);
     if (!original) throw new Error("This track is no longer available.");
+    const waveform = prepareAudioWaveformFile(file);
     replacingAudioRef.current.add(trackId); setReplacingAudioCount(replacingAudioRef.current.size);
     try {
       const duration = await getAudioDuration(file);
@@ -1937,6 +1948,7 @@ export function ReleaseForm({
       const releaseId = await ensureUploadDraft();
       const downloadPath = await uploadPrivateAudio(file, { releaseId, clientTrackId: trackId, signal, onProgress: reportProgress });
       signal.throwIfAborted();
+      seedAudioWaveform(downloadPath, waveform);
       // Swap only the audio fields after success; credits, identifiers and order stay with this track.
       setTracks(current => current.map(track => track.id === trackId ? { ...track, audioFile: null, audioFileName: file.name, existingAudioUrl: downloadPath, audioPreviewUrl: downloadPath, audioAssetId: undefined, duration, audioUploadStatus: "uploaded", audioUploadProgress: 100, audioBytesUploaded: file.size, audioTotalBytes: file.size, requiresAudioReplacement: false } : track));
       if (original.audioPreviewUrl.startsWith("blob:")) { safeRevokePreviewUrl(original.audioPreviewUrl); audioPreviewObjectUrlsRef.current.delete(original.audioPreviewUrl); }
@@ -1997,6 +2009,8 @@ export function ReleaseForm({
     if (!supportedMime || !/\.(wav|mp3)$/i.test(file.name)) {
       throw new Error("HYMN requires WAV or MP3 audio. FLAC and other formats are not accepted.");
     }
+    setStatus(null);
+    const waveform = prepareAudioWaveformFile(file);
     clearCorrectionField("audio-upload", `track-${index}-audio`);
     const currentTrack = tracks[index];
     const trackId = clientTrackId ?? currentTrack?.id;
@@ -2033,6 +2047,7 @@ export function ReleaseForm({
           patchTrack({ audioUploadProgress: Math.min(99, Math.round(loaded / Math.max(total, 1) * 100)), audioBytesUploaded: loaded, audioTotalBytes: total });
         },
       });
+      seedAudioWaveform(downloadPath, waveform);
       patchTrack({
         audioFile: null,
         audioFileName: file.name,
@@ -2085,17 +2100,26 @@ export function ReleaseForm({
   }
 
   async function handleAudioBatch(files: FileList | File[]) {
-    if (batchUploading || replacingAudioRef.current.size) return;
+    if (amendmentMode) { setStatus("Existing tracks and their ISRCs are locked. Replace an existing master instead."); return; }
+    if (batchUploadLockRef.current || batchUploading || replacingAudioRef.current.size || tracks.some(track => track.audioUploadStatus === "uploading")) return;
     const selected = Array.from(files);
     if (!selected.length) return;
-    const existingAudioCount = tracks.filter((track) => Boolean(track.existingAudioUrl || track.audioFile || track.audioPreviewUrl)).length;
-    const resultingTrackCount = existingAudioCount + selected.length;
-    if (singleReleaseGift) {
-      if (resultingTrackCount > 1) setStatus("Your free first release covers one Single, so only the first track can be used.");
-      if (existingAudioCount === 0) await uploadAudioBatch(selected.slice(0, 1), 1);
+    if (selected.some(file => !/\.(wav|mp3)$/i.test(file.name) || !["audio/wav", "audio/x-wav", "audio/mpeg"].includes(file.type))) {
+      setStatus("Choose only WAV or MP3 audio masters. No files from this batch were added.");
       return;
     }
-    await uploadAudioBatch(selected, 30);
+    batchUploadLockRef.current = true;
+    try {
+      const existingAudioCount = tracks.filter(track => Boolean(track.existingAudioUrl || track.audioFile || track.audioPreviewUrl)).length;
+      if (singleReleaseGift) {
+        if (existingAudioCount === 0) await uploadAudioBatch(selected.slice(0, 1), 1);
+        if (existingAudioCount + selected.length > 1) setStatus("Your free first release covers one Single, so only the first track can be used.");
+        return;
+      }
+      await uploadAudioBatch(selected, 30);
+    } finally {
+      batchUploadLockRef.current = false;
+    }
   }
 
   async function resumeAudioUpload(session: PendingAudioUpload, file: File) {
@@ -2454,7 +2478,9 @@ export function ReleaseForm({
   const primaryArtistComplete = !primaryArtistIssue;
   const audioAssetsComplete = tracks.every((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
   const uploadedMusicTracks = tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length;
-  const canAddMusic = (!singleReleaseGift || uploadedMusicTracks === 0) && tracks.length < 30;
+  const musicQueueVisible = amendmentMode || tracks.length > 1 || batchUploading || tracks.some(track => Boolean(track.audioFileName || track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
+  const musicUploadBusy = batchUploading || replacingAudioCount > 0 || tracks.some(track => track.audioUploadStatus === "uploading");
+  const canAddMusic = !amendmentMode && (!singleReleaseGift || uploadedMusicTracks === 0) && tracks.length < 30;
   const stepChecks = [
     audioComplete,
     primaryArtistComplete && !destinationsIssues().some((issue) => issue.step === 1),
@@ -3674,30 +3700,26 @@ export function ReleaseForm({
 {entryStage === 0 ? (<section ref={registerField("audio-upload") as (node: HTMLElement | null) => void} className={clsx("release-audio-stage", stepMotion)}>
 
             <div className="release-focused-intro release-music-heading">
-              <div><h2>Add your music</h2><p>{uploadedMusicTracks ? `${uploadedMusicTracks} track${uploadedMusicTracks === 1 ? "" : "s"} added` : "Start with your audio master"}</p></div>
-              <div className="release-music-format"><span>{releaseType === "ep" ? "EP" : releaseType === "album" ? "Album" : "Single"}</span></div>
+              <h2>Add your music</h2>
+              <p className="release-music-summary"><span>{releaseType === "ep" ? "EP" : releaseType === "album" ? "Album" : "Single"}</span><span aria-hidden="true"> · </span><span>{musicQueueVisible ? `${tracks.length} track${tracks.length === 1 ? "" : "s"}${batchUploading ? " uploading" : " added"}` : "Start with your audio masters"}</span></p>
             </div>
             <div className="release-onboarding-assets">
             <div className="release-onboarding-audio">
-              {canAddMusic ? <label className="release-batch-upload" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!batchUploading && !replacingAudioCount) void handleAudioBatch(event.dataTransfer.files); }}>
-                <UploadCloud aria-hidden="true" />
-                <span><strong>{batchUploading ? "Uploading…" : uploadedMusicTracks ? "Add tracks" : "Choose audio"}</strong><small>WAV or MP3 <span className="release-desktop-upload-hint">· Drag files here</span></small></span>
-                <input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" multiple disabled={batchUploading || replacingAudioCount > 0} onChange={(event) => { if (event.target.files) void handleAudioBatch(event.target.files); event.target.value = ""; }} />
-              </label> : null}
+              {!musicQueueVisible && canAddMusic ? <AudioBatchDrop compact={false} disabled={musicUploadBusy} onFiles={files => void handleAudioBatch(files)} /> : null}
               {pendingAudioUploads.length ? <div className="release-resume-uploads" role="status"><strong>Continue an interrupted upload</strong><p>Choose the original file. Uploaded chunks will be reused where possible.</p>{pendingAudioUploads.map((session) => <label key={session.id}><span>{session.originalFilename} · {Math.round(session.bytesUploaded / Math.max(session.totalSize, 1) * 100)}% received</span><span className="release-resume-file">Choose file<input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" onChange={(event) => { const file = event.target.files?.[0]; if (file) void resumeAudioUpload(session, file); event.target.value = ""; }} /></span></label>)}</div> : null}
-            {uploadedMusicTracks > 0 && <div className="release-master-toolbar"><div><strong>Track sequence</strong><p>{amendmentMode ? "Original track order and ISRCs are locked." : "Drag the handle or use the arrows to set your release order."}</p></div><span>{uploadedMusicTracks} audio {uploadedMusicTracks === 1 ? "master" : "masters"}</span></div>}
-            {trackListNotice && <p className="release-master-notice" role="status">{trackListNotice}</p>}
-            <div className={clsx("release-audio-queue", tracks.length > 4 && "is-scrollable")}>
-              {!tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) && !singleReleaseGift ? null : tracks.map((track, index) => {
+            {musicQueueVisible && <div className="release-master-toolbar"><div><strong>Track sequence</strong><p>{amendmentMode ? "Original track order and ISRCs are locked." : "Drag to reorder, or choose a track’s position."}</p></div></div>}
+            {trackListNotice && <p className="release-master-notice sr-only" role="status">{trackListNotice}</p>}
+            {musicQueueVisible ? <div className="release-audio-queue" onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void handleAudioBatch(event.dataTransfer.files); } }}>
+              {tracks.map((track, index) => {
                 const hasAudio = Boolean((track.audioPreviewUrl || track.existingAudioUrl) && track.audioUploadStatus === "uploaded");
                 const isUploading = track.audioUploadStatus === "uploading";
                 return (
-                  <article key={track.id} className={clsx("release-audio-queue-item release-managed-master", hasAudio && "is-ready", isUploading && "is-uploading", draggedTrackIndex === index && "is-dragging")}
-                    onDragOver={event => { if (!amendmentMode && !batchUploading && !replacingAudioCount && event.dataTransfer.types.includes("application/x-hymn-track")) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
-                    onDrop={event => { const id = event.dataTransfer.getData("application/x-hymn-track"); if (!id) return; event.preventDefault(); reorderTrack(tracks.findIndex(item => item.id === id), index); setDraggedTrackIndex(null); }}>
-                    {!amendmentMode && tracks.length > 1 && <button type="button" className="release-master-grip" draggable={!batchUploading && !replacingAudioCount && !tracks.some(item => item.audioUploadStatus === "uploading")} disabled={batchUploading || replacingAudioCount > 0 || tracks.some(item => item.audioUploadStatus === "uploading")} onDragStart={event => { event.dataTransfer.setData("application/x-hymn-track", track.id); event.dataTransfer.effectAllowed = "move"; setDraggedTrackIndex(index); }} onDragEnd={() => setDraggedTrackIndex(null)} aria-label={`Drag to reorder ${track.trackTitle || `track ${index + 1}`}`} title="Drag to reorder; arrow buttons also available"><GripVertical size={18}/></button>}
+                  <article key={track.id} className={clsx("release-audio-queue-item release-managed-master", hasAudio && "is-ready", isUploading && "is-uploading", draggedTrackIndex === index && "is-dragging")} data-drop-edge={draggedTrackIndex !== null && trackDropTarget?.index === index ? trackDropTarget.edge : undefined}
+                    onDragOver={event => { if (!amendmentMode && !batchUploading && !replacingAudioCount && event.dataTransfer.types.includes("application/x-hymn-track")) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; const box = event.currentTarget.getBoundingClientRect(); setTrackDropTarget({ index, edge: event.clientY < box.top + box.height / 2 ? "before" : "after" }); } }}
+                    onDrop={event => { const id = event.dataTransfer.getData("application/x-hymn-track"); if (!id) return; event.preventDefault(); const from = tracks.findIndex(item => item.id === id); const insertion = index + (trackDropTarget?.edge === "after" ? 1 : 0); reorderTrack(from, insertion - (from < insertion ? 1 : 0)); setDraggedTrackIndex(null); setTrackDropTarget(null); }}>
+                    {!amendmentMode && tracks.length > 1 && <button type="button" className="release-master-grip" draggable={!batchUploading && !replacingAudioCount && !tracks.some(item => item.audioUploadStatus === "uploading")} disabled={batchUploading || replacingAudioCount > 0 || tracks.some(item => item.audioUploadStatus === "uploading")} onDragStart={event => { event.dataTransfer.setData("application/x-hymn-track", track.id); event.dataTransfer.effectAllowed = "move"; setDraggedTrackIndex(index); }} onDragEnd={() => { setDraggedTrackIndex(null); setTrackDropTarget(null); }} onKeyDown={event => { const to = event.key === "ArrowUp" ? index - 1 : event.key === "ArrowDown" ? index + 1 : event.key === "Home" ? 0 : event.key === "End" ? tracks.length - 1 : null; if (to !== null) { event.preventDefault(); reorderTrack(index, to); } }} aria-label={`Drag to reorder ${track.trackTitle || `track ${index + 1}`}`} title="Drag to reorder; use arrow keys, Home or End when focused"><GripVertical size={18}/></button>}
                     {isUploading ? <span className="release-audio-queue-progress" style={{ width: `${track.audioUploadProgress}%` }} aria-hidden="true" /> : null}
-                    <span className="release-audio-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                    {!amendmentMode && tracks.length > 1 ? <span className="release-position-control"><select className="release-audio-position" aria-label={`Position of ${track.trackTitle || track.audioFileName || `track ${index + 1}`}`} value={index} disabled={musicUploadBusy} onChange={event => reorderTrack(index, Number(event.target.value))}>{tracks.map((item, position) => <option key={item.id} value={position}>{String(position + 1).padStart(2, "0")}</option>)}</select><ChevronDown size={10} aria-hidden="true" /></span> : <span className="release-audio-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>}
                     <div className="release-audio-queue-main">
                       {isUploading ? (
                         <div className="release-audio-uploading-copy" role="status" aria-live="polite">
@@ -3709,19 +3731,21 @@ export function ReleaseForm({
                           <AudioWaveform
                             src={track.existingAudioUrl || track.audioPreviewUrl}
                             title={track.trackTitle || track.audioFileName || `Track ${index + 1}`}
-                            subtitle={[track.audioFileName, track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")}
+                            subtitle={[track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" · ")}
                             compact
                           />
                         </div>
-                      ) : (
+                      ) : (<>
+                        {track.audioUploadStatus === "failed" ? <p className="release-audio-failure" role="alert">Upload failed. Choose the file again to retry.</p> : null}
                         <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add track" title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
-                      )}
+                      </>)}
                     </div>
-                    {hasAudio ? <ReleaseTrackActions name={track.trackTitle || track.audioFileName || `track ${index + 1}`} index={index} count={tracks.length} disabled={batchUploading || replacingAudioCount > 0 || tracks.some(item => item.audioUploadStatus === "uploading")} orderLocked={amendmentMode} replace={(file, signal, progress) => replaceTrackAudio(track.id, file, signal, progress)} move={direction => moveTrack(index, direction)} remove={() => tracks.length > 1 ? removeTrack(index) : clearTrackAudio(index)}/> : tracks.length > 1 ? <button type="button" disabled={batchUploading || replacingAudioCount > 0 || isUploading} className="release-audio-remove" onClick={() => removeTrack(index)} aria-label={`Remove empty track ${index + 1}`}><X /></button> : null}
+                    {hasAudio ? <ReleaseTrackActions compact name={track.trackTitle || track.audioFileName || `track ${index + 1}`} index={index} count={tracks.length} disabled={batchUploading || replacingAudioCount > 0 || tracks.some(item => item.audioUploadStatus === "uploading")} orderLocked={amendmentMode} replace={(file, signal, progress) => replaceTrackAudio(track.id, file, signal, progress)} move={direction => moveTrack(index, direction)} remove={() => tracks.length > 1 ? removeTrack(index) : clearTrackAudio(index)}/> : tracks.length > 1 ? <button type="button" disabled={batchUploading || replacingAudioCount > 0 || isUploading} className="release-audio-remove" onClick={() => removeTrack(index)} aria-label={`Remove empty track ${index + 1}`}><X /></button> : null}
                   </article>
                 );
               })}
-            </div>
+              {canAddMusic ? <AudioBatchDrop compact disabled={musicUploadBusy} onFiles={files => void handleAudioBatch(files)} /> : null}
+            </div> : null}
             </div>
             </div>
           </section>) : null}
@@ -5108,7 +5132,7 @@ export function ReleaseForm({
             </div>
           </section>
         </section>) : null}</div>
-        {entryStage === 0 ? <div className={layoutStyles.entryActions}><button type="button" onClick={continueFromMusic} disabled={tracks.some(track => track.audioUploadStatus === "uploading") || replacingAudioCount > 0}>{audioComplete ? "Continue to release information" : "Skip for now"}<ArrowRight size={16}/></button></div> : null}
+        {entryStage === 0 ? <div className={layoutStyles.entryActions}><button type="button" onClick={continueFromMusic} aria-label={audioComplete ? "Continue to release information" : "Skip for now"} disabled={tracks.some(track => track.audioUploadStatus === "uploading") || replacingAudioCount > 0}>{audioComplete ? "Continue" : "Skip for now"}<ArrowRight size={16}/></button></div> : null}
             <div className={layoutStyles.sheetDraftAction}>
           {entryStage === null ? <button type="button" onClick={enterReviewMode} disabled={submitting} className={layoutStyles.sheetReviewAction}>Review release <ArrowRight size={16} aria-hidden="true" /></button> : null}
         </div>

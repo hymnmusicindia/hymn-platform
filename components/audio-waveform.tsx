@@ -1,5 +1,7 @@
 "use client";
 
+import { loadAudioWaveform, WAVEFORM_SAMPLES } from "@/lib/client-audio-waveform";
+import "./audio-waveform-loading.css";
 import { Pause, Pencil, Play, RotateCcw, Waves } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
@@ -30,10 +32,10 @@ function formatTime(seconds: number) {
 }
 
 function fallbackBars(count: number) {
-  return Array.from({ length: count }, () => 0.08);
+  return Array.from({ length: count }, (_, index) => .2 + Math.abs(Math.sin(index * .37)) * .55);
 }
 
-const PEAK_SAMPLES = 512;
+const PEAK_SAMPLES = WAVEFORM_SAMPLES;
 
 function fitPeaksToWidth(peaks: number[], width: number) {
   const count = Math.max(24, Math.min(160, Math.floor(width / 4)));
@@ -51,6 +53,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
   const [peaks, setPeaks] = useState<number[]>(() => fallbackBars(PEAK_SAMPLES));
   const [waveformWidth, setWaveformWidth] = useState(480);
   const [waveformReady, setWaveformReady] = useState(false);
+  const [waveformError, setWaveformError] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -73,90 +76,20 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
   }, [compact]);
 
   useEffect(() => {
-    if (!validSrc || typeof window === "undefined") {
-      setPeaks(fallbackBars(PEAK_SAMPLES));
-      setWaveformReady(false);
-      return;
-    }
-
     let cancelled = false;
-    let context: AudioContext | null = null;
-    const cacheKey = `hymn-waveform:v2:${src}`;
     setPeaks(fallbackBars(PEAK_SAMPLES));
     setWaveformReady(false);
-    try {
-      const cached = window.localStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached) as { bars?: number[]; duration?: number };
-        if (Array.isArray(parsed.bars) && parsed.bars.length === PEAK_SAMPLES) {
-          setPeaks(parsed.bars);
-          setWaveformReady(true);
-          if (typeof parsed.duration === "number") setDuration(parsed.duration);
-          return;
-        }
-        if (typeof parsed.duration === "number") setDuration(parsed.duration);
-      }
-    } catch {}
-    const controller = new AbortController();
-    const schedule = typeof window.requestIdleCallback === "function"
-      ? (callback: () => void) => window.requestIdleCallback(callback, { timeout: 1800 })
-      : (callback: () => void) => window.setTimeout(callback, 700);
-    const cancelSchedule = typeof window.cancelIdleCallback === "function"
-      ? (handle: number) => window.cancelIdleCallback(handle)
-      : (handle: number) => window.clearTimeout(handle);
-
-    const readWaveform = async () => {
-      try {
-        const response = await fetch(src, { signal: controller.signal });
-        if (!response.ok) throw new Error("Waveform audio unavailable");
-        const buffer = await response.arrayBuffer();
-        context = new window.AudioContext();
-        const decoded = await context.decodeAudioData(buffer.slice(0));
-        if (cancelled) return;
-
-        const channels = Array.from({ length: decoded.numberOfChannels }, (_, channelIndex) => decoded.getChannelData(channelIndex));
-        const blockSize = Math.max(1, Math.ceil(decoded.length / PEAK_SAMPLES));
-        const rawPeaks = Array.from({ length: PEAK_SAMPLES }, (_, index) => {
-          const start = index * blockSize;
-          const end = Math.min(decoded.length, start + blockSize);
-          let peak = 0;
-          let sumSquares = 0;
-          let count = 0;
-          const stride = Math.max(1, Math.floor((end - start) / 128));
-          for (let sample = start; sample < end; sample += stride) {
-            for (const channel of channels) {
-              const value = Math.abs(channel[sample] ?? 0);
-              peak = Math.max(peak, value);
-              sumSquares += value * value;
-              count++;
-            }
-          }
-          return peak * 0.3 + Math.sqrt(sumSquares / Math.max(1, count)) * 0.7;
-        });
-        const peakMax = Math.max(...rawPeaks, 0.001);
-        const nextBars = rawPeaks.map((peak) => Math.max(0.06, Math.min(1, peak / peakMax)));
-
-        setPeaks(nextBars);
-        setWaveformReady(true);
-        setDuration(decoded.duration);
-        try { window.localStorage.setItem(cacheKey, JSON.stringify({ bars: nextBars, duration: decoded.duration })); } catch {}
-      } catch {
-        if (!cancelled) {
-          setPeaks(fallbackBars(PEAK_SAMPLES));
-          setWaveformReady(false);
-        }
-      } finally {
-        if (context && context.state !== "closed") void context.close();
-      }
-    };
-
-    const scheduled = schedule(() => { void readWaveform(); });
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-      cancelSchedule(scheduled);
-    };
+    setWaveformError(false);
+    if (!validSrc) return;
+    void loadAudioWaveform(src!).then(data => {
+      if (cancelled) return;
+      setPeaks(data.bars);
+      setDuration(data.duration);
+      setWaveformReady(true);
+    }, () => {
+      if (!cancelled) { setPeaks(new Array(PEAK_SAMPLES).fill(.08)); setWaveformError(true); }
+    });
+    return () => { cancelled = true; };
   }, [src, validSrc]);
 
   useEffect(() => {
@@ -306,8 +239,8 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
           ) : <strong title={title}>{title}</strong>}
           <span>{playbackError ? "Preview unavailable · tap retry" : subtitle || ""}</span>
         </div> : null}
-        <div ref={waveformRef} role="slider" tabIndex={validSrc ? 0 : -1} aria-disabled={!validSrc} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-valuetext={`${currentTime} of ${totalTime}`} aria-label={`Seek ${title}`} onPointerDown={beginSeek} onPointerMove={moveSeek} onPointerUp={endSeek} onPointerCancel={endSeek} onKeyDown={keyboardSeek} className="audio-waveform-inline-track">
-          <div className={clsx("audio-waveform-live", !waveformReady && "is-pending")} aria-hidden="true">
+        <div ref={waveformRef} role="slider" tabIndex={validSrc ? 0 : -1} aria-disabled={!validSrc} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-valuetext={`${currentTime} of ${totalTime}`} aria-label={`Seek ${title}`} onPointerDown={beginSeek} onPointerMove={moveSeek} onPointerUp={endSeek} onPointerCancel={endSeek} onKeyDown={keyboardSeek} className="audio-waveform-inline-track" data-waveform-state={waveformError ? "error" : waveformReady ? "ready" : "loading"} aria-busy={validSrc && !waveformReady && !waveformError} title={waveformError ? "Waveform unavailable. Audio playback and seeking are still available." : undefined}>
+          <div className={clsx("audio-waveform-live", validSrc && !waveformReady && !waveformError && "is-pending")} aria-hidden="true">
             {bars.map((bar, index) => {
               const active = index / Math.max(1, bars.length - 1) <= progress;
               return <span key={index} style={{ height: `${Math.max(3, Math.round(bar * 32))}px`, background: active ? "var(--accent)" : "var(--text-soft)" }} />;
@@ -361,7 +294,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
         className={clsx("group cursor-pointer rounded-[1.2rem] border px-3 py-4", validSrc ? "" : "opacity-60")}
         style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}
       >
-        <div className="flex h-20 items-end gap-[3px]">
+        <div className={clsx("audio-waveform-bars flex h-20 items-end gap-[3px]", validSrc && !waveformReady && !waveformError && "is-pending")}>
           {bars.length > 0 ? (
             bars.map((bar, index) => {
               const active = index / Math.max(1, bars.length - 1) <= progress;
@@ -369,7 +302,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
               const bounce = playing ? 1 + ((index % 5) * 0.03) : 1;
               return (
                 <span
-                  key={`${index}-${bar.toFixed(3)}`}
+                  key={index}
                   className="flex-1 rounded-full"
                   style={{
                     height: `${height}px`,

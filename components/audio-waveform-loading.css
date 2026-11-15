@@ -1,0 +1,9 @@
+html body :is(.audio-waveform-live,.audio-waveform-bars) > span { transition:height .28s ease,opacity .28s ease; }
+html body :is(.audio-waveform-live,.audio-waveform-bars).is-pending > span { animation:hymn-waveform-loading 1.1s ease-in-out infinite; transform-origin:center; opacity:.55!important; }
+html body :is(.audio-waveform-live,.audio-waveform-bars).is-pending > span:nth-child(3n) { animation-delay:-.2s; }
+html body :is(.audio-waveform-live,.audio-waveform-bars).is-pending > span:nth-child(3n + 1) { animation-delay:-.4s; }
+html body :is(.audio-waveform-live,.audio-waveform-bars).is-pending > span:nth-child(3n + 2) { animation-delay:-.6s; }
+@keyframes hymn-waveform-loading { 0%,100% { transform:scaleY(.35); } 50% { transform:scaleY(1); } }
+@media(prefers-reduced-motion:reduce) {
+  html body :is(.audio-waveform-live,.audio-waveform-bars) > span { animation:none!important; transition:none!important; }
+}
