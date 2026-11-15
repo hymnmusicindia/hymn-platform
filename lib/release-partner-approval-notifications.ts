@@ -26,5 +26,5 @@ export async function queuePartnerReleaseApproval(releaseId: number, attemptId: 
     await tx.emailLog.upsert({ where: { eventKey: `${eventKey}:email` }, create: { ...data, eventKey: `${eventKey}:email`, status: "pending" }, update: {} });
     // Refresh estimates only before SMTP is attempted; never reset sent or uncertain deliveries.
     await tx.emailLog.updateMany({ where: { eventKey: `${eventKey}:email`, status: { in: ["pending", "skipped"] } }, data: { ...data, status: "pending", errorMessage: null } });
-  });
+  }, { timeout: 30_000, maxWait: 10_000 });
 }
