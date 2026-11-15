@@ -860,7 +860,7 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
         await tx.releaseStatusTransition.create({ data: { releaseId, previousStatus: current.status, newStatus: status.toUpperCase() as any, actorType: options?.actorType ?? (review?.reviewedBy ? "admin" : "system"), actorId: options?.actorId ?? null, reason: note?.trim() || null, metadata: { manualOverride: Boolean(options?.manualOverride) } } });
         await tx.auditLog.create({ data: { actorId: options?.actorId ?? null, action: "RELEASE_STATUS_TRANSITION", entity: "release", entityId: String(releaseId), metadata: { previousStatus, newStatus: status, reason: note?.trim() || null, version: current.version + 1, manualOverride: Boolean(options?.manualOverride) } } });
         const { queueReleaseStatusUpdate } = await import("@/lib/email/release-outbox");
-        await queueReleaseStatusUpdate(tx, releaseId, options?.reviewApproval && reviewedApproval ? 'approved' : status);
+        if (!(options?.reviewApproval && options.notify === false)) await queueReleaseStatusUpdate(tx, releaseId, options?.reviewApproval && reviewedApproval ? 'approved' : status);
         return true;
       }, { timeout: 30_000, maxWait: 10_000 });
       const release = await getDetailedReleaseById(releaseId);

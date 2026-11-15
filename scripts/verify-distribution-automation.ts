@@ -162,7 +162,9 @@ async function main(){
     const queuedReseal=await queueReviewedReleaseForDelivery(reseal.row.id,{actorId:null,siteUrl:'https://hymn.fixture'});
     const sealed=queuedReseal.release!;const oldSignature=sealed.metadata!.manualQc as any;
     await prisma.release.update({where:{id:reseal.row.id},data:{metadata:{...sealed.metadata,manualQc:{...oldSignature,proof:'0'.repeat(64)}} as never}});
+    const approvalMailCount=await prisma.emailLog.count({where:{entityType:'release',entityId:String(reseal.row.id)}});
     assert.equal((await recoverQueuedReviewSignature(reseal.row.id,sealed.recordVersion!)).recovered,true);
+    assert.equal(await prisma.emailLog.count({where:{entityType:'release',entityId:String(reseal.row.id)}}),approvalMailCount,'Resealing an existing approval must not send another approval email.');
     const resealed=(await getDetailedReleaseById(reseal.row.id))!;assert(hasCurrentManualQcEvidence(resealed));
     await assert.rejects(()=>recoverQueuedReviewSignature(reseal.row.id,sealed.recordVersion!),/version changed/);
     await prisma.release.update({where:{id:reseal.row.id},data:{metadata:{...resealed.metadata,manualQc:{...(resealed.metadata!.manualQc as any),proof:'0'.repeat(64)}} as never}});
