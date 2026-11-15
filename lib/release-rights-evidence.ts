@@ -12,7 +12,13 @@ export function releaseRightsEvidence(release: Source): RightsEvidence[] {
   const metadata = object(release.metadata), rows: RightsEvidence[] = [];
   function add(label: string, candidates: unknown[]) {
     const href = candidates.map(usable).find(Boolean);
-    if (href && !rows.some(row => row.href === href)) rows.push({ label, href, privateFile: href.startsWith('/api/assets/') });
+    const identity = (value: string) => /^\/api\/assets\/(\d+)\/download(?:\?|$)/.exec(value)?.[1]?.replace(/^0+(?=\d)/, '') ?? value;
+    if (href && !rows.some(row => identity(row.href) === identity(href))) {
+      // Query aliases of one private asset are one attachment; preview must stay inline.
+      const url = href.startsWith('/api/assets/') ? new URL(href, 'https://hymn.invalid') : null;
+      url?.searchParams.delete('download');
+      rows.push({ label, href:url ? url.pathname + url.search : href, privateFile:Boolean(url) });
+    }
   }
   const licence = ['licenseReceiptUrl', 'license_receipt_url', 'licenseDocumentUrl', 'beatLicenseUrl'] as const;
   add('Licence agreement', [...licence.map(key => release[key]), ...licence.map(key => metadata[key])]);
