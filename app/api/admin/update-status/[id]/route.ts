@@ -1,3 +1,4 @@
+import { queueReviewedReleaseForDelivery } from '@/lib/distribution-reviewed-queue';
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/access";
 import { adminStatusSchema } from "@/lib/validation";
@@ -44,30 +45,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (!currentRelease) return NextResponse.json({ error: "Release not found." }, { status: 404 });
       const distributionPermission = await requireAdminPermission("distribution.submit");
       if ("error" in distributionPermission) return distributionPermission.error;
-      // submitRelease performs a fresh provider-readiness check under its advisory lock
-      // before it creates the provider attempt.
-      const submission = await submitRelease(Number(id), { actorId, siteUrl: getPublicAppUrl(request.url) });
-      if ('queued' in submission && submission.queued) return NextResponse.json(submission, { status: 202, headers: { 'Retry-After': String(submission.retryAfterSeconds) } });
-      if ("inProgress" in submission && submission.inProgress) return NextResponse.json({ release: submission.release, inProgress: true, message: submission.error, retryAfterSeconds: submission.retryAfterSeconds }, { status: 202 });
-      if (!submission.submitted) {
-        const messages = submission.validation.issues.map((issue) => issue.message);
-        return NextResponse.json(
-          { release: submission.release, error: submission.error ?? messages[0] ?? "DireNote delivery did not complete.", validation: submission.validation, retryable: submission.retryable, retryAfterSeconds: "retryAfterSeconds" in submission ? submission.retryAfterSeconds : undefined },
-          { status: submission.validation.ok ? 502 : 400 }
-        );
-      }
-      const queueEntry = submission.duplicate ? null : await syncQueueStage(Number(id), "sent_to_direnote", actorId, "HYMN approval automatically delivered this release to DireNote.", { syncReleaseStatus: false });
-      if (!submission.duplicate) await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_AUTO_DELIVERED", details: { note: payload.note ?? null } });
-      const submittedRelease = await getDetailedReleaseById(Number(id));
-      // The provider acknowledgement is authoritative for this action. Status
-      // refresh acquires the same release lock as submission, so running it
-      // inline can turn a successful send into a misleading contention result.
-      const sync = submittedRelease?.upcCode && !submission.submitted
-        ? await syncDireNoteRelease(Number(id), actorId).catch(() => null)
-        : null;
-      const release = sync ? await getDetailedReleaseById(Number(id)) : submittedRelease;
-      const providerSync = sync && !("skipped" in sync) ? { status: sync.status, upc: sync.upc, trackCount: sync.trackCount } : null;
-      return NextResponse.json({ release, queueEntry, validation: submission.validation, warnings: "warnings" in submission ? submission.warnings ?? [] : [], providerSync });
+      const queued = await queueReviewedReleaseForDelivery(Number(id), { actorId, siteUrl:getPublicAppUrl(request.url), note:payload.note, expectedVersion:(payload as { expectedVersion?:number }).expectedVersion });
+      return NextResponse.json(queued, { status:queued.queued ? 202 : 400, headers:queued.queued ? { 'Retry-After':'15' } : {} });
     }
     if (payload.status === "sent") {
       const origin = getPublicAppUrl(request.url);
@@ -76,6 +55,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const retry = ["failed", "delivery_failed", "queued_for_distribution", "submitting_to_distributor"].includes(currentRelease.status);
       const distributionPermission = await requireAdminPermission(retry ? "distribution.retry" : "distribution.submit");
       if ("error" in distributionPermission) return distributionPermission.error;
+      if(currentRelease.status==='queued_for_distribution' && currentRelease.metadata?.manualQc){
+        const queued=await queueReviewedReleaseForDelivery(Number(id),{actorId,siteUrl:origin,note:payload.note,expectedVersion:payload.expectedVersion});
+        return NextResponse.json(queued,{status:queued.queued?202:400});
+      }
       const submission = await submitRelease(Number(id), { actorId, siteUrl: origin, retry });
       if ('queued' in submission && submission.queued) return NextResponse.json(submission, { status: 202, headers: { 'Retry-After': String(submission.retryAfterSeconds) } });
       if ("inProgress" in submission && submission.inProgress) return NextResponse.json({ release: submission.release, inProgress: true, message: submission.error, retryAfterSeconds: submission.retryAfterSeconds }, { status: 202 });

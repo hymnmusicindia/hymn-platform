@@ -1,3 +1,4 @@
+import { runArtistMappingChecks } from './artist-mapping-batch';
 import 'server-only';
 import { verifiedArtistStoreLinks as storeLinks } from './artist-store-links';
 import { randomUUID } from 'node:crypto';
@@ -118,7 +119,7 @@ export async function ensureDireNoteArtistMapping(cardId: number, releaseId: num
 }
 
 export async function verifyReleaseArtistMappings(userId: number, releaseId: number, payload: DireNotePayload, actorId?: number | null, newIdentityCardIds: number[] = []) {
-  const deadline = Date.now() + 45000;
+  const deadline = Date.now() + 90000;
   const artists = [...payload.artists, ...(payload.featuring_artists ?? []), ...payload.tracks.flatMap(track => [...(track.artists ?? []), ...(track.featuring_artists ?? [])])];
   // Payload names alone never authorize a provider write: require the exact saved store identity.
   const liveCards = await prisma.artistCard.findMany({ where: { userId, archivedAt: null } });
@@ -128,6 +129,7 @@ export async function verifyReleaseArtistMappings(userId: number, releaseId: num
     return saved ? { ...card, artistName: saved.artistName, spotifyProfileUrl: saved.spotifyUrl, spotifyArtistId: storeLinks({ spotify: saved.spotifyUrl }).spotify?.id ?? null, appleMusicProfileUrl: saved.appleUrl, appleArtistId: storeLinks({ apple: saved.appleUrl }).apple?.id ?? null } : card;
   });
   const checked = new Set<number>();
+  const pending: number[] = [];
   for (const artist of artists) {
     const wanted = verifiedArtistStoreLinks({ spotify: artist.spotify_url, apple: artist.apple_url });
     const matches = cards.filter(card => sameName(card.artistName, artist.name) && (wanted.spotify ? savedArtistStoreLinks(card).spotify?.id === wanted.spotify.id : wanted.apple ? savedArtistStoreLinks(card).apple?.id === wanted.apple.id : false));
@@ -139,6 +141,10 @@ export async function verifyReleaseArtistMappings(userId: number, releaseId: num
     }
     const saved = savedArtistStoreLinks(card);
     if (saved.spotify && wanted.spotify?.id !== saved.spotify.id || saved.apple && wanted.apple?.id !== saved.apple.id) throw Error('A saved store profile is missing or different in the artist delivery payload. Refresh the release before delivery.');
-    if (!checked.has(card.id)) { checked.add(card.id); if (!newIdentityCardIds.includes(card.id)) await ensureDireNoteArtistMapping(card.id, releaseId, actorId, deadline); }
+    if (!checked.has(card.id)) { checked.add(card.id); if (!newIdentityCardIds.includes(card.id)) pending.push(card.id); }
   }
+  // Albums repeat artists across tracks. Validate every match before any writes,
+  // then bound parallel I/O rather than spending the whole deadline on a serial prefix.
+  await runArtistMappingChecks(pending, id => ensureDireNoteArtistMapping(id, releaseId, actorId, deadline));
+
 }

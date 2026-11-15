@@ -31,7 +31,7 @@ async function main() {
     for (const width of [1440, 390]) {
       const page = await browser.newPage({ viewport: { width, height: 1000 } });
       const errors = [], writes = [];
-      let blocked = false, unavailable = false, readCount = 0;
+      let blocked = false, unavailable = false, readCount = 0, unknownResponse = false;
       page.on('pageerror', error => errors.push(error.message));
       await page.route('https://hymn.fixture/**', async route => {
         const req = route.request(), url = new URL(req.url());
@@ -43,6 +43,7 @@ async function main() {
         }
         if (req.method() === 'PATCH') {
           writes.push({ path: url.pathname, data: req.postDataJSON() });
+          if(unknownResponse)return route.fulfill({status:502,contentType:'text/html',body:'<h1>Gateway timeout</h1>'});
           const id = Number(url.pathname.split('/').at(-1));
           return route.fulfill({ status: 202, json: { queued: true, retryable: true, retryAfterSeconds: 240, message: 'HYMN approved this package. Waiting for partner request capacity.', release: { ...releases.find(release => release.id === id), status: 'queued_for_distribution' } } });
         }
@@ -56,21 +57,21 @@ async function main() {
       const inspect = async title => page.getByRole('button', { name: `Inspect ${title}`, exact: true }).click();
       const close = async () => page.getByRole('button', { name: 'Close details', exact: true }).click();
       await inspect('Correction response');
-      await expect(page.getByRole('button', { name: 'Approve & Send to DireNote', exact: true })).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'Approve & queue delivery', exact: true })).toBeEnabled();
       await expect(page.getByRole('dialog')).toContainText('Correction review required');
       await close();
       await inspect('Manual pass');
-      await expect(page.getByRole('button', { name: 'Send to DireNote', exact: true })).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'Queue partner delivery', exact: true })).toBeEnabled();
       await expect(page.getByRole('region', { name: 'Automatic QC evidence' })).toContainText('Manual QC passed');
       await expect(page.getByRole('region', { name: 'Automatic QC evidence' })).toContainText('Historical automatic QC notes');
       // Opening approval closes the native top-layer dialog, leaving confirmation accessible.
-      await page.getByRole('button', { name: 'Send to DireNote', exact: true }).click();
+      await page.getByRole('button', { name: 'Queue partner delivery', exact: true }).click();
       await expect(page.getByRole('dialog', { name: 'Confirm Action' })).toBeVisible();
-      await page.getByRole('button', { name: 'Yes, Approve & Send', exact: true }).click();
+      await page.getByRole('button', { name: 'Yes, Approve & queue', exact: true }).click();
       await expect.poll(() => writes.length).toBe(1);
       assert.equal(writes[0].path, '/api/admin/update-status/2');
       assert.equal(writes[0].data.status, 'approved');
-      await expect(page.getByRole('alertdialog')).toContainText('waiting for delivery capacity');
+      await expect(page.getByRole('alertdialog')).toContainText('queued for delivery');
       await expect(page.getByRole('alertdialog')).toContainText('Waiting for partner request capacity');
       // Dismiss the outcome dialog before inspecting more records.
       const dismiss = page.getByRole('button', { name: /close|got it|understood/i }).last();
@@ -87,7 +88,7 @@ async function main() {
       blocked = true;
       await inspect('Correction response');
       await page.getByRole('button', { name: 'Recheck readiness', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Approve & Send to DireNote', exact: true })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Approve & queue delivery', exact: true })).toBeDisabled();
       await expect(page.getByRole('region', { name: 'Release review actions' })).toContainText('Audio source unavailable');
       unavailable = true;
       await page.getByRole('button', { name: 'Recheck readiness', exact: true }).click();
@@ -95,26 +96,34 @@ async function main() {
       unavailable = blocked = false;
       const before = readCount;
       await page.getByRole('button', { name: 'Recheck readiness', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Approve & Send to DireNote', exact: true })).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'Approve & queue delivery', exact: true })).toBeEnabled();
       assert.ok(readCount > before);
       await close();
       await inspect('Accepted recording');
-      await expect(page.getByRole('button', { name: /Approve & Send to DireNote|^Send to DireNote$|^Retry Send$/ })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Approve & queue delivery|^Queue partner delivery$|^Retry Send$/ })).toHaveCount(0);
       await close();
       await page.getByRole('button', { name: 'QC queue', exact: true }).click();
       await expect(page.getByRole('region', { name: 'Release review actions' })).toBeVisible();
+      await page.getByRole('button',{name:'All releases',exact:true}).click();
+      await inspect('Correction response');unknownResponse=true;
+      await page.getByRole('button',{name:'Approve & queue delivery',exact:true}).click();
+      await page.getByRole('button',{name:'Yes, Approve & queue',exact:true}).click();
+      await expect(page.getByRole('alertdialog')).toContainText('Checking saved approval');
+      await expect(page.getByRole('alertdialog')).toContainText('HTTP 502');
+      await expect.poll(()=>writes.length).toBe(2);assert.equal(writes[1].data.expectedVersion,3);
+      await page.waitForTimeout(100);assert.equal(writes.length,2,'Unknown proxy responses must not trigger automatic duplicate writes');unknownResponse=false;
       // A read-only operator can inspect eligibility without gaining write authority.
       await page.goto('https://hymn.fixture/admin?tab=releases');
       await page.evaluate(releases => { window.fixtureReleases = releases; window.permissions = ['releases.read']; }, releases);
       await page.addStyleTag({ path: path.join(out, 'ui.css') });
       await page.addScriptTag({ path: path.join(out, 'ui.js') });
       await inspect('Correction response');
-      await expect(page.getByRole('button', { name: 'Approve & Send to DireNote', exact: true })).toBeDisabled();
-      await expect(page.getByRole('button', { name: 'Request Metadata Changes', exact: true })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Approve & queue delivery', exact: true })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Request changes', exact: true })).toBeDisabled();
       await close();
       await page.getByRole('button', { name: /^Drafts/ }).click();
       await inspect('Unsubmitted draft');
-      await expect(page.getByRole('button', { name: /Approve & Send to DireNote|^Send to DireNote$|^Start Review$/ })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Approve & queue delivery|^Queue partner delivery$|^Start Review$/ })).toHaveCount(0);
       assert.deepEqual(errors, []);
       await page.close();
       console.log(`PASS ${width}px catalogue and QC controls: correction review, manual pass, correct send target, accessible confirmation, resubmission, QC queue, failed delivery, visible blockers and readiness recovery.`);

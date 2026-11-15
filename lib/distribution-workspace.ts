@@ -5,7 +5,7 @@ export type ReleaseBucket = 'drafts' | 'review' | 'corrections' | 'delivery' | '
 
 export function hasCurrentManualQcPass(release: Release) {
   const review = release.metadata?.manualQc as { status?: string; releaseId?: number; reviewedVersion?: number } | undefined;
-  return release.status === 'approved' && review?.status === 'passed' && review.releaseId === release.id && Number.isInteger(release.recordVersion) && review.reviewedVersion === release.recordVersion;
+  return ['approved','queued_for_distribution'].includes(release.status) && review?.status === 'passed' && review.releaseId === release.id && Number.isInteger(release.recordVersion) && review.reviewedVersion === release.recordVersion;
 }
 
 /** Shared by the catalogue inspector and QC queue. Readiness and permissions
@@ -15,11 +15,12 @@ export function releaseReviewActions(release: Release) {
   const imported = release.releaseSource === 'ADMIN_MANUAL';
   const acknowledged = Boolean(release.liveAt) || ['sent', 'sent_to_distributor', 'distributor_processing', 'processing', 'delivered', 'scheduled', 'awaiting_live_confirmation', 'partially_live', 'live', 'distributed'].includes(String(release.direNoteStatus ?? '').trim().toLowerCase());
   const reviewable = !imported && !acknowledged;
+  const queuedReview = status === 'queued_for_distribution' && requiresManualDistributionReview(release);
   const startReview = reviewable && ['submitted', 'resubmitted', 'in_queue', 'in_qc_queue', 'failed'].includes(status);
   return {
     status, startReview,
-    approve: reviewable && ['under_review', 'approved'].includes(status),
-    retry: reviewable && ['failed', 'delivery_failed', 'queued_for_distribution'].includes(status),
+    approve: reviewable && (['under_review', 'approved'].includes(status) || queuedReview),
+    retry: reviewable && (['failed', 'delivery_failed'].includes(status) || status==='queued_for_distribution' && !hasCurrentManualQcPass(release) && !queuedReview),
     returnToQc: !imported && status === 'delivery_failed',
     requestChanges: reviewable && ['submitted', 'in_queue', 'in_qc_queue', 'under_review', 'approved'].includes(status),
     reject: reviewable && ['submitted', 'in_queue', 'in_qc_queue', 'under_review', 'approved'].includes(status),
@@ -31,6 +32,7 @@ export function requiresManualDistributionReview(release: Release) {
   const status = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
   if (!['approved', 'queued_for_distribution'].includes(status)) return false;
   if (['sent', 'sent_to_distributor', 'processing', 'distributor_processing', 'delivered', 'scheduled', 'awaiting_live_confirmation', 'partially_live', 'live', 'distributed'].includes(String(release.direNoteStatus ?? '').toLowerCase())) return false;
+  if ((release.metadata?.deliveryPreparation as {state?:string}|undefined)?.state==='needs_review') return true;
   if (release.adminQcReviewRequired) return true;
   if (hasCurrentManualQcPass(release)) return false;
   const qc = release.metadata?.autoQc as { status?: string; policyVersion?: number; rightsReview?: string } | undefined;
@@ -76,6 +78,9 @@ export function automationSummary(release: Release) {
   if(bucket==='live')return {label:'Monitoring',tone:'success',detail:'Current store availability takes precedence over historical automatic QC notes.'};
   if(['failed','delivery_failed'].includes(release.status))return {label:'Delivery needs attention',tone:'warning',detail:'Review the saved submission outcome before retrying. A QC pass does not confirm partner receipt.'};
   if(['sent','sent_to_distributor','processing','distributor_processing','delivered','scheduled','awaiting_live_confirmation'].includes(release.status.toLowerCase()))return {label:'Delivery acknowledged',tone:'success',detail:'The provider acknowledged the current delivery. Earlier automatic QC holds are historical; monitor the current provider review and store status.'};
+  const preparation=release.metadata?.deliveryPreparation as {state?:string;reason?:string;nextAttemptAt?:string}|undefined;
+  if(preparation?.state==='needs_review')return {label:'Delivery preparation needs review',tone:'warning',detail:preparation.reason||'Inspect the saved preparation error before approving again.'};
+  if(preparation?.state==='retryable')return {label:'Delivery will retry',tone:'warning',detail:preparation.reason||'Approval is saved. The next retry is scheduled automatically.'};
   if(hasCurrentManualQcPass(release))return {label:'Manual QC passed',tone:'success',detail:'A reviewer approved this revision. Earlier automatic QC notes are historical; delivery readiness is checked again before sending.'};
   const correction=correctionReviewSummary(release);
   if(correction)return {label:correction.label,tone:'warning',detail:correction.detail};

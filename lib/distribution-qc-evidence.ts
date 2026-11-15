@@ -1,3 +1,4 @@
+import { releaseRightsEvidence } from './release-rights-evidence';
 import 'server-only';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getUserSessionSecret } from './env';
@@ -38,12 +39,11 @@ export function hasCurrentManualQcEvidence(release: Release): boolean {
 }
 export async function manualQcSourceRevision(release: Release, db: Pick<Prisma.TransactionClient, 'release' | 'storedAsset'> = prisma) {
   const artwork = await resolvePrivateReleaseArtworkUrl({ userId: release.userId, releaseId: release.id, value: release.artworkUrl }, db);
-  const sources = [];
-  for (const url of [artwork, ...(release.tracks || []).map(track => track.audioUrl)]) {
-    const id = Number(new URL(url || '', 'https://hymn.local').pathname.match(/^\/api\/assets\/(\d+)\/download$/)?.[1]);
-    const asset = id ? await db.storedAsset.findFirst({ where: { id, ownerUserId: release.userId, deletedAt: null, uploadStatus: 'ready' }, select: { id: true, checksum: true } }) : null;
-    sources.push({ url, asset });
-  }
+  const urls=[artwork, ...(release.tracks || []).map(track => track.audioUrl), ...releaseRightsEvidence(release).filter(item=>item.privateFile).map(item=>item.href)];
+  const assetId=(url:string|undefined)=>Number(new URL(url || '', 'https://hymn.local').pathname.match(/^\/api\/assets\/(\d+)\/download$/)?.[1]);
+  const ids=[...new Set(urls.map(assetId).filter(id=>Number.isSafeInteger(id)&&id>0))];
+  const assets=await db.storedAsset.findMany({where:{id:{in:ids},ownerUserId:release.userId,deletedAt:null,uploadStatus:'ready'},select:{id:true,checksum:true}});
+  const sources=urls.map(url=>({url,asset:assets.find(asset=>asset.id===assetId(url))??null}));
   return createHmac('sha256', getUserSessionSecret()).update(stable(sources)).digest('hex');
 }
 export async function assertCurrentManualQc(release: Release, revision: string) {

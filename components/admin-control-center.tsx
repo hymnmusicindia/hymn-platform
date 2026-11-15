@@ -1,4 +1,6 @@
 "use client";
+import operationsStyles from './distribution-operations.module.css';
+
 import {displayDateTime} from "@/lib/display-date-time";
 import { useAdminReleaseFeed } from "./use-admin-release-feed";
 import { DistributionReleaseCatalogue as AdminReleaseCatalogue } from "./distribution-release-catalogue";
@@ -973,7 +975,7 @@ export function AdminControlCenter({
         const response = await fetch(`/api/admin/update-status/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status, note: `Status set to ${status}` })
+          body: JSON.stringify({ status, note: `Status set to ${status}`, expectedVersion: releases.find(item => item.id === id)?.recordVersion })
         });
         const data = await response.json().catch(() => ({}));
         if (isDireNoteAction && data.queued) {
@@ -981,7 +983,7 @@ export function AdminControlCenter({
           setDireNoteCooldowns(current => ({ ...current, [id]: Date.now() + Math.max(1, Number(data.retryAfterSeconds) || 60) * 1000 }));
           const message = data.message || 'HYMN approval is retained. The package is queued for partner capacity; it has not been sent yet.';
           setFeedback(message);
-          setDireNoteResult({ type: 'pending', title: 'Approved — waiting for delivery capacity', message });
+          setDireNoteResult({ type: 'pending', title: 'Approved — queued for delivery', message });
           return;
         }
         if (data.inProgress) {
@@ -990,6 +992,11 @@ export function AdminControlCenter({
           const message = data.message || "DireNote is processing this release. Its status will update shortly.";
           setFeedback(message);
           setDireNoteResult({ type: "pending", title: "Request waiting — retry shortly", message });
+          return;
+        }
+        if (isDireNoteAction && response.status >= 500 && !data.error) {
+          void refreshReleaseFeed();
+          setDireNoteResult({type:'pending',title:'Checking saved approval',message:`The server did not return a result (HTTP ${response.status}). Refresh this release to check its saved approval and delivery history before retrying. No partner acceptance is confirmed by this response.`});
           return;
         }
         if (!response.ok) {
@@ -1235,7 +1242,7 @@ export function AdminControlCenter({
 
   return (
     <AdminModuleToolbar
-      hideSearch={["users", "delivery", "releases"].includes(activeTab)}
+      hideSearch={isReleaseWorkspace || activeTab === "users"}
       searchValue={moduleSearch}
       onSearchChange={setModuleSearch}
       searchPlaceholder={isReleaseWorkspace ? "Search releases..." : `Search ${activeTab.replace(/-/g, " ")}...`}
@@ -1248,7 +1255,7 @@ export function AdminControlCenter({
       }
     >
       <AdminActivityAndLogs currentPage={activeTab} visible={activeTab === "activity"} />
-      <div className="admin-role-strip flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>
+      {!isReleaseWorkspace && <div className="admin-role-strip flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>}
       {feedback ? <div role="status" className="flex items-start justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}><p className="leading-6">{feedback}</p><button type="button" onClick={() => setFeedback(null)} className="pressable shrink-0 rounded-lg p-1" aria-label="Dismiss message"><X className="h-4 w-4" /></button></div> : null}
       {isReleaseWorkspace && <DistributionOperationsHeader releases={releases} active={activeTab} navigate={(view,collection)=>{if(view==="releases"){setCatalogCollection(collection||"submitted");setCatalogStatus("all");setModuleSearch("");}selectAdminTab(view as AdminTab);}} can={hasPermission} refresh={()=>void refreshReleaseFeed(true)} refreshing={releasesRefreshing} error={releaseFeedError} arrivals={releaseArrivals} dismissArrivals={dismissReleaseArrivals} updatedAt={releaseFeedUpdatedAt}/>}
       {activeTab === "overview" ? (
@@ -1346,8 +1353,8 @@ export function AdminControlCenter({
       ) : null}
 
       {activeTab === "distribution-queue" || activeTab === "delivery-failed" ? (
-        <div className="grid gap-6 xl:grid-cols-[0.92fr,1.08fr]">
-          <SurfaceSection title={activeTab === "delivery-failed" ? "Delivery Failed" : "QC queue"} description={activeTab === "delivery-failed" ? "Review the failure before returning a release to QC." : "Review submissions and release readiness."}>
+        <div className={operationsStyles.workbench}>
+          <aside className={operationsStyles.queuePane}><SurfaceSection title={activeTab === "delivery-failed" ? "Delivery Failed" : "QC queue"} description={activeTab === "delivery-failed" ? "Review the failure before returning a release to QC." : "Review submissions and release readiness."}>
             <div className="grid gap-4">
               <div className="grid gap-3 rounded-2xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
                 <input className="field" value={moduleSearch} onChange={(event) => setModuleSearch(event.target.value)} placeholder="Search title, artist, UPC, ISRC, or user email" aria-label="Search submissions" />
@@ -1359,13 +1366,14 @@ export function AdminControlCenter({
               </div>
               <DistributionReviewQueue releases={queueReleases} selectedId={selectedRelease?.id} onSelect={id=>{setSelectedReleaseId(id);setReviewTab("overview");}}/>
             </div>
-          </SurfaceSection>
+          </SurfaceSection></aside>
 
-          <SurfaceSection title={activeTab === "delivery-failed" ? "Failed Delivery Review" : "Selected Release Review"} description={activeTab === "delivery-failed" ? "Inspect the failure history before returning this release to the QC workflow." : "Inspect metadata, files, rights, readiness, and the complete activity record."}>
+          <div className={operationsStyles.reviewPane}><SurfaceSection title={activeTab === "delivery-failed" ? "Failed Delivery Review" : "Selected Release Review"} description={activeTab === "delivery-failed" ? "Inspect the failure history before returning this release to the QC workflow." : "Inspect metadata, files, rights, readiness, and the complete activity record."}>
             {selectedRelease ? (
-              <div className="grid gap-5"><DistributionAutomationInsight release={selectedRelease}/>
+              <div className={operationsStyles.reviewContent}>
                 <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.releaseTitle || selectedRelease.trackName}</h3><div className="mt-2 flex flex-wrap items-center gap-2"><p className="text-sm" style={{ color: "var(--text-muted)" }}>{selectedRelease.releaseType.toUpperCase()} · {selectedRelease.tracks?.length ?? 0} track{selectedRelease.tracks?.length === 1 ? "" : "s"} · {selectedRelease.artistName}</p><AccountStatusBadge status={users.find((user) => user.id === selectedRelease.userId)?.status} /></div><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Submitted {selectedRelease.submittedAt ? new Date(selectedRelease.submittedAt).toLocaleString("en-IN") : "—"} · Release {selectedRelease.releaseDate || "—"} · {selectedRelease.ownerEmail || "Account email unavailable"}</p></div><StatusPill label={adminReleaseStatusLabel(selectedRelease.status, selectedRelease.direNoteStatus, selectedRelease.metadata)} active /></div>
-                <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Release review sections">{(["overview", "metadata", "tracks", "assets", "rights", "direnote", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setReviewTab(tab)} className={reviewTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={reviewTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "assets" ? "Artwork & Audio" : tab === "direnote" ? "Distribution readiness" : tab}</button>)}</nav>
+                <nav className={operationsStyles.reviewTabs} aria-label="Release review sections">{(["overview", "metadata", "tracks", "assets", "rights", "direnote", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setReviewTab(tab)} aria-pressed={reviewTab === tab} className={reviewTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={reviewTab === tab ? undefined : { color: "var(--text-muted)" }}>{({overview:"Summary",metadata:"Metadata",tracks:"Tracks",assets:"Media",rights:"Rights & agreements",direnote:"Delivery checks",activity:"History"})[tab]}</button>)}</nav>
+                {renderReleaseActions(selectedRelease)}
                 {(selectedRelease.metadata?.correctionReview as {status?:string}|undefined)?.status === "pending" ? <ReleaseCorrectionNotice release={selectedRelease} review={() => { setReviewTab("rights"); requestAnimationFrame(() => { const panel = document.getElementById("release-rights-evidence"); panel?.focus({ preventScroll:true }); panel?.scrollIntoView({ behavior:"smooth", block:"start" }); }); }}/> : null}
                 {reviewTab === "overview" ? <div className="grid gap-5 rounded-[1.4rem] border p-5 sm:grid-cols-[9rem,1fr] sm:items-start" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
                   <div>
@@ -1407,8 +1415,8 @@ export function AdminControlCenter({
                 ) : null}
                 {reviewTab === "assets" ? <div className="grid gap-4"><div className="grid gap-4 sm:grid-cols-2"><div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)" }}>{selectedRelease.artworkUrl ? <><img src={artworkPreviewUrl(selectedRelease.artworkUrl, 320)} alt={selectedRelease.releaseTitle} className="aspect-square w-full rounded-xl object-cover" /><a href={selectedRelease.artworkUrl} target="_blank" rel="noreferrer" className="btn-outline mt-3 inline-flex text-xs">Open artwork file</a></> : <EmptyState copy="Artwork file is missing." />}</div><div className="grid gap-3">{(selectedRelease.tracks ?? []).map((track) => <article key={track.id} className="surface-list-item p-4"><p className="font-semibold">{track.trackNumber}. {track.trackTitle}</p>{track.audioUrl ? <audio controls preload="metadata" className="mt-3 w-full" src={track.audioUrl} /> : <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>Audio file missing</p>}</article>)}</div></div><AdminStoreStatusEditor release={selectedRelease} /></div> : null}
                 {reviewTab === "rights" ? <Link className="btn-outline mb-4 inline-flex" href={`/dashboard/releases/${selectedRelease.id}/qc-report`}>View detailed track QC report</Link> : null}
-                {reviewTab === "rights" ? <div className="grid gap-3 sm:grid-cols-2">{[["Content type", selectedRelease.contentType], ["Copyright owner", selectedRelease.copyrightOwner], ["Publishing rights", selectedRelease.publishingRights], ["Ownership confirmed", selectedRelease.ownershipConfirmed ? "Yes" : "No"], ["Terms accepted", selectedRelease.agreedToTerms ? "Yes" : "No"], ["Unauthorised samples", selectedRelease.noUnauthorizedSamples ? "Confirmed none" : "Not confirmed"]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span>{typeof value === "string" && (/^https?:\/\//.test(value) || /^\/api\/assets\/\d+\/download(?:\?|$)/.test(value)) ? <a className="font-semibold underline" href={value} target="_blank" rel="noreferrer">Open proof</a> : <strong>{value || "—"}</strong>}</div>)}</div> : null}
-                {reviewTab === "rights" ? <ReleaseRightsEvidence key={selectedRelease.id} release={selectedRelease}/> : null}
+                {reviewTab === "rights" ? <div className={operationsStyles.rightsSummary}>{[["Content type", selectedRelease.contentType], ["Copyright owner", selectedRelease.copyrightOwner], ["Publishing rights", selectedRelease.publishingRights], ["Ownership confirmed", selectedRelease.ownershipConfirmed ? "Yes" : "No"], ["Terms accepted", selectedRelease.agreedToTerms ? "Yes" : "No"], ["Unauthorised samples", selectedRelease.noUnauthorizedSamples ? "Confirmed none" : "Not confirmed"]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span>{typeof value === "string" && (/^https?:\/\//.test(value) || /^\/api\/assets\/\d+\/download(?:\?|$)/.test(value)) ? <a className="font-semibold underline" href={value} target="_blank" rel="noreferrer">Open proof</a> : <strong>{value || "—"}</strong>}</div>)}</div> : null}
+                {reviewTab === "rights" ? <ReleaseRightsEvidence key={`rights-evidence:${selectedRelease.id}`} release={selectedRelease}/> : null}
                 {reviewTab === "activity" ? <div className="rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><h3 className="font-semibold">Activity &amp; Audit Timeline ({releaseAudit.length})</h3><div className="mt-4 grid gap-2">{releaseAudit.map((event) => <div key={event.id} className="summary-card"><span><strong>{event.action.replace(/_/g, " ")}</strong><br /><small>{new Date(event.createdAt).toLocaleString("en-IN")}</small></span><span className="max-w-[50%] truncate text-xs">{event.metadata ? JSON.stringify(event.metadata) : "Recorded"}</span></div>)}{releaseAudit.length === 0 ? <EmptyState copy="No activity has been recorded yet." /> : null}</div></div> : null}
                 {reviewTab === "direnote" ? <div className="rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1444,8 +1452,9 @@ export function AdminControlCenter({
                     </div>
                   ) : null}
                 </div> : null}
-                <ReleaseSubmissionHistory key={selectedRelease.id} releaseId={selectedRelease.id} admin />
-                {renderReleaseActions(selectedRelease)}
+                <details key={`qc-evidence:${selectedRelease.id}`} className={operationsStyles.auditDisclosure}><summary>QC evidence</summary><DistributionAutomationInsight release={selectedRelease}/></details>
+                <details key={`submission-history:${selectedRelease.id}`} className={operationsStyles.auditDisclosure}><summary>Submission history</summary><ReleaseSubmissionHistory releaseId={selectedRelease.id} admin /></details>
+
                 {reviewTab === "tracks" ? <div className="grid gap-3">
                   {(selectedRelease.tracks ?? []).map((track) => (
                     <details key={track.id} className="surface-list-item p-4" open={(selectedRelease.tracks?.length ?? 0) === 1}>
@@ -1457,7 +1466,7 @@ export function AdminControlCenter({
                 </div> : null}
               </div>
             ) : <EmptyState copy="Select a release to open the detailed view." />}
-          </SurfaceSection>
+          </SurfaceSection></div>
         </div>
       ) : null}
 
@@ -1710,7 +1719,7 @@ export function AdminControlCenter({
                 : confirmStatusAction === "in_qc_queue"
                   ? "This stops automatic retry for this failed handoff and returns the release to HYMN QC. The DireNote attempt and failure history are retained for review."
                 : confirmStatusAction === "approved"
-                    ? actionRelease.status === 'approved' ? "This sends the approved package to DireNote after a fresh delivery check. Partner receipt and store availability require separate confirmation." : "This approves HYMN's metadata, artwork, audio, and rights review and immediately sends the release to DireNote. Partner receipt and store availability require separate confirmation."
+                    ? actionRelease.status === 'approved' ? "This saves approval and queues the current package for automatic artist verification and partner delivery. Partner acceptance and store availability are confirmed separately." : "This confirms your review of the metadata, artwork, audio and rights evidence, then saves the package for automatic delivery. You can leave this screen while artist verification and partner processing continue."
                     : "The DireNote readiness check must pass before this release is submitted for distribution."}
             </p>
             <div className="mt-6 flex gap-3 justify-center">
@@ -1719,7 +1728,7 @@ export function AdminControlCenter({
                 updateReleaseStatus(actionRelease.id, confirmStatusAction);
                 setConfirmStatusAction(null);
               }} className="btn-primary pressable px-4 py-2">
-                Yes, {confirmStatusAction === "live" ? "Mark live" : confirmStatusAction === "in_qc_queue" ? "Return to QC" : confirmStatusAction === "approved" ? "Approve & Send" : "Send"}
+                Yes, {confirmStatusAction === "live" ? "Mark live" : confirmStatusAction === "in_qc_queue" ? "Return to QC" : confirmStatusAction === "approved" ? "Approve & queue" : "Send"}
               </button>
             </div>
           </section>

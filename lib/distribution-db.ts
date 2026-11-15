@@ -821,7 +821,7 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
   fields: NonNullable<Release["reviewIssues"]>["fields"];
   adminInternalNote?: string;
   reviewedBy?: string | null;
-}, options?: { manualOverride?: boolean; actorType?: string; actorId?: number | null; persist?: (tx: Prisma.TransactionClient) => Promise<void>; reviewChanged?: boolean; notify?: boolean }) {
+}, options?: { manualOverride?: boolean; actorType?: string; actorId?: number | null; persist?: (tx: Prisma.TransactionClient) => Promise<void>; reviewChanged?: boolean; notify?: boolean; reviewApproval?: boolean }) {
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
@@ -838,28 +838,29 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
           ...(review ? { rejectionReason: status === "rejected" ? review.reason : undefined, correctionReason: status === "changes_requested" ? review.reason : undefined, reviewIssues: reviewIssues as any, adminInternalNote: review.adminInternalNote || null, reviewedAt: new Date(), reviewedBy: review.reviewedBy ?? null } : {})
         } });
         if (changed.count !== 1) throw new Error("Release changed concurrently. Refresh and retry.");
-        if (status === 'approved' && options?.actorId != null && ['admin','team_member'].includes(options.actorType ?? '')) {
+        const reviewedApproval = (status === 'approved' || status === 'queued_for_distribution' && options?.reviewApproval) && (options?.actorType === 'admin' || options?.actorType === 'team_member' && options.actorId != null);
+        if (reviewedApproval) {
           const row = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: 'asc' }, include: { contributions: { include: { party: true }, orderBy: { sequence: 'asc' } } } } } });
           const metadata = row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata as Record<string, unknown> : {};
           const { signQcEvidence, manualQcPackageRevision, manualQcSourceRevision } = await import('./distribution-qc-evidence');
           const approvedPackage = deserializeRelease(row);
-          const manualQc = { status: 'passed', releaseId, reviewedVersion: current.version + 1, packageRevision: manualQcPackageRevision(approvedPackage), sourceRevision: await manualQcSourceRevision(approvedPackage, tx), reviewerUserId: options.actorId, actorType: options.actorType, reviewedAt: new Date().toISOString(), reason: note ?? 'Manual QC approved.' };
+          const manualQc = { status: 'passed', releaseId, reviewedVersion: current.version + 1, packageRevision: manualQcPackageRevision(approvedPackage), sourceRevision: await manualQcSourceRevision(approvedPackage, tx), reviewerUserId: options?.actorId ?? null, actorType: options?.actorType, reviewedAt: new Date().toISOString(), reason: note ?? 'Manual QC approved.' };
           await tx.release.update({ where: { id: releaseId }, data: { metadata: JSON.parse(JSON.stringify({ ...metadata, manualQc: { ...manualQc, proof: signQcEvidence(manualQc) } })) } });
           await tx.adminTask.updateMany({ where: { entityType: 'release', entityId: String(releaseId), status: { not: 'resolved' }, type: { in: ['Correction review','Distribution QC review'] } }, data: { status: 'resolved', resolvedAt: new Date(), resolutionNote: note ?? 'Manual QC approved this revision.' } });
         }
-        if (['approved','changes_requested','rejected','archived'].includes(status)) {
+        if (reviewedApproval || ['approved','changes_requested','rejected','archived'].includes(status)) {
           const row = await tx.release.findUniqueOrThrow({where:{id:releaseId},select:{metadata:true}});
           const meta = row.metadata as Record<string,unknown>|null;
           const marker = meta?.correctionReview as {submissionKey?:string}|undefined;
           if (marker?.submissionKey) {
             await tx.adminTask.updateMany({where:{eventKey:`release:${releaseId}:correction-review:${marker.submissionKey}`,status:{not:'resolved'}},data:{status:'resolved',resolvedAt:new Date(),resolutionNote:note||`Review decision: ${status}`}});
-            await tx.release.update({where:{id:releaseId},data:{metadata:JSON.parse(JSON.stringify({...meta,correctionReview:{...marker,status,reviewedAt:new Date().toISOString()}}))}});
+            await tx.release.update({where:{id:releaseId},data:{metadata:JSON.parse(JSON.stringify({...meta,correctionReview:{...marker,status:reviewedApproval ? 'approved' : status,reviewedAt:new Date().toISOString()}}))}});
           }
         }
         await tx.releaseStatusTransition.create({ data: { releaseId, previousStatus: current.status, newStatus: status.toUpperCase() as any, actorType: options?.actorType ?? (review?.reviewedBy ? "admin" : "system"), actorId: options?.actorId ?? null, reason: note?.trim() || null, metadata: { manualOverride: Boolean(options?.manualOverride) } } });
         await tx.auditLog.create({ data: { actorId: options?.actorId ?? null, action: "RELEASE_STATUS_TRANSITION", entity: "release", entityId: String(releaseId), metadata: { previousStatus, newStatus: status, reason: note?.trim() || null, version: current.version + 1, manualOverride: Boolean(options?.manualOverride) } } });
         const { queueReleaseStatusUpdate } = await import("@/lib/email/release-outbox");
-        await queueReleaseStatusUpdate(tx, releaseId, status);
+        await queueReleaseStatusUpdate(tx, releaseId, options?.reviewApproval && reviewedApproval ? 'approved' : status);
         return true;
       }, { timeout: 30_000, maxWait: 10_000 });
       const release = await getDetailedReleaseById(releaseId);

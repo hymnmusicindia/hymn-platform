@@ -23,7 +23,7 @@ export async function automaticDeliveryContext(releaseId: number,userId: number)
   ]);
   return {
     fraudHold,
-    retryable: latestAttempt?.state === 'retryable' && (attempt?.state !== 'submitted' || object(attempt.corrections).status === 'customer_resolved') && !unresolvedAttempt,
+    retryable: (!latestAttempt && !attempt || latestAttempt?.state === 'retryable' || attempt?.state === 'submitted' && object(attempt.corrections).status === 'customer_resolved') && (attempt?.state !== 'submitted' || object(attempt.corrections).status === 'customer_resolved') && !unresolvedAttempt,
     accepted: attempt?.state === 'submitted',
     uncertainAttempt: Boolean(unresolvedAttempt || attempt?.state === 'failed'),
     correctionResolved: object(attempt?.corrections ?? latestAttempt?.corrections).status === 'customer_resolved',

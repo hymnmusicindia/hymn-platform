@@ -315,6 +315,7 @@ export const distributionEditSchema = z.object({
 });
 
 export const adminStatusSchema = z.object({
+  expectedVersion: z.number().int().positive().optional(),
   status: z.enum(["draft", "submitted", "in_queue", "in_qc_queue", "under_review", "changes_requested", "approved", "queued_for_distribution", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "rejected", "sent", "live", "failed"]),
   note: z.string().optional(),
   reason: z.string().trim().optional(),
