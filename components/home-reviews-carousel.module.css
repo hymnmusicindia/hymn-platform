@@ -14,3 +14,13 @@
 .viewport:hover .track,.viewport:focus-within .track{animation-play-state:paused}
 @keyframes review-glide{to{transform:translateX(-50%)}}
 @media(prefers-reduced-motion:reduce){.track[data-moving=true]{animation:none;transform:none}.group[aria-hidden=true]{display:none}.viewport{mask-image:none;overflow-x:auto}.card{scroll-snap-align:start}}
+
+/* Let the moving strip pass beneath the editorial heading instead of ending
+   at its column. The mask keeps review text from competing with the heading. */
+.root{position:relative;isolation:isolate}
+.viewport{mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 56px),transparent)}
+@media(min-width:761px) and (prefers-reduced-motion:no-preference){
+  .intro{grid-column:1;grid-row:1;position:relative;z-index:2;pointer-events:none}
+  .viewport{grid-column:1 / -1;grid-row:1;z-index:1;mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.025) 15%,rgba(0,0,0,.08) 27%,#000 43%,#000 calc(100% - 72px),transparent 100%)}
+}
+@media(max-width:760px){.viewport{mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 32px),transparent)}}
