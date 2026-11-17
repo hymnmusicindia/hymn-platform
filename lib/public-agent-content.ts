@@ -2,17 +2,17 @@ import { publicBusiness, publicServices } from "./public-business";
 import { distributionPlanCards } from "./distribution-plans";
 import { getTrackPricingQuote, UGC_ADDON_PRICE } from "./distribution-pricing";
 import { CONTENT_ID_REQUEST_FEE } from "./content-id-access";
-import { DISTRIBUTION_POLICY_SUMMARY } from "./policy-content";
+const publicRoyaltyTermsNotice = "Review the Distribution Terms and Royalty & Payout Policy for royalty calculations, the distribution partner share and payout conditions. Applicable terms are presented for approval before submission.";
 
 export const publicPricingNotes = `One-time distribution is priced per track, with bulk discounts. UGC platforms cost INR ${UGC_ADDON_PRICE} extra on one-time purchases when selected. YouTube Content ID access requests cost INR ${CONTENT_ID_REQUEST_FEE} when applicable and require eligibility and approval. Optional add-ons and extra Yearly+ artist slots may increase the total. Eligible first releases can receive the base-track discount; review the eligibility rules. Checkout confirms the final payable amount and terms before payment.`;
 export const publicFaqs = [
   { question: "What does HYMN Music offer?", answer: publicBusiness.description },
   { question: "How much does music distribution cost?", answer: `One-time distribution starts at INR ${getTrackPricingQuote(1).finalPrice} for one track. Subscription prices are listed on the public pricing page. Optional add-ons cost extra.` },
-  { question: "Does HYMN take an additional royalty commission?", answer: DISTRIBUTION_POLICY_SUMMARY },
+  { question: "Where can I review royalty and payout terms?", answer: publicRoyaltyTermsNotice },
 ];
 
 export function distributionPricing(trackCount = 1) {
-  return { currency: "INR", oneTime: getTrackPricingQuote(trackCount), plans: distributionPlanCards.map(plan => ({ key: plan.key, name: plan.title, price: plan.price, cadence: plan.cadence, artistLimit: plan.artistLimit })), notes: publicPricingNotes, royaltyTerms: DISTRIBUTION_POLICY_SUMMARY };
+  return { currency: "INR", oneTime: getTrackPricingQuote(trackCount), plans: distributionPlanCards.map(plan => ({ key: plan.key, name: plan.title, price: plan.price, cadence: plan.cadence, artistLimit: plan.artistLimit })), notes: publicPricingNotes, royaltyTerms: publicRoyaltyTermsNotice };
 }
 
 export function publicOffers(origin: string) {
@@ -28,7 +28,7 @@ export function homeStructuredData(origin: string) {
 }
 
 export function homeMarkdown(origin: string) {
-  return `# HYMN Music\n\n> ${publicBusiness.description}\n\n## Services\n\n${publicServices.map(service => `- [${service.name}](${origin}${service.path}): ${service.description}`).join("\n")}\n\n## Distribution pricing\n\n${distributionPlanCards.map(plan => `- ${plan.title}: INR ${plan.price} / ${plan.cadence}. ${plan.artistLimit} artist profiles.`).join("\n")}\n\n${publicPricingNotes}\n\n${DISTRIBUTION_POLICY_SUMMARY}\n\n[Full pricing and fees](${origin}/pricing) · [First-release eligibility](${origin}/first-release)\n\n## Contact\n\n- Email: [${publicBusiness.email}](mailto:${publicBusiness.email})\n- Phone: [${publicBusiness.telephone}](tel:${publicBusiness.telephone})\n- [Contact HYMN](${origin}/contact)\n- Official profiles: ${publicBusiness.sameAs.join(", ")}\n\n## Frequently asked questions\n\n${publicFaqs.map(faq => `### ${faq.question}\n\n${faq.answer}`).join("\n\n")}\n\n## More information\n\n- [About HYMN](${origin}/about)\n- [Music guides](${origin}/blog)\n- [Help and FAQs](${origin}/faq)\n- [Policies](${origin}/policies)\n- [Agent index](${origin}/llms.txt)\n- [MCP server card](${origin}/.well-known/mcp/server-card.json)\n\nAccount, checkout, uploads and consultation booking require signing in. Public agent tools only read public business, service and pricing information; they cannot place orders or book meetings.\n`;
+  return `# HYMN Music\n\n> ${publicBusiness.description}\n\n## Services\n\n${publicServices.map(service => `- [${service.name}](${origin}${service.path}): ${service.description}`).join("\n")}\n\n## Distribution pricing\n\n${distributionPlanCards.map(plan => `- ${plan.title}: INR ${plan.price} / ${plan.cadence}. ${plan.artistLimit} artist profiles.`).join("\n")}\n\n${publicPricingNotes}\n\n${publicRoyaltyTermsNotice}\n\n[Full pricing and fees](${origin}/pricing) · [First-release eligibility](${origin}/first-release)\n\n## Contact\n\n- Email: [${publicBusiness.email}](mailto:${publicBusiness.email})\n- Phone: [${publicBusiness.telephone}](tel:${publicBusiness.telephone})\n- [Contact HYMN](${origin}/contact)\n- Official profiles: ${publicBusiness.sameAs.join(", ")}\n\n## Frequently asked questions\n\n${publicFaqs.map(faq => `### ${faq.question}\n\n${faq.answer}`).join("\n\n")}\n\n## More information\n\n- [About HYMN](${origin}/about)\n- [Music guides](${origin}/blog)\n- [Help and FAQs](${origin}/faq)\n- [Policies](${origin}/policies)\n- [Agent index](${origin}/llms.txt)\n- [MCP server card](${origin}/.well-known/mcp/server-card.json)\n\nAccount, checkout, uploads and consultation booking require signing in. Public agent tools only read public business, service and pricing information; they cannot place orders or book meetings.\n`;
 }
 
 export function llmsText(origin: string) {

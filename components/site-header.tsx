@@ -22,6 +22,7 @@ import { SmartHelpToggle } from "@/components/smart-help-toggle";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { MusicAppInstall } from "@/components/music-app-install";
 import { MusicAppUpdate } from "@/components/music-app-update";
+import { PageHistoryNavigation } from "@/components/page-history-navigation";
 
 type SiteHeaderProps = {
   user?: SessionPayload | null;
@@ -645,9 +646,9 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
     >
       <MusicAppUpdate />
       <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-1 px-3 py-2 sm:min-h-[4.5rem] sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
-        <Link prefetch={false} href="/" className="header-brand flex min-w-0 shrink items-center" aria-label="HYMN Music home">
+        <div className="header-brand flex min-w-0 shrink items-center justify-between gap-3"><Link prefetch={false} href="/" aria-label="HYMN Music home">
           <Image src="/assets/hymn-logo-320.webp" alt="HYMN Music Logo" width={156} height={52} className="h-7 w-auto max-w-24 object-contain sm:h-9 sm:max-w-none lg:h-10" style={{ filter: "var(--logo-filter)" }} priority />
-        </Link>
+        </Link><div className="hidden md:block"><PageHistoryNavigation/></div></div>
 
         {workspaceHeader ? <div className="studio-header-section"><button type="button" aria-label="Toggle service navigation" onClick={()=>window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={17}/></button><Breadcrumbs /></div> : <nav className="hymn-page-selector hidden items-center gap-1 lg:flex" aria-label="Main navigation">
           {mainNav.map((item) => (
@@ -709,7 +710,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         </div>
       </div>
 
-      <div className="mobile-workspace-subheader"><button type="button" aria-label="Toggle service navigation" onClick={() => window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={15} aria-hidden="true"/></button><Breadcrumbs /></div>
+      <div className="mobile-workspace-subheader"><PageHistoryNavigation/><button type="button" aria-label="Toggle service navigation" onClick={() => window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={15} aria-hidden="true"/></button><Breadcrumbs /></div>
 
       {open ? (
         <div id="site-mobile-nav" className="border-t lg:hidden" style={{ borderColor: "var(--glass-border)", background: "color-mix(in srgb, var(--glass-bg-strong) 88%, transparent)", backdropFilter: "blur(18px) saturate(155%)" }}>

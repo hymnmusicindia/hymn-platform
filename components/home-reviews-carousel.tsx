@@ -22,7 +22,6 @@ function reviewPriority(a: Review, b: Review) {
 }
 
 export function HomeReviewsCarousel({ reviews, compact = false }: { reviews: Review[]; compact?: boolean }) {
-
   const byUser = new Map<number, Review>();
   for (const review of reviews) {
     if (![4, 4.5, 5].includes(review.rating)) continue;
@@ -32,8 +31,6 @@ export function HomeReviewsCarousel({ reviews, compact = false }: { reviews: Rev
   const items = [...byUser.values()].sort(reviewPriority);
   if (!items.length) return null;
   const moving = items.length > 1;
-  const duration = Math.max(40, items.length * 16);
-
   function cards(duplicate = false) {
     return <div className={styles.group} aria-hidden={duplicate || undefined} inert={duplicate || undefined}>
       {items.map(review => <article key={review.id} className={styles.card} aria-label={`Review by ${review.user.name}`}>
@@ -44,9 +41,9 @@ export function HomeReviewsCarousel({ reviews, compact = false }: { reviews: Rev
     </div>;
   }
   return <section className={`${styles.root} ${compact ? styles.compact : ''}`} aria-label="Customer reviews">
-    <div className={styles.intro}><p className={styles.eyebrow}><span aria-hidden="true"/>ARTIST REVIEWS</p><h2>Real artists.<br/><span>Real experiences.</span></h2><p className={styles.summary}>In their own words. From their own journey.</p></div>
-    <div className={styles.viewport} tabIndex={0} role="region" aria-label="Artist reviews. Hover or focus here to pause." aria-live="off">
-      <div className={styles.track} data-moving={moving} style={{"--review-duration":`${duration}s`} as CSSProperties}>{cards()}{moving&&cards(true)}</div>
+    <div className={styles.intro}><p className={styles.eyebrow}>THE ARTIST PERSPECTIVE</p><h2>Real artists.<br/><span>Real experiences.</span></h2><p className={styles.summary}>In their own words. From their own journey.</p></div>
+    <div className={styles.viewport} tabIndex={0} role="region" aria-roledescription="carousel" aria-label="Artist reviews. Hover or focus to pause.">
+      <div className={styles.track} data-moving={moving} style={{"--review-duration":`${Math.max(40,items.length*12)}s`} as CSSProperties}>{cards()}{moving && cards(true)}</div>
     </div>
   </section>;
 }
