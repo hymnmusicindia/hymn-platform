@@ -2,7 +2,7 @@ import "server-only";
 import { customerBrandText } from "@/lib/customer-message";
 import { emailLayout, emailText } from "@/lib/email/email-templates";
 
-export type ReleaseEmailData = { userName: string; releaseTitle: string; artistName?: string; releaseId: string | number; releaseStatus: string; releaseDate?: string; manageReleaseUrl: string; correctionUrl?: string; rejectionReason?: string; providerApproved?: boolean; qcReportUrl?:string; qcSummary?:string; upc?: string; approvalEstimate?: string };
+export type ReleaseEmailData = { userName: string; releaseTitle: string; artistName?: string; releaseId: string | number; releaseStatus: string; releaseDate?: string; manageReleaseUrl: string; correctionUrl?: string; rejectionReason?: string; providerApproved?: boolean; qcReportUrl?:string; qcSummary?:string; upc?: string; approvalEstimate?: string; correctionItems?: Array<{label:string;note?:string}>; correctionApology?: boolean };
 
 const copy: Record<string, { subject: string; body: (data: ReleaseEmailData) => string; next: string; cta: string; step: number; notice?: (data: ReleaseEmailData) => string | undefined }> = {
   release_submitted: { subject: "Your release has been submitted", body: (d) => `We received “${d.releaseTitle}”. HYMN will review its audio, artwork, metadata and rights information before distribution.`, next: "No action is needed right now. We’ll email you when review is complete or if anything needs your attention.", cta: "Manage release", step: 0 },
@@ -21,14 +21,33 @@ export function releaseStatusEmail(event: string, data: ReleaseEmailData) {
   const item = copy[event];
   if (!item) throw new Error(`Unsupported release email event: ${event}`);
   const ctaUrl = event === "release_changes_requested" ? data.correctionUrl || data.manageReleaseUrl : data.manageReleaseUrl;
-  const subject = item.subject;
+  const subject = data.correctionApology ? "Corrected QC report and our apology" : item.subject;
+  const corrections = event === "release_changes_requested" ? correctionEmailSummary(data.correctionItems) : [];
   const preserveNames = [data.releaseTitle, data.artistName ?? ""].filter(Boolean);
-  const model = { preserveNames, title: subject, greeting: `Hi ${data.userName || "there"},`, body: event === "release_scheduled" && data.providerApproved ? `Good news—“${data.releaseTitle}” has been approved by HYMN for your selected schedule on ${data.releaseDate || "the date shown in HYMN"}. This confirms the partner schedule, not that the release is already live.` : item.body(data), ctaLabel: item.cta, ctaUrl, notice: event === "release_changes_requested" && data.rejectionReason ? `Requested corrections: ${data.rejectionReason}` : item.notice?.(data), timelineStep: item.step, sections: [
-    ...(data.qcReportUrl && ['release_changes_requested','release_rejected','release_distribution_failed'].includes(event) ? [{title:'Detailed track QC report',body:data.qcSummary || 'Review affected tracks, matched recordings, timestamps and any rights evidence returned by the provider. Sign in to your HYMN account to view the report.',linkLabel:'Open your HYMN QC report',linkUrl:data.qcReportUrl}] : []),
+  const model = { ctaAfterSections: event === "release_changes_requested", preserveNames, title: subject, greeting: `Hi ${data.userName || "there"},`, body: event === "release_scheduled" && data.providerApproved ? `Good news—“${data.releaseTitle}” has been approved by HYMN for your selected schedule on ${data.releaseDate || "the date shown in HYMN"}. This confirms the partner schedule, not that the release is already live.` : item.body(data), ctaLabel: event === "release_changes_requested" ? "View detailed QC review" : item.cta, ctaUrl: event === "release_changes_requested" ? data.qcReportUrl || ctaUrl : ctaUrl, notice: data.correctionApology ? "We are sorry. Our earlier message repeated the album-wide review against unrelated tracks and was difficult to read. Please use this corrected review in place of that message." : item.notice?.(data), timelineStep: item.step, sections: [
+    ...corrections.map(item => ({title:item.label,body:item.note})),
+    ...(event === 'release_changes_requested' ? [{title:'Release on hold',body:'Distribution can continue only after the requested changes have been reviewed. The items above summarize the current correction request; they do not mark other tracks as approved.'}] : []),
+    ...(data.qcReportUrl && ['release_rejected','release_distribution_failed'].includes(event) ? [{title:'Detailed QC review',body:'Sign in to HYMN to read the current review and any verified supporting evidence.',linkLabel:'Open QC review',linkUrl:data.qcReportUrl}] : []),
     ...(event === "release_sent_to_distributor" && data.upc ? [{ title: "Release identifier", body: `UPC: ${data.upc}` }] : []),
     { title: "What happens next?", body: item.next },
     { title: "Need help with your release?", body: "Reply to this email and the HYMN team will help you understand the status and next steps." }
   ] };
   return { subject: customerBrandText(`${subject} · ${data.releaseTitle}`, preserveNames), html: emailLayout(model), text: emailText(model) };
 }
-// vercel trigger 6
+/** Email is a bounded summary, never a concatenated provider report. */
+export function correctionEmailSummary(items?:Array<{label:string;note?:string}>) {
+  const clip=(text:string,max:number)=>text.length>max?text.slice(0,max-1).trimEnd()+'\u2026':text;
+  const unique=[...new Map((items??[]).map(item=>[item.label.trim().toLowerCase()+"\n"+(item.note??""),item])).values()];
+  if(!unique.length)return [{label:'Changes requested',note:'Open the detailed QC review for the affected tracks, reasons and required actions.'}];
+  const grouped = new Map<string,{label:string;note?:string}>();
+  for (const item of unique) {
+    const action = item.note?.split(/Required action\s*\n/i)[1] || item.note || '';
+    const key = action.replace(/\s+/g,' ').trim().toLowerCase();
+    const existing = grouped.get(key);
+    grouped.set(key, existing ? {...existing,label:existing.label+' / '+item.label} : item);
+  }
+  const summaries=[...grouped.values()];
+  const result=summaries.slice(0,4).map(item=>({label:clip(item.label,110),note:clip((item.note?.split(/Required action\s*\n/i)[1] || item.note || 'Review the requested correction in HYMN.').replace(/\s+/g,' ').replace(/^HYMN review:\s*/i,''),240)}));
+  if(summaries.length>4)result.push({label:'Additional corrections',note:`${summaries.length-4} additional item(s) are listed in your detailed QC review.`});
+  return result;
+}

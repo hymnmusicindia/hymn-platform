@@ -20,7 +20,7 @@ export async function readReleaseQcReport(releaseId:number,db:Pick<typeof prisma
   const logs=await db.direNoteLog.findMany({where:{releaseId,action:'release_qc_details',success:true,requestPayloadRedacted:{path:['attemptId'],equals:attempt.id}},orderBy:{id:'desc'},take:1,select:{responseJson:true}});
   const report=logs[0]?.responseJson as unknown as ReleaseQcReport|undefined;
   // Historical evidence stays in the audit log; it must never replace the latest review.
-  return report?.version===1 && report.verified && report.releaseId===releaseId && report.attemptId===attempt.id && report.currentUpc===attempt.upc && (!fingerprint || report.reviewFingerprint===fingerprint && Date.parse(report.fetchedAt)>=latestReview!.createdAt.getTime()) ? report : null;
+  return report?.version===1 && report.verified && report.releaseId===releaseId && report.attemptId===attempt.id && report.currentUpc===attempt.upc && report.sourceUpc===attempt.upc && (!fingerprint || report.reviewFingerprint===fingerprint && Date.parse(report.fetchedAt)>=latestReview!.createdAt.getTime()) ? report : null;
 }
 
 export async function fetchBoundReleaseQcReport(input:{releaseId:number;attemptId:number;upc:string;tracks:QcLocalTrack[];reviewFingerprint:string;sourceUpc?:string;actorId?:number|null;timeoutMs?:number}){

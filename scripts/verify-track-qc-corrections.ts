@@ -10,5 +10,5 @@ const mismatch = extractDireNoteCorrections(direNoteQcCorrectionPayload({ tracks
 assert(mismatch.every(issue => !issue.field.startsWith("tracks.")), "Conflicting identifiers must not implicate a different EP track.");
 for (const check of [{ error: "NONE" }, { success: false, message: "API limit reached" }]) assert.equal(extractDireNoteCorrections(direNoteQcCorrectionPayload({ tracks: [{ ...report.tracks[0], isrc_lookup: check }] }), tracks, 11, 12, true).length, 0);
 const rights = extractDireNoteCorrections(direNoteQcCorrectionPayload({ tracks: [{ ...report.tracks[0], isrc_lookup: null, acr: { status: "failed", message: "Please provide proof of exclusive rights" } }] }), tracks, 11, 12, true);
-assert.equal(rights[0].field, "rights.contentId"); assert.match(rights[0].label, /Second song/);
+assert.match(rights[0].field, /^tracks\.1\.rights\.contentId\./); assert.match(rights[0].label, /Second song/);
 console.log("PASS track QC: reordered EP rows, exact track attribution, conflicting identifiers, unscanned results and ACR matches without false accusations.");

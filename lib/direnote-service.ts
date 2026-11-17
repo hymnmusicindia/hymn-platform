@@ -481,8 +481,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         releaseStatus: remoteRelease.status ?? payload.status,
         trackReviews: remoteTracks.map(track => ({ isrc: track.isrc, status: track.status, remarks: track.remarks ?? track.review_remarks ?? track.correction_remarks }))
       })).digest("hex");
-      const sourceBinding=record(record(release.metadata).direNote);
-      const sourceUpc = (sourceBinding.qcSourceAttemptId===attempt.id ? normalizeDireNoteUpc(sourceBinding.qcSourceUpc) : null) ?? providerQcSourceUpc(currentPayload) ?? lookupUpc;
+      const sourceUpc = lookupUpc; // Previous-package analysis is audit history, not evidence for this review.
       const { raw: qc, report } = await fetchBoundReleaseQcReport({ releaseId, attemptId: attempt.id, upc: lookupUpc, sourceUpc, tracks: mappingTracks, reviewFingerprint, actorId, timeoutMs: requestTimeout(15000) });
       if (!report) throw new Error("Current QC report unavailable; historical evidence was withheld.");
       if (qc && !providerCorrections.length) {
@@ -680,10 +679,10 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     && !(customerWorkflow && !["changes_requested", "rejected"].includes(aggregateStatus.canonical));
   if (applyStatus && aggregateStatus.canonical) {
     if (aggregateStatus.canonical === "changes_requested") {
-      const reason = correctionMessages.join(" ") || "DireNote requires corrections before distribution can continue.";
+      const reason = correctionMessages.join("\n\n") || "DireNote requires corrections before distribution can continue.";
       const review = {
         reason,
-        issueType: providerCorrections.some(issue => issue.field === "rights.contentId") ? "rights_ownership" as const : "other" as const,
+        issueType: providerCorrections.some(issue => issue.field.includes("rights.contentId")) ? "rights_ownership" as const : "other" as const,
         severity: "required_correction" as const,
         fields: providerCorrections.length ? providerCorrections.map(({ field, label, note }) => ({ field, label, note })) : [{ field: "direnote.correction", label: "DireNote correction", note: reason }],
         adminInternalNote: "Automatically halted from DireNote release-information sync.",

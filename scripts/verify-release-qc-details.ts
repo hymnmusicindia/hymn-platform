@@ -42,7 +42,7 @@ async function main(){
     const stored=await readReleaseQcReport(release.id);assert(stored?.verified);assert.equal(stored.tracks[1].matches.length,1);
     const notes=(await prisma.release.findUniqueOrThrow({where:{id:release.id}})).reviewIssues as any;assert(!notes.fields.some((field:any)=>field.field.endsWith('.providerQc')),'Fingerprint evidence is not a requested correction.');
     const count=await prisma.emailLog.count({where:{entityId:String(release.id),template:'release_changes_requested'}});assert.equal(count,1);
-    const email=await prisma.emailLog.findFirstOrThrow({where:{entityId:String(release.id),template:'release_changes_requested'}});assert.match(JSON.stringify(email.payload),new RegExp(`/dashboard/releases/${release.id}/qc-report`));assert.match(JSON.stringify(email.payload),/Matched recording/);
+    const email=await prisma.emailLog.findFirstOrThrow({where:{entityId:String(release.id),template:'release_changes_requested'}});assert.match(JSON.stringify(email.payload),new RegExp(`/dashboard/releases/${release.id}/qc-report`));assert.doesNotMatch(JSON.stringify(email.payload),/Matched recording/);
     await syncDireNoteRelease(release.id);assert.equal(qcCalls,1,'Report cache avoids repeat requests.');assert.equal(await prisma.emailLog.count({where:{entityId:String(release.id),template:'release_changes_requested'}}),count,'Repeated reports do not resend correction email.');
     remark='Please ensure that the cover art metadata matches the release metadata.';
     await syncDireNoteRelease(release.id);
@@ -50,8 +50,8 @@ async function main(){
     assert.match(artworkReview.correctionReason!,/cover art metadata/);
     assert.doesNotMatch(artworkReview.correctionReason!,/fingerprint|rights clearance|Audio match review/i);
     const artworkMail=await prisma.emailLog.findFirstOrThrow({where:{entityId:String(release.id),template:'release_changes_requested'},orderBy:{id:'desc'}});
-    assert.match(JSON.stringify(artworkMail.payload),/Supplementary audio scan evidence/);
-    assert.equal((artworkMail.payload as any).qcPolicyVersion,2);
+    assert.doesNotMatch(JSON.stringify(artworkMail.payload),/Supplementary audio scan evidence/);
+    assert.equal((artworkMail.payload as any).qcPolicyVersion,3);
     assert.equal((artworkMail.payload as any).qcReportFetchedAt,(await readReleaseQcReport(release.id))!.fetchedAt);
     trackStatus='Pending';
     await syncDireNoteRelease(release.id);
@@ -80,6 +80,8 @@ async function main(){
   assert.equal((await prisma.emailLog.findUniqueOrThrow({where:{id:legacy.id}})).status,'review');
   await saveReleaseQcReport(buildReleaseQcReport(raw,boundContext));
   const oldRaw={...raw,upc_code:'036000291452',tracks:raw.tracks.map(t=>({...t,isrc:t.isrc!.replace('260','250'),isrc_lookup:{status:'NEW ISRC',isrc:t.isrc}}))};const old=buildReleaseQcReport(oldRaw,{...context,sourceUpc:'036000291452'});assert(old.verified);
+  await saveReleaseQcReport(old);assert.equal(await readReleaseQcReport(release.id),null,"Earlier-package evidence must not appear in the current QC review.");
+  await saveReleaseQcReport(buildReleaseQcReport(raw,boundContext));
   const require=createRequire(import.meta.url);let owner=user.id;
   const accessModule={exports:{} as any};const compile=(file:string)=>ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
   vm.runInNewContext(compile('lib/release-qc-access.ts'),{exports:accessModule.exports,require:(id:string)=>id==='server-only'?{}:id==='@/lib/prisma'?{prisma}:id==='@/lib/access'?{requireUser:async()=>owner?{user:{id:owner}}:{error:require('next/server').NextResponse.json({error:'Unauthorized'},{status:401})},requireAdminPermission:async()=>({error:require('next/server').NextResponse.json({error:'Forbidden'},{status:403})})}:require(id)});
