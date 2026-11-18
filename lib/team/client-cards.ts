@@ -138,22 +138,23 @@ export async function importWorkspaceClientAccounts(workspaceId: string) {
   }, { maxWait: 10000, timeout: 30000 });
 }
 
-export async function ensureAccountClientCard(userId: number, options: { syncMobileToCard?: boolean; mobile?: string } = {}) {
-  const user = await prisma.user.findUnique({
+export async function ensureAccountClientCard(userId: number, options: { syncMobileToCard?: boolean; mobile?: string } = {}, transaction?: Prisma.TransactionClient) {
+  const database = transaction ?? prisma;
+  const user = await database.user.findUnique({
     where: { id: userId },
     select: { id: true, role: true, status: true, name: true, email: true, mobile: true, contactEmail: true, onboardingPurpose: true, onboardingUserType: true, onboardingPreferences:true }
   });
   if (!user || (user.role !== UserRole.CUSTOMER && user.role !== UserRole.PRODUCER) || ["BANNED", "DELETION_SCHEDULED"].includes(user.status)) return null;
   const account = { ...user, mobile: options.mobile ?? user.mobile };
-  const workspace = await prisma.teamWorkspace.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
+  const workspace = await database.teamWorkspace.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
   if (!workspace) return null;
-  return prisma.$transaction(async tx => {
+  const sync = async (tx:Prisma.TransactionClient) => {
     await tx.$queryRaw`SELECT id FROM team_workspaces WHERE id = ${workspace.id} FOR UPDATE`;
     const owner = await tx.teamMember.findFirst({ where: { workspaceId: workspace.id, status: "ACTIVE", role: { owner: true } }, orderBy: { joinedAt: "asc" }, select: { id: true } });
     if (!owner) return null;
     if (options.mobile !== undefined) {
       const updated = await tx.user.updateMany({
-        where: { id: userId, role: UserRole.CUSTOMER, status: "ACTIVE" },
+        where: { id: userId, role: {in:[UserRole.CUSTOMER,UserRole.PRODUCER]}, status: "ACTIVE" },
         data: { mobile: options.mobile }
       });
       if (updated.count !== 1) throw new Error("Customer account is no longer active.");
@@ -172,7 +173,8 @@ export async function ensureAccountClientCard(userId: number, options: { syncMob
       contactCardSynced = true;
     }
     return { createdOrLinked: count > 0 || Boolean(card), contactCardSynced };
-  }, { maxWait: 10000, timeout: 30000 });
+  };
+  return transaction ? sync(transaction) : prisma.$transaction(sync, { maxWait: 10000, timeout: 30000 });
 }
 
 export { CLIENT_INTERESTS };

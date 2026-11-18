@@ -55,6 +55,13 @@ export interface SupportTicket {
 }
 
 export interface SupportDetails {
+  contactPhone?: string;
+  contactSaved?: boolean;
+  source?: string;
+  trackId?: number | null;
+  trackTitle?: string | null;
+  trackNumber?: number | null;
+  releaseTitle?: string | null;
   email?: string;
   upc?: string;
   screenshotIds?: number[];

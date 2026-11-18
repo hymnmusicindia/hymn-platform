@@ -27,10 +27,10 @@ export function HomeGoalWorkspace({ userId, name, banners = {} }: { userId: numb
   const [error, setError] = useState("");
   const [visit, setVisit] = useState(0);
   const [popupOpen, setPopupOpen] = useState(false);
-  const popupToggleRef = useRef<HTMLButtonElement>(null);
+  useEffect(()=>{const show=()=>setPopupOpen(true);window.addEventListener('hymn-goal-guide-open',show);return()=>window.removeEventListener('hymn-goal-guide-open',show);},[]);
   useEffect(() => {
     if (!popupOpen) return;
-    function dismiss(event: KeyboardEvent) { if (event.key === "Escape") { setPopupOpen(false); popupToggleRef.current?.focus(); } }
+    function dismiss(event: KeyboardEvent) { if (event.key === "Escape") { setPopupOpen(false); document.querySelector<HTMLButtonElement>('[aria-controls="hymn-support-chat"]')?.focus(); } }
     window.addEventListener("keydown", dismiss);
     return () => window.removeEventListener("keydown", dismiss);
   }, [popupOpen]);
@@ -115,9 +115,8 @@ export function HomeGoalWorkspace({ userId, name, banners = {} }: { userId: numb
       <div className="home-goal-choice-footer"><p>{busy && choosingProfession ? "Saving your profession..." : "Your path. Always changeable."}</p><div>{state ? <button type="button" onClick={() => { setEditing(false); void load(); }} disabled={busy}>Cancel</button> : <Link href="/dashboard">Explore first</Link>}{!choosingProfession ? <button className="home-goal-primary" type="button" disabled={busy || !selected} onClick={() => void update({ action: state ? "regenerate" : "generate", goalId: selected })}>{busy ? <><LoaderCircle size={16} /> Building your path...</> : <>Build my path <ArrowRight size={16} /></>}</button> : null}</div></div>
     </> : state ? <>
       {typeof document !== "undefined" ? createPortal(<aside className="home-path-popup" aria-label="Your focus">
-      <button ref={popupToggleRef} className="home-path-popup-toggle" type="button" aria-label={popupOpen ? "Close goal guide" : "Open goal guide"} title="Your goal guide" aria-expanded={popupOpen} aria-controls="home-path-popup-content" onClick={() => setPopupOpen(open => !open)}>{popupOpen ? <X size={22}/> : <Compass size={24}/>}</button>
       <div id="home-path-popup-content" hidden={!popupOpen}>
-      <header className="home-path-popup-heading"><Compass size={17}/><span>Your focus. Your next move.</span></header>
+      <header className="home-path-popup-heading"><Compass size={17}/><span>Your focus. Your next move.</span><button type="button" aria-label="Close goal guide" onClick={()=>setPopupOpen(false)}><X size={17}/></button></header>
       <div className="home-path-launch"><Link className="home-goal-primary" href={activeHref}>{next?.action_label || goal.action}<ArrowRight size={16}/></Link><button type="button" onClick={() => { setSelected(state.goalId || ""); setEditing(true); requestAnimationFrame(() => headingRef.current?.focus()); }}>Change goal</button></div>
       <details className="home-path-guide" open><summary>Your guide <span>{completed}/{steps.length} steps</span><ArrowRight size={16}/></summary>
       <div className="home-goal-focus-grid"><article className="home-goal-feature"><div className="home-goal-feature-label"><span>YOUR NEXT STEP</span></div><h2>{next?.title || "Your path is complete. Keep creating."}</h2><p>{next?.description || "Your chosen tools and services are ready whenever you need them."}</p><div className="home-goal-feature-actions"><Link className="home-goal-primary" href={activeHref}>{next?.action_label || goal.action}<ArrowRight size={16} /></Link><button type="button" onClick={() => guide(activeHref, next?.title || goal.title, next?.description || goal.description)}><Compass size={16} /> Guide me there</button></div><details className="home-goal-feature-footnote"><summary>Why this step?</summary>{next?.why_it_matters || "Revisit any step or choose a new objective."}</details></article>

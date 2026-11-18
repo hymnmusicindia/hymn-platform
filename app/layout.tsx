@@ -36,6 +36,7 @@ import "./styles/subscription-options.css";
 import "./styles/home-goal-workspace.css";
 import "./styles/home-editorial.css";
 import "./styles/support-workspace.css";
+import { SupportChatWidget } from '@/components/support-chat-widget';
 import "./styles/faq-center.css";
 import "./styles/sidebar-consistency.css";
 import "./styles/workspace-page-transition.css";
@@ -109,7 +110,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning><PublicNoScriptInformation/><BeatPreviewPlayerProvider><SubscriptionLabelProvider label={subscriptionLabel}><PersistentSiteWorkspace user={session} header={<SiteHeader user={session}/>}>{children}</PersistentSiteWorkspace></SubscriptionLabelProvider></BeatPreviewPlayerProvider><CustomerServiceInterestTracker /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
+      <body suppressHydrationWarning><PublicNoScriptInformation/><BeatPreviewPlayerProvider><SubscriptionLabelProvider label={subscriptionLabel}><PersistentSiteWorkspace user={session} header={<SiteHeader user={session}/>}>{children}</PersistentSiteWorkspace></SubscriptionLabelProvider></BeatPreviewPlayerProvider><CustomerServiceInterestTracker /><SmartHelpLayer /><SupportChatWidget userId={session?.sub??null}/><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
     </html>
   );
 }
