@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {randomBytes,randomUUID} from 'node:crypto';
+import jwt from 'jsonwebtoken';
+import {prisma} from '../lib/prisma';
+import {desktopAdministrator,desktopChallenge,issueDesktopCode,redeemDesktopCode} from '../lib/admin-desktop-auth';
+import {desktopTaskScope,desktopTaskAlert} from '../lib/admin-desktop-feed';
+import {getUserSessionSecret} from '../lib/env';
+async function main(){
+ assert.match(process.env.DATABASE_URL??'',/^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55473\/acquisition_fixture/);
+ const role=await prisma.adminRole.create({data:{key:'desktop-fixture',name:'Desktop reviewer'}});
+ const permission=await prisma.adminPermission.upsert({where:{key:'releases.read'},create:{key:'releases.read',description:'Review'},update:{}});
+ await prisma.adminRolePermission.create({data:{roleId:role.id,permissionId:permission.id}});
+ const user=await prisma.user.create({data:{name:'Desktop admin',email:'desktop-admin@example.test',googleId:randomUUID(),role:'ADMIN'}});
+ await prisma.adminMembership.create({data:{userId:user.id,roleId:role.id}});
+ const customer=await prisma.user.create({data:{name:'Customer',email:'desktop-customer@example.test',googleId:randomUUID()}});
+ await assert.rejects(()=>desktopAdministrator(customer.id));
+ const verifier=randomBytes(32).toString('base64url'),code=issueDesktopCode(user.id,desktopChallenge(verifier));
+ await assert.rejects(()=>redeemDesktopCode(code,randomBytes(32).toString('base64url')));
+ const parallel=await Promise.allSettled([redeemDesktopCode(code,verifier),redeemDesktopCode(code,verifier)]);
+ assert.equal(parallel.filter(r=>r.status==='fulfilled').length,1,'Handoff is single-use across concurrent requests.');
+ await assert.rejects(()=>redeemDesktopCode(code,verifier));
+ const expired=jwt.sign({purpose:'hymn-admin-desktop-v1',uid:user.id,challenge:desktopChallenge(verifier)},getUserSessionSecret(),{audience:'hymn-admin-desktop-v1',issuer:'hymn',jwtid:randomUUID(),expiresIn:-1});
+ await assert.rejects(()=>redeemDesktopCode(expired,verifier));
+ const pending=issueDesktopCode(user.id,desktopChallenge(verifier));await prisma.adminMembership.update({where:{userId:user.id},data:{active:false,revokedAt:new Date()}});
+ await assert.rejects(()=>redeemDesktopCode(pending,verifier),'Revocation between approval and exchange is enforced.');
+ await prisma.adminMembership.update({where:{userId:user.id},data:{active:true,revokedAt:null}});await prisma.user.update({where:{id:user.id},data:{status:'SUSPENDED'}});await assert.rejects(()=>desktopAdministrator(user.id));
+ assert.deepEqual(desktopTaskScope([]),{entityType:{in:[]}});
+ const release=await prisma.adminTask.create({data:{eventKey:'desktop-release',type:'Needs review',title:'Private title',body:'Private evidence',href:'/admin',entityType:'release',entityId:'1'}});
+ await prisma.adminTask.create({data:{eventKey:'desktop-support',type:'Support Ticket Open',title:'Private support',body:'Private phone',href:'/admin',entityType:'support_ticket',entityId:'2'}});
+ const authorised=await prisma.adminTask.findMany({where:desktopTaskScope(['releases.read'])});assert.equal(authorised.length,1);
+ const alert=desktopTaskAlert(release,['releases.read']);assert.ok(alert);assert.doesNotMatch(JSON.stringify(alert),/Private/);assert.equal(desktopTaskAlert({...release,entityType:'support_ticket'},['releases.read']),null);assert.equal(desktopTaskAlert({...release,entityType:'unknown'},['releases.read']),null);
+ console.log('PASS admin desktop DB: active admin membership, proof binding, expiry, concurrent single-use handoff, revoked/suspended denial, permission-scoped task feed and private banner summaries.');
+}
+main().finally(()=>prisma.$disconnect()).catch(error=>{console.error(error);process.exitCode=1;});
