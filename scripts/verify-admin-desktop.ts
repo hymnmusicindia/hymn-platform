@@ -25,10 +25,10 @@ async function main(){
  await assert.rejects(()=>redeemDesktopCode(pending,verifier),'Revocation between approval and exchange is enforced.');
  await prisma.adminMembership.update({where:{userId:user.id},data:{active:true,revokedAt:null}});await prisma.user.update({where:{id:user.id},data:{status:'SUSPENDED'}});await assert.rejects(()=>desktopAdministrator(user.id));
  assert.deepEqual(desktopTaskScope([]),{entityType:{in:[]}});
- const release=await prisma.adminTask.create({data:{eventKey:'desktop-release',type:'Needs review',title:'Private title',body:'Private evidence',href:'/admin',entityType:'release',entityId:'1'}});
+ const release=await prisma.adminTask.create({data:{eventKey:'desktop-release',type:'Needs review',title:'Private title',body:'Ownership evidence needs review. Email owner@example.test or +91 9876543210.',href:'/admin',entityType:'release',entityId:'1'}});
  await prisma.adminTask.create({data:{eventKey:'desktop-support',type:'Support Ticket Open',title:'Private support',body:'Private phone',href:'/admin',entityType:'support_ticket',entityId:'2'}});
  const authorised=await prisma.adminTask.findMany({where:desktopTaskScope(['releases.read'])});assert.equal(authorised.length,1);
- const alert=desktopTaskAlert(release,['releases.read']);assert.ok(alert);assert.doesNotMatch(JSON.stringify(alert),/Private/);assert.equal(desktopTaskAlert({...release,entityType:'support_ticket'},['releases.read']),null);assert.equal(desktopTaskAlert({...release,entityType:'unknown'},['releases.read']),null);
+ const alert=desktopTaskAlert(release,['releases.read']);assert.ok(alert);assert.doesNotMatch(JSON.stringify(alert),/owner@example|9876543210/);assert.match(alert.body,/Ownership evidence/);assert.equal(desktopTaskAlert({...release,entityType:'support_ticket'},['releases.read']),null);assert.equal(desktopTaskAlert({...release,entityType:'unknown'},['releases.read']),null);
  console.log('PASS admin desktop DB: active admin membership, proof binding, expiry, concurrent single-use handoff, revoked/suspended denial, permission-scoped task feed and private banner summaries.');
 }
 main().finally(()=>prisma.$disconnect()).catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,9 +1,10 @@
 import {NextResponse} from 'next/server';
 import {getSession,createSession} from '@/lib/session';
-import {getAdminAccessForPage,isRecentAdminAuthentication} from '@/lib/access';
+import {isRecentAdminAuthentication} from '@/lib/access';
 import {isSameAppOrigin} from '@/lib/request-origin';
 import {consumeRateLimit,requestIdentity} from '@/lib/rate-limit';
-import {DesktopAuthError,desktopAdministrator,issueDesktopCode,redeemDesktopCode} from '@/lib/admin-desktop-auth';
+import {DesktopAuthError,desktopWorkspaceAccess,issueDesktopCode,redeemDesktopCode} from '@/lib/admin-desktop-auth';
+import type {UserRole} from '@/lib/types';
 import {readJsonBody,RequestBodyError} from '@/lib/request-body';
 export const runtime='nodejs';
 const headers={'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'};
@@ -15,15 +16,16 @@ export async function POST(request:Request){try{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new DesktopAuthError('Invalid request.');
   const body=raw as Record<string,unknown>;
   if(body?.action==='approve'){
-    const session=await getSession(),access=await getAdminAccessForPage();
-    if(!session||!access?.permissions.length)throw new DesktopAuthError('Sign in with an approved administrator account.',403);
+    const session=await getSession();
+    if(!session)throw new DesktopAuthError('Sign in with an approved Admin OS or Team OS account.',403);
     if(!isRecentAdminAuthentication('iat' in session&&typeof session.iat==='number'?session.iat:undefined))throw new DesktopAuthError('Sign in again before connecting this computer.',401);
-    await desktopAdministrator(session.sub);
+    await desktopWorkspaceAccess(session.sub);
     if(typeof body.challenge!=='string')throw new DesktopAuthError('Invalid challenge.');
     return NextResponse.json({code:issueDesktopCode(session.sub,body.challenge)},{headers});
   }
   if(body?.action!=='redeem'||typeof body.code!=='string'||typeof body.verifier!=='string')throw new DesktopAuthError('Invalid sign-in request.');
   const user=await redeemDesktopCode(body.code,body.verifier);
-  await createSession({sub:user.id,email:user.email,name:user.name,role:'admin',avatarUrl:user.avatar},{ipAddress:requestIdentity(request),userAgent:request.headers.get('user-agent')?.slice(0,1000)});
-  return NextResponse.json({signedIn:true},{headers});
+  const access=await desktopWorkspaceAccess(user.id);
+  await createSession({sub:user.id,email:user.email,name:user.name,role:user.role.toLowerCase() as UserRole,avatarUrl:user.avatar},{ipAddress:requestIdentity(request),userAgent:request.headers.get('user-agent')?.slice(0,1000)});
+  return NextResponse.json({signedIn:true,defaultPath:access.permissions.length?'/admin':`/team?workspace=${encodeURIComponent(access.teams[0].workspaceId)}`},{headers});
 }catch(error){return NextResponse.json({error:error instanceof DesktopAuthError||error instanceof RequestBodyError?error.message:'Desktop sign-in is temporarily unavailable.'},{status:error instanceof DesktopAuthError||error instanceof RequestBodyError?error.status:503,headers});}}

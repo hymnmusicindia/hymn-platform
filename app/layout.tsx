@@ -1,3 +1,5 @@
+import './styles/desktop-workspaces.css';
+import {headers} from 'next/headers';
 import { BeatPreviewPlayerProvider } from '@/components/beat-preview-player';
 import { getSession } from '@/lib/session';
 import { getSubscriptionMenuLabel } from '@/lib/subscription-helpers';
@@ -82,11 +84,12 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const session = await getSession();
+  const desktop=/HYMNAdmin\//.test((await headers()).get('user-agent')??'');
   const subscriptionLabel = await getSubscriptionMenuLabel(session?.sub);
   const origin = getPublicAppUrl();
   const structuredData = businessStructuredData(origin);
   return (
-    <html lang="en" data-scroll-behavior="smooth" data-theme="light" suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth" data-theme="light" data-desktop-workspaces={desktop?'true':undefined} suppressHydrationWarning>
       <head>
         <meta name="color-scheme" content="only light" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(structuredData) }} />
@@ -110,7 +113,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning><PublicNoScriptInformation/><BeatPreviewPlayerProvider><SubscriptionLabelProvider label={subscriptionLabel}><PersistentSiteWorkspace user={session} header={<SiteHeader user={session}/>}>{children}</PersistentSiteWorkspace></SubscriptionLabelProvider></BeatPreviewPlayerProvider><CustomerServiceInterestTracker /><SmartHelpLayer /><SupportChatWidget userId={session?.sub??null}/><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
+      <body suppressHydrationWarning>{!desktop?<PublicNoScriptInformation/>:null}<BeatPreviewPlayerProvider><SubscriptionLabelProvider label={subscriptionLabel}><PersistentSiteWorkspace desktop={desktop} user={session} header={<SiteHeader user={session} desktop={desktop}/>}>{children}</PersistentSiteWorkspace></SubscriptionLabelProvider></BeatPreviewPlayerProvider>{!desktop?<><CustomerServiceInterestTracker /><SmartHelpLayer /><SupportChatWidget userId={session?.sub??null}/><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</>:null}</body>
     </html>
   );
 }

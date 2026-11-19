@@ -41,6 +41,13 @@ export async function proxy(request: NextRequest) {
     }
   }
   const pathname = request.nextUrl.pathname;
+  // Desktop is a staff-workspace client. This changes navigation only, never authority.
+  const desktopStaff = /HYMNAdmin\//.test(request.headers.get('user-agent') || '');
+  if (desktopStaff && ['GET', 'HEAD'].includes(request.method) && !/^\/(?:admin|team)(?:\/|$)/.test(pathname) && !pathname.startsWith('/api/') && (request.headers.get('accept')?.includes('text/html') || request.headers.get('rsc') === '1')) {
+    const session = await readSession(request);
+    const destination = session ? session.role === 'admin' ? '/admin' : '/team' : '/admin/login';
+    return NextResponse.redirect(new URL(destination, request.url), 307);
+  }
   if ((pathname === "/" || pathname === "/home") && ["GET", "HEAD"].includes(request.method) && request.headers.get("rsc") !== "1") {
     const response = prefersMarkdown(request.headers.get("accept"))
       ? NextResponse.rewrite(new URL("/index.md", request.url))

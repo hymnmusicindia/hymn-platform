@@ -1,0 +1,40 @@
+name: Staff desktop regression
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/api/desktop/**'
+      - 'app/api/desktop-admin-auth/**'
+      - 'app/api/admin/desktop/**'
+      - 'components/desktop-staff-header*'
+      - 'components/site-header.tsx'
+      - 'components/persistent-site-workspace.tsx'
+      - 'app/layout.tsx'
+      - 'app/styles/desktop-workspaces.css'
+      - 'scripts/verify-acquisition-isolated.ts'
+      - 'lib/*desktop*'
+      - 'lib/desktop-alert-text.ts'
+      - 'proxy.ts'
+      - 'scripts/verify*desktop*'
+      - '.github/workflows/desktop-staff-regression.yml'
+permissions:
+  contents: read
+jobs:
+  staff-boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx prisma generate
+      - run: npx playwright install --with-deps chromium
+      - run: node --test desktop/admin/tests/policy.test.cjs
+      - run: node --conditions=react-server --import tsx scripts/verify-admin-desktop-api.ts
+      - run: node --import tsx scripts/verify-desktop-route-boundary.ts
+      - run: node --import tsx scripts/verify-acquisition-isolated.ts --admin-desktop-only
+      - run: node scripts/verify-desktop-staff-browser.cjs

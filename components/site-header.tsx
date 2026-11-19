@@ -1,4 +1,5 @@
 "use client";
+import {DesktopStaffHeader} from './desktop-staff-header';
 
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { AccountHandle } from "@/components/account-handle";
@@ -26,6 +27,7 @@ import { PageHistoryNavigation } from "@/components/page-history-navigation";
 
 type SiteHeaderProps = {
   user?: SessionPayload | null;
+  desktop?:boolean;
 };
 
 type HeaderNotification = {
@@ -62,7 +64,8 @@ function notificationTimeAgo(value: string) {
   return new Date(value).toLocaleDateString();
 }
 
-export function SiteHeader({ user = null }: SiteHeaderProps) {
+export function SiteHeader({user=null,desktop=false}:SiteHeaderProps){return desktop?<DesktopStaffHeader name={user?.name}/>:<PublicSiteHeader user={user}/>;}
+function PublicSiteHeader({ user = null }: SiteHeaderProps) {
   const pathname = usePathname();
   const workspaceHeader = true;
   const [breadcrumbs, setBreadcrumbs] = useState<WorkspaceCrumb[]>(() => workspaceBreadcrumbs(pathname));

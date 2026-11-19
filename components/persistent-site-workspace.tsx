@@ -7,7 +7,7 @@ import {LandingWorkspace} from './landing-workspace';
 import {studioDestinations, usesHymnStudioShell} from '@/lib/studio-navigation';
 import {OacEligibilityPrompt} from './oac-eligibility-prompt';
 import s from './hymn-studio.module.css';
-export function PersistentSiteWorkspace({children, header, user}: {children:ReactNode; header:ReactNode; user: {sub?:number;name:string;role:string}|null}) {
+export function PersistentSiteWorkspace({children, header, user,desktop=false}: {children:ReactNode; header:ReactNode; user: {sub?:number;name:string;role:string}|null;desktop?:boolean}) {
   const path = usePathname();
   const router = useRouter();
   const [configuration, setConfiguration] = useState<StudioFrameConfiguration | null>(null);
@@ -25,7 +25,8 @@ export function PersistentSiteWorkspace({children, header, user}: {children:Reac
     else if(configuration?.workspaceKind==='producer')router.push(`/producer/dashboard?tab=${encodeURIComponent(key)}`);
     else router.push(studioDestinations.find(item => item.key === key)?.href || '/studio');
   };
-  return <PersistentWorkspaceContext.Provider value={!standalone}><div className={studio ? s.root : path.startsWith('/admin') ? 'admin-workspace-theme' : 'hymn-public-workspace'}>{header}{user?<OacEligibilityPrompt key={user.sub||user.name}/>:null}
+  if(desktop&&!/^\/(?:admin|team)(?:\/|$)/.test(path))return <div>{header}<main className="shell py-20"><h1 className="text-2xl font-semibold">Choose your staff workspace.</h1><p className="mt-3 text-sm text-[var(--text-muted)]">The Windows app contains Admin OS and Team OS only. Use the workspace switcher above to continue.</p></main></div>;
+  return <PersistentWorkspaceContext.Provider value={!standalone}><div className={studio ? s.root : path.startsWith('/admin') ? 'admin-workspace-theme' : 'hymn-public-workspace'}>{header}{user&&!desktop?<OacEligibilityPrompt key={user.sub||user.name}/>:null}
     {standalone ? children : studio ? <StudioFrameContext.Provider value={context}><StudioFrameView {...(configuration || {navItems:[], activeKey:active})} user={user || undefined} activeKey={configuration?.activeKey || active} onSelect={select}>{children}</StudioFrameView></StudioFrameContext.Provider> : <div className="hymn-landing hymn-service-pages"><LandingWorkspace workspaceHref="/studio" releaseNavigation={path === '/distribution/start'}>{children}</LandingWorkspace></div>}
   </div></PersistentWorkspaceContext.Provider>;
 }

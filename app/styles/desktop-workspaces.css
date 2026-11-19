@@ -1,0 +1,2 @@
+html[data-desktop-workspaces=true] [data-dashboard-sidebar] a[href="/"]{display:none!important}
+html[data-desktop-workspaces=true] [data-dashboard-surface]{--workspace-header-height:58px!important}

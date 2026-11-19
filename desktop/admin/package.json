@@ -1,6 +1,6 @@
 {
   "name": "hymn-admin-os",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "HYMN Admin OS for Windows",
   "author": "HYMN Music",
@@ -36,7 +36,8 @@
       "home.cjs",
       "home.html",
       "assets/**",
-      "package.json"
+      "package.json",
+      "workspace-preload.cjs"
     ],
     "asar": true,
     "win": {
@@ -52,7 +53,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "HYMN Admin OS",
-      "deleteAppDataOnUninstall": true
+      "deleteAppDataOnUninstall": true,
+      "include": "installer.nsh"
     }
   }
 }
