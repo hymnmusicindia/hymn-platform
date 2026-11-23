@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { answerSupportQuestion } from '../lib/support-chat-knowledge';
-import { createChatSupportTicket, supportChatContext } from '../lib/support-chat';
+import { createChatSupportTicket, supportChatContext, supportChatTickets } from '../lib/support-chat';
 import { supportContactPhone } from '../lib/support-contact-phone';
 
 async function main(){
@@ -34,6 +34,9 @@ async function main(){
   assert.equal(await prisma.supportTicket.count({where:{userId:user.id}}),1);
   assert.equal(await prisma.adminTask.count({where:{entityId:String(first.id),entityType:'support_ticket'}}),1);
   assert.equal(await prisma.notification.count({where:{eventKey:`support-chat:${first.id}:created`}}),1);
+  await prisma.supportTicket.create({data:{userId:other.id,subject:'Foreign private request',message:'Must never leak.'}});
+  await prisma.supportReply.createMany({data:[{ticketId:first.id,requestKey:randomUUID(),authorId:ownerUser.id,kind:'solution',recipient:user.email,subject:'Update',body:'Private unsent reply',status:'QUEUED'},{ticketId:first.id,requestKey:randomUUID(),authorId:ownerUser.id,kind:'solution',recipient:user.email,subject:'Update',body:'HYMN team delivered answer',status:'SENT'}]});
+  const ownTickets=await supportChatTickets(user.id);assert.equal(ownTickets.tickets.length,1);assert.equal(ownTickets.tickets[0].id,first.id);assert.deepEqual(ownTickets.tickets[0].replies.map(reply=>reply.body),['HYMN team delivered answer']);assert(!JSON.stringify(ownTickets).includes('recipient'));assert(!JSON.stringify(ownTickets).includes('chatFingerprint'));
   const saved=await prisma.supportTicket.findUniqueOrThrow({where:{id:first.id}}),details=saved.details as any;
   assert.equal(saved.relatedReleaseId,release.id);assert.equal(details.trackId,track.id);assert.equal(details.trackTitle,track.title);assert.equal(details.upc,release.upc);assert.equal(details.callbackStatus,'REQUESTED');
   const contact=await prisma.teamClient.findUniqueOrThrow({where:{id:card.id}});

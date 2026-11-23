@@ -25,6 +25,13 @@ export const supportArticles:SupportArticle[] = [
 const stop = new Set(['i','my','me','a','an','the','is','it','to','for','of','on','in','with','and','or','can','you','please','help','want','need','how','what','why','not','am','are','do','does','this','that','have','has','get']);
 function terms(value:string){return value.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu,' ').split(/\s+/).filter(word=>word.length>1&&!stop.has(word));}
 export function answerSupportQuestion(query:string, service?:SupportService):SupportAnswer {
+  const command=query.trim().toLowerCase().normalize('NFKC').replace(/[!?.\s]+$/g,'');
+  const conversational=(title:string,answer:string):SupportAnswer=>({title,answer,tags:[],service:'general',sources:[],suggestions:[],matched:true});
+  if(/^(hi|hello|hey|hey there|hi there|hello hymn|namaste|good morning|good evening|good afternoon)$/.test(command))return conversational('Hi there', 'Hi! I am your HYMN support guide. What can I help you with today? Choose an issue below, or tell me what happened.');
+  if(/^(help|\/help|menu|start|\/start)$/.test(command))return conversational('How can I help?', 'Choose a service below for guidance. You can also type "ticket" to send an issue to our team, or "my tickets" to check your requests here.');
+  if(/^(thanks|thank you|thank you so much|thankyou|thx)$/.test(command))return conversational('You are welcome', 'Happy to help. If you still need a closer look, you can create a ticket here for the HYMN team.');
+  if(/^(ticket|\/ticket|create ticket|raise ticket|new ticket|talk to human|talk to team)$/.test(command))return conversational('Let us create a ticket', 'Choose your service, describe the issue and confirm your contact number. I will let you review everything before sending it to the HYMN team.');
+  if(/^(my tickets|\/tickets|tickets|ticket status)$/.test(command))return conversational('Your support requests', 'Open My tickets above to see your requests, their status and replies from the HYMN team, without leaving this chat.');
   const words=terms(query.slice(0,3000));
   const ranked=supportArticles.filter(article=>!service||service==='general'||article.service===service).map(article=>{
     const title=terms(article.title),tags=article.tags.flatMap(terms);
@@ -33,6 +40,6 @@ export function answerSupportQuestion(query:string, service?:SupportService):Sup
   }).filter(item=>item.score>0).sort((a,b)=>b.score-a.score);
   const best=ranked[0]?.article;
   if(!best&&service&&service!=='general')return answerSupportQuestion(query,'general');
-  return best ? {title:best.title,answer:best.answer,tags:best.tags.slice(0,5),service:best.service,sources:[{title:best.title,href:best.href}],suggestions:ranked.slice(1,3).map(({article})=>({id:article.id,title:article.title})),matched:true}
+  return best ? {title:best.title,answer:best.answer,tags:best.tags.slice(0,5),service:best.service,sources:[{title:best.title,href:best.href}],suggestions:supportArticles.filter(article=>article.service===best.service&&article.id!==best.id).slice(0,3).map(article=>({id:article.id,title:article.title})),matched:true}
     : {title:'Let’s get you the right help',answer:'Tell me which service you are using and what happened. You can also raise a ticket for HYMN’s team. For release-specific checks, select your release and track in the ticket flow; I won’t guess your release status or the outcome of a payment.',tags:[],service:service??'general',sources:[],suggestions:[],matched:false};
 }

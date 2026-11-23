@@ -64,3 +64,11 @@ export async function createChatSupportTicket(userId:number,raw:unknown) {
     return {id:ticket.id,subject,status:'open',duplicate:false,contactSaved:true,href:`/dashboard?tab=support&ticketId=${ticket.id}`};
   },{timeout:30000,maxWait:10000});
 }
+
+/** Customer-only projection: never return internal diagnostics, recipients or unsent replies. */
+export async function supportChatTickets(userId:number,offset=0){
+  const account=await prisma.user.findUnique({where:{id:userId},select:{status:true}});
+  if(account?.status!=='ACTIVE')throw new SupportError('Sign in with an active HYMN account.',403);
+  const rows=await prisma.supportTicket.findMany({where:{userId},orderBy:[{createdAt:'desc'},{id:'desc'}],skip:offset,take:21,select:{id:true,subject:true,message:true,status:true,createdAt:true,replies:{where:{status:'SENT'},orderBy:{createdAt:'asc'},select:{id:true,body:true,createdAt:true}}}});
+  return {tickets:rows.slice(0,20).map(row=>({...row,subject:customerBrandText(row.subject),message:customerBrandText(row.message),status:row.status.toLowerCase().replaceAll('_',' '),replies:row.replies.map(reply=>({...reply,body:customerBrandText(reply.body)}))})),hasMore:rows.length>20,nextOffset:offset+20};
+}
