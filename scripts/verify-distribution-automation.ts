@@ -213,6 +213,9 @@ async function main(){
     await prisma.direNoteLog.deleteMany({where:{action:'rate_limit_reservation'}});
     await prisma.direNoteLog.createMany({data:Array.from({length:55},(_,i)=>({action:'rate_limit_reservation',success:true,createdAt:new Date(Date.now()-1800000+i*1000)}))});
     await assert.rejects(reserveDireNoteRequest('release_information'),(e:any)=>e.code==='DIRENOTE_RATE_LIMIT');
+    await reserveDireNoteRequest('content_ingestion',null,null,{headroom:40,reserve:false});
+    assert.equal(await prisma.direNoteLog.count({where:{action:'rate_limit_reservation'}}),55,'Headroom checks must not consume a provider reservation.');
+    await assert.rejects(reserveDireNoteRequest('content_ingestion',null,null,{headroom:41,reserve:false}),(e:any)=>e.code==='DIRENOTE_RATE_LIMIT'&&e.retryAfterSeconds>1700);
     await reserveDireNoteRequest('artist_mapping_check',reviewed.row.id);
     await reserveDireNoteRequest('content_ingestion',reviewed.row.id);
     await reserveDireNoteRequest('ingest_status',reviewed.row.id);

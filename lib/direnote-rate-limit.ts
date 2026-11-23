@@ -17,7 +17,7 @@ export async function enforceDireNoteResponseLimit(result: { httpStatus: number 
  * Reserves capacity before an outbound DNM call. Reservations are durable so
  * concurrent cron invocations share the documented provider-wide limit.
  */
-export async function reserveDireNoteRequest(action: string, releaseId?: number | null, actorId?: number | null) {
+export async function reserveDireNoteRequest(action: string, releaseId?: number | null, actorId?: number | null, options: { headroom?: number; reserve?: boolean } = {}) {
   await prisma.$transaction(async (tx) => {
     // PostgreSQL advisory locking serializes this narrow reservation path
     // across app instances without locking the release or royalty tables.
@@ -38,13 +38,16 @@ export async function reserveDireNoteRequest(action: string, releaseId?: number 
     // ingestion and acknowledgement polling, plus five administrator requests.
     const routineRead = /^(?:release_information(?:_.*)?|artist_information|songwriter_information|upc_lookup|check_release_status|revenue_report|correction_qc_report|legacy_amendment_recovery)$/.test(action);
     const capacity = actorId != null ? 100 : routineRead ? 55 : 95;
-    if (used >= capacity) {
-      const [available] = await tx.direNoteLog.findMany({ where: { action: "rate_limit_reservation", createdAt: { gte: since } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip: Math.max(0, used - capacity), take: 1, select: { createdAt: true } });
+    const headroom = Math.max(1, Math.min(capacity, Math.trunc(options.headroom || 1)));
+    if (used + headroom > capacity) {
+      const [available] = await tx.direNoteLog.findMany({ where: { action: "rate_limit_reservation", createdAt: { gte: since } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip: Math.max(0, used + headroom - capacity - 1), take: 1, select: { createdAt: true } });
       const retryAfterSeconds = Math.max(1, Math.ceil(((available?.createdAt.getTime() ?? Date.now()) + 60 * 60 * 1000 - Date.now()) / 1000));
       const error = new Error(`DireNote hourly request capacity is exhausted. Retry in ${Math.ceil(retryAfterSeconds / 60)} minute(s).`);
       Object.assign(error, { code: "DIRENOTE_RATE_LIMIT", retryAfterSeconds });
       throw error;
     }
+
+    if (options.reserve === false) return;
 
     await tx.direNoteLog.create({
       data: {

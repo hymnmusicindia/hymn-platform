@@ -369,6 +369,11 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   const previousAttempt = options.correctionReingest ? await ensureCurrentDireNoteAttempt(releaseId) : null;
   const validation = validationResult(payload, { ...options, replaceProviderIdentifiers: Boolean(options.correctionReingest) });
   if (validation.ok) {
+    // Avoid repeatedly checking an album's first artists when the shared budget
+    // cannot cover its mapping batch. Each actual request still reserves its slot.
+    const artists = [...payload.artists, ...(payload.featuring_artists ?? []), ...payload.tracks.flatMap(track => [...(track.artists ?? []), ...(track.featuring_artists ?? [])])];
+    const uniqueArtists = new Set(artists.map(artist => artist.name.trim().toLocaleLowerCase())).size;
+    await reserveDireNoteRequest('content_ingestion', releaseId, options.actorId, { headroom: uniqueArtists * 2 + 1, reserve: false });
     validation.issues.push(...await getArtistProvisionIssues(payload));
     validation.ok = validation.issues.length === 0;
   }
