@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Compass, Headphones, LoaderCircle, MessageCircle, Send, Ticket, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Compass, ChevronRight, LoaderCircle, MessageCircle, Send, Ticket, X } from 'lucide-react';
+import { SupportMascot } from './support-mascot';
 import { useAccessibleDialog } from './ui/use-accessible-dialog';
 import type { SupportService } from '@/lib/support-chat-knowledge';
 import { supportContactPhone } from '@/lib/support-contact-phone';
@@ -20,16 +21,19 @@ const services:Array<{id:SupportService;label:string;description:string}>=[{id:'
 const initialMessage:Message={role:'assistant',text:'Hi, welcome to HYMN Support. Tell me what you need help with. I can find relevant guidance or help you raise a ticket with our team.'};
 
 export function SupportChatWidget({userId}:{userId:number|null}){
-  const pathname=usePathname(),[mounted,setMounted]=useState(false),[open,setOpen]=useState(false);
+  const pathname=usePathname(),[mounted,setMounted]=useState(false),[open,setOpen]=useState(false),[hidden,setHidden]=useState(false);
   const [messages,setMessages]=useState<Message[]>([initialMessage]),[question,setQuestion]=useState(''),[service,setService]=useState<SupportService>('general');
   const [context,setContext]=useState<Context|null>(null),[loading,setLoading]=useState(false),[contextLoading,setContextLoading]=useState(false),[error,setError]=useState('');
   const [step,setStep]=useState<Step|null>(null),[releaseChoice,setReleaseChoice]=useState(''),[release,setRelease]=useState<ReleaseOption|null>(null),[trackId,setTrackId]=useState(''),[hasGoalGuide,setHasGoalGuide]=useState(false);
   const [upc,setUpc]=useState(''),[issue,setIssue]=useState(''),[phone,setPhone]=useState(''),[callback,setCallback]=useState(false),[search,setSearch]=useState(''),[receipt,setReceipt]=useState<Receipt|null>(null),[uncertain,setUncertain]=useState(false);
   const requestKey=useRef(''),payload=useRef<Record<string,unknown>|null>(null),busy=useRef(false),contextVersion=useRef(0),conversationVersion=useRef(0),log=useRef<HTMLDivElement>(null);
+  const launcherButton=useRef<HTMLButtonElement>(null),restoreButton=useRef<HTMLButtonElement>(null);
+  function toggleVisibility(value:boolean){rememberHidden(value);requestAnimationFrame(()=>{(value?restoreButton:launcherButton).current?.focus();});}
   const dialog=useAccessibleDialog(open,()=>setOpen(false));
   const loginHref=`/login?next=${encodeURIComponent(pathname+'?supportChat=1')}`;
 
-  useEffect(()=>{setMounted(true);const show=()=>setOpen(true);window.addEventListener('hymn-support-chat-open',show);if(new URLSearchParams(window.location.search).get('supportChat')==='1')setOpen(true);return()=>window.removeEventListener('hymn-support-chat-open',show);},[]);
+  function rememberHidden(value:boolean){setHidden(value);try{sessionStorage.setItem('hymn-support-hidden',value?'1':'0');}catch{/* Storage is optional. */}}
+  useEffect(()=>{setMounted(true);try{setHidden(sessionStorage.getItem('hymn-support-hidden')==='1');}catch{/* Storage is optional. */}const show=()=>{rememberHidden(false);setOpen(true);};window.addEventListener('hymn-support-chat-open',show);if(new URLSearchParams(window.location.search).get('supportChat')==='1')show();return()=>window.removeEventListener('hymn-support-chat-open',show);},[]);
   useEffect(()=>{++contextVersion.current;++conversationVersion.current;setMessages([initialMessage]);setStep(null);setContext(null);setPhone('');setReceipt(null);setQuestion('');setIssue('');setRelease(null);setReleaseChoice('');setTrackId('');setUpc('');setCallback(false);setSearch('');setService('general');setError('');setUncertain(false);payload.current=null;busy.current=false;setLoading(false);},[userId]);
   async function loadContext(query='',offset=0){
     const version=++contextVersion.current;setContextLoading(true);setError('');
@@ -63,7 +67,7 @@ export function SupportChatWidget({userId}:{userId:number|null}){
   const stepNumber=step==='service'?1:step==='release'?2:step==='issue'?service==='distribution'?3:2:step==='contact'?service==='distribution'?4:3:service==='distribution'?5:4;
   return createPortal(<div className={styles.root} data-smart-help-ignore>
     {open?<><button className={styles.backdrop} type="button" tabIndex={-1} aria-label="Close HYMN support" onClick={()=>setOpen(false)}/><section ref={element=>{dialog.current=element;}} id="hymn-support-chat" className={styles.panel} role="dialog" aria-modal="true" aria-labelledby="hymn-support-chat-title" tabIndex={-1}>
-      <header className={styles.header}><span className={styles.mark}><Headphones size={21}/></span><div><h2 id="hymn-support-chat-title">HYMN Support</h2><p>Guidance. Answers. A real team.</p></div><button type="button" onClick={()=>setOpen(false)} aria-label="Minimize support"><X size={18}/></button></header>
+      <header className={styles.header}><span className={styles.mark}><SupportMascot/></span><div><h2 id="hymn-support-chat-title">HYMN Support</h2><p>Guidance. Answers. A real team.</p></div><button type="button" onClick={()=>setOpen(false)} aria-label="Minimize support"><X size={18}/></button></header>
       <nav className={styles.tabs} aria-label="Support shortcuts"><button type="button" onClick={()=>{if(!loading&&!uncertain){setStep(null);setError('');}}} aria-current={!step?'page':undefined}><MessageCircle size={14}/>Ask HYMN</button><Link href={userId?'/dashboard?tab=support':loginHref} onClick={()=>setOpen(false)}><Ticket size={14}/>My tickets</Link>{pathname==='/'&&hasGoalGuide?<button type="button" onClick={()=>{window.dispatchEvent(new Event('hymn-goal-guide-open'));setOpen(false);}}><Compass size={14}/>My path</button>:null}</nav>
       <div ref={log} className={styles.body}>
         {!step?<><div className={styles.messages} role="log" aria-label="Support conversation" aria-live="polite">{messages.map((message,index)=><article key={index} className={message.role==='user'?styles.userMessage:styles.assistantMessage}><small>{message.role==='user'?'You':'HYMN GUIDE'}</small>{message.answer?<h3>{message.answer.title}</h3>:null}<p>{message.text}</p>{message.answer?.sources.map(source=><Link className={styles.source} key={source.href} href={source.href} onClick={()=>setOpen(false)}>{source.title}<ArrowRight size={13}/></Link>)}</article>)}{loading?<p className={styles.typing} role="status"><LoaderCircle size={15}/>Finding the right guidance…</p>:null}</div><div className={styles.topics}><p>Explore a topic</p><div>{services.slice(0,5).map(item=><button key={item.id} type="button" disabled={loading} onClick={()=>{setService(item.id);void ask(`Help with ${item.label}`,item.id);}}>{item.label}</button>)}</div></div><button type="button" className={styles.handoff} disabled={loading} onClick={startTicket}><span><Ticket size={17}/><span><strong>Need a closer look?</strong><small>Send the details to our support team.</small></span></span><ArrowRight size={17}/></button></>:step==='done'&&receipt?<div className={styles.success}><span><Check size={25}/></span><p className={styles.eyebrow}>REQUEST RECEIVED</p><h3>Ticket #{receipt.id}</h3><p>Your request is now in HYMN’s support inbox. Your contact number was saved to your account and contact card.{callback?' A callback was requested; our team will arrange an available representative.':''}</p><Link className={styles.primary} href={receipt.href} onClick={()=>setOpen(false)}>View my ticket<ArrowRight size={16}/></Link><button type="button" className={styles.quiet} onClick={()=>{setMessages([initialMessage]);setStep(null);setIssue('');setError('');}}>Back to support</button></div>:<>
@@ -82,6 +86,11 @@ export function SupportChatWidget({userId}:{userId:number|null}){
       {!step?<form className={styles.composer} onSubmit={event=>{event.preventDefault();void ask(question);}}><label className={styles.srOnly} htmlFor="hymn-support-question">Your support question</label><textarea id="hymn-support-question" rows={1} maxLength={3000} value={question} onChange={event=>setQuestion(event.target.value)} placeholder="Type your question…" onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void ask(question);}}}/><button type="submit" disabled={loading||!question.trim()} aria-label="Send question"><Send size={18}/></button></form>:null}
       <footer className={styles.footer}>HYMN guidance · Your team is one ticket away.</footer>
     </section></>:null}
-    <button type="button" className={styles.launcher} aria-label={open?'Minimize HYMN support':'Open HYMN support'} aria-expanded={open} aria-controls="hymn-support-chat" onClick={()=>setOpen(value=>!value)}>{open?<X size={23}/>:<MessageCircle size={24}/>}<span>Support</span></button>
+    <div className={styles.dock}>
+    {hidden&&!open?<button type="button" ref={restoreButton} className={styles.restoreLauncher} aria-label="Show HYMN support" onClick={()=>toggleVisibility(false)}><ChevronRight size={15}/><SupportMascot/></button>:<>
+    {!open?<button type="button" className={styles.hideLauncher} aria-label="Hide HYMN support" onClick={()=>toggleVisibility(true)}><X size={12}/></button>:null}
+    <button type="button" ref={launcherButton} className={styles.launcher} aria-label={open?'Minimize HYMN support':'Open HYMN support'} aria-expanded={open} aria-controls="hymn-support-chat" onClick={()=>setOpen(value=>!value)}>{open?<X size={23}/>:<SupportMascot/>}</button>
+    </>}
+    </div>
   </div>,document.body);
 }
