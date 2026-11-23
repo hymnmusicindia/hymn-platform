@@ -1,0 +1,111 @@
+HYMN UX and conversion audit
+23 November 2026
+
+SCOPE
+Repository inventory: 118 page files, including 41 public page files and 32
+public routes without dynamic path segments. Inventory saved locally at
+.cache/conversion-experience/route-inventory.json.
+
+The implementation covers shared service navigation and sign-in context, the
+visitor homepage, pricing, the guided welcome experience, producer onboarding,
+the first-release offer, and distribution and Studio service entry points.
+It does not represent a redesign or exhaustive functional audit of all 118 pages.
+
+CHANGES AND UX PRINCIPLES
+1. Flexibility and efficiency: four immediate goal shortcuts coexist with an
+   optional guide. Users can skip the remaining questions and browse beats
+   without first creating an account. Producer setup supports email and Google.
+2. Recognition over recall: service navigation includes a starting-point guide
+   and pricing shortcut. Pricing cards explain the audience for each plan.
+3. Continuity: approved task destinations survive sign-in, including release
+   campaigns, release stages, selected Studio listings and beat purchases.
+   Distribution's former portal links no longer loop back into the same gate.
+4. User control: release-preview authentication opens on request and can be
+   reopened after dismissal. The questionnaire no longer requires a name and a
+   greeting screen before asking what the visitor needs.
+5. Error recovery: email fields remain mounted during requests; malformed
+   responses produce readable feedback and preserve the typed email. OTP input
+   receives focus and supports pasting and one-time-code autofill. Corrupt or
+   unavailable local/session storage does not block the edited onboarding flows.
+6. Accessibility: a keyboard skip link, labelled referral field, readable mobile
+   entry copy, native radio controls and accessible chart text support efficient
+   navigation. These are targeted improvements, not a WCAG conformance claim.
+7. Transparent persuasion: a direct first-release action and visible pricing
+   alternative explain eligibility and separately priced extras. Producer copy
+   retains the actual eligible-sales split. Distribution copy preserves HYMN's
+   zero additional royalty commission and the distribution partner's share.
+8. Measurement: the existing optional growth tracker covers the major entry
+   routes. Its enable/disable setting is preserved. Pricing visibility is
+   measured separately from a landing-page view to avoid double counting.
+
+GRAPH AND CLAIMS
+The new catalogue planner shows cumulative planned releases over January to
+December, starting from zero, for 1, 3, 6 or 12 releases per year. It is explicitly
+labelled as an illustration rather than measured artist performance. It does
+not promise streams, sales or earnings. Unsupported hardcoded homepage audience
+figures were replaced with product commitments. No 245% growth claim was added.
+Measured conversion uplift or customer growth requires a verified dataset and
+an observation period; neither is established by this implementation.
+
+VALIDATION
+Completed domain and isolated authentication checks:
+- npm test: all 16 core regression groups and the four request/update boundary
+  regression scripts passed.
+- Email OTP database fixture: verified signup, existing-role preservation,
+  concurrent single use, replay protection, attempt limits, wrong email,
+  tampering, expiry, restricted accounts, identity lookup and SMTP failures.
+- Email OTP browser fixture: 320/390/768/1440px, request, resend lock, incorrect
+  code, retry, authenticated callback and horizontal-overflow checks passed.
+- Growth-domain attribution, event trust boundaries and campaign URL checks
+  passed.
+
+The pre-existing performance guard expected retired synchronous approval text
+and route-owned handoff updates. It now verifies the current durable approval
+queue contract, concurrency/version evidence and failed-submission handling.
+Delivery implementation was not changed to satisfy the stale assertion.
+
+Final production-fixture verification:
+- Optimized Next.js production build, full TypeScript check, page generation and
+  trace collection passed. The fixture reused that same completed build for
+  browser checks; no production deployment was performed.
+- All 28 main entry routes passed at 1440, 390 and 320 pixels, including legacy
+  redirects: successful responses, no uncaught client errors and no horizontal
+  page overflow. Results: .cache/conversion-experience/entries.json.
+- All ten focused conversion checks passed, including blocked/corrupt storage,
+  malformed auth responses, task-return allowlists, guest API boundaries,
+  questionnaire shortcuts, the planner, reopening authentication and a mocked
+  successful OTP callback with blocked storage. Results:
+  .cache/conversion-experience/checks.json.
+- Eleven customer-flow checks passed: support submission and private screenshot
+  upload/download authorization, promotions, settings, release keyboard and tab
+  navigation, beat browsing/playback/cart, verified checkout quote, purchased
+  licence, subscriptions, missing referral reward configuration, privileged
+  route denial and forged payment rejection. Results:
+  .cache/customer-experience/features.json.
+- The core suite was rerun after the final application edits and passed again.
+
+Production tests simulate reverse-proxy protocol/origin headers on loopback and
+use the existing private-storage override for their Windows fixture directory.
+Live origin checks and production storage defaults were not weakened. Browser
+checks block service workers to make their network fixtures deterministic.
+Legacy browser assertions were aligned with the current first release section
+and Beat Store card controls while retaining selection/playback checks.
+
+REPRODUCTION
+npm test
+npm run test:conversion
+npm run test:conversion:entries
+node scripts/verify-email-auth-ui.cjs
+node --import tsx scripts/verify-customer-email-isolated.ts
+
+The conversion commands build a local production fixture. Fixture databases,
+storage and identities are disposable. Email, paid gateway creation and live
+distribution delivery are disabled. No live customer accounts or records were
+used. Existing unrelated working-tree changes were preserved.
+
+LIMITS
+Live OAuth, SMTP delivery, payment settlement and partner distribution were not
+exercised. A local regression pass does not establish live provider health.
+The wider development-mode content audit encountered external image-loading
+failures and server memory restarts; it is not an all-pages clean bill of health.
+The repository remains local; no production deployment is included.

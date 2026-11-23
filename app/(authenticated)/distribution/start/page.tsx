@@ -14,6 +14,7 @@ import { firstReleaseAttribution } from "@/lib/first-release-flow";
 import { amendmentSourceRevision } from '@/lib/release-amendment-revision';
 import { normalizeContentIdAccessStatus } from "@/lib/content-id-access";
 import { redirect } from 'next/navigation';
+import { loginForTask } from '@/lib/routes';
 
 function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -22,6 +23,8 @@ function firstValue(value?: string | string[]) {
 export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ amend?: string | string[]; draft?: string | string[]; submitted?: string | string[]; edit?: string | string[]; audioAssetId?: string | string[]; correctionField?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; stage?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
   const user = await getCurrentUserForPage();
   const params = (await searchParams) ?? {};
+  const returnQuery = new URLSearchParams(Object.entries(params).flatMap(([key, value]) => { const first = firstValue(value); return first === undefined ? [] : [[key, first]]; })).toString();
+  const signInHref = loginForTask('/distribution/start' + (returnQuery ? '?' + returnQuery : ''));
   const contentIdAccess = user ? await prisma.contentIdAccess.findUnique({ where: { userId: user.id }, select: { status: true, channelUrl: true } }) : null;
   const legacyAmendmentId = Number(firstValue(params.amend));
   if (Number.isSafeInteger(legacyAmendmentId) && legacyAmendmentId > 0) redirect(`/dashboard/releases/${legacyAmendmentId}?tab=requests`);
@@ -80,15 +83,15 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
                   <p className="mt-3 text-sm" style={{ color: "var(--text-soft)" }}>
                     Editing <strong style={{ color: "var(--text)" }}>{editingRelease.releaseTitle || editingRelease.trackName}</strong>
                   </p>
-                ) : hasRequestedRelease && !editingRelease ? (
+                ) : user && hasRequestedRelease && !editingRelease ? (
                   <p className="mt-3 text-sm" style={{ color: "var(--danger)" }}>
                     We could not find that release in your catalogue.
                   </p>
                 ) : null}
               </div>
-              <Link href="/distribution" className="btn-outline pressable">
+              <Link href="/music-distribution" className="btn-outline pressable">
                 <ArrowLeft className="h-4 w-4" />
-                Back to portal
+                About distribution
               </Link>
             </div>
           </div> : null}
@@ -106,12 +109,12 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
                 The portal keeps your release, queue, and payment data connected to your account.
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <Link href="/login" className="btn-primary pressable">
+                <Link href={signInHref} className="btn-primary pressable">
                   Go to login
                   <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link href="/distribution" className="btn-outline pressable">
-                  View portal
+                <Link href="/pricing" className="btn-outline pressable">
+                  Compare pricing
                 </Link>
               </div>
             </div>

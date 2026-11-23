@@ -1,7 +1,7 @@
+import { GrowthPlanner } from '@/components/growth-planner';
 import { PublicHomeInformation } from "@/components/public-home-information";
 import { publicPageMetadata } from '@/lib/seo';
 import Link from 'next/link';
-import Image from 'next/image';
 import { AnimatedHeroMetrics } from '@/components/animated-hero-metrics';
 import { ArrowRight, Disc3, Headphones, Radio, Instagram, Youtube } from 'lucide-react';
 import { buildHomePathBanners } from '@/components/home-path-banners';
@@ -17,7 +17,7 @@ import './homepage.css';
 export const metadata = publicPageMetadata('Music Distribution, Beats & Artist Services', 'Release music worldwide, discover beats and work with mixing and mastering engineers. Your next chapter starts with HYMN.', '/');
 const images = {hero:{alt:'Artist performing in front of a massive concert crowd'}};
 export default async function HomePage() {
- const [session, { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases }] = await Promise.all([getSession(), getPublicHomePreview()]);
+ const [session, { beats, producerProfiles, featuredReviews, featuredReleases }] = await Promise.all([getSession(), getPublicHomePreview()]);
  const { catalog } = buildBeatStorefront(beats, producerProfiles);
  const banners = buildHomePathBanners({ featuredReleases, catalog, signedIn: Boolean(session) });
  if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners}/><HomeReviewsCarousel reviews={featuredReviews}/><PublicHomeInformation/></LandingWorkspace></main>;
@@ -37,31 +37,11 @@ export default async function HomePage() {
               Where Artists Become Movements.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white opacity-70 sm:mt-6 sm:text-base sm:leading-8 lg:text-lg">
-              HYMN helps artists release music, build audiences, monetize creatively, grow brands, access label services, and scale into a global career ecosystem.
+              Release your music, license your next beat or finish your record with an engineer. Choose what you need today and build from there.
             </p>
-            <AnimatedHeroMetrics />
+            <div className="mt-6 flex flex-wrap items-center gap-3"><Link href="/first-release" className="inline-flex min-h-12 items-center rounded-xl bg-white px-6 text-base font-semibold text-black">Start my first release</Link><Link href="/pricing" className="inline-flex min-h-12 items-center rounded-xl border border-white/40 px-6 text-base font-semibold text-white">See pricing first</Link></div><p className="mt-3 text-sm leading-6 text-white/70">Eligible first single: base distribution fee covered. Optional extras cost separately.</p><AnimatedHeroMetrics />
             <div className="mt-7 h-px max-w-3xl bg-gradient-to-r from-white/20 via-white/10 to-transparent" aria-hidden="true" />
-            <Link prefetch={false}
-                href="/first-release"
-                className="group mt-5 inline-flex max-w-full items-center gap-4 text-left transition duration-300 hover:-translate-y-0.5"
-              >
-                {googleAvatarUrls.length ? (
-                  <span className="flex shrink-0 -space-x-2.5" aria-hidden="true">
-                    {googleAvatarUrls.map((src, index) => (
-                      <span key={`${src}-${index}`} className="relative h-9 w-9 overflow-hidden rounded-full border-2 border-[#11141b] bg-[#1b1f28] sm:h-10 sm:w-10" style={{ zIndex: googleAvatarUrls.length - index }}>
-                        <Image src={src} alt="" fill sizes="40px" className="object-cover" unoptimized />
-                      </span>
-                    ))}
-                  </span>
-                ) : null}
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2 text-sm font-semibold text-white">
-                    Release your first track free
-                    <ArrowRight className="hidden h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1 sm:block" />
-                  </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-white/50">Music distribution for independent artists.</span>
-                </span>
-              </Link>
+            <Link href="/welcome" className="mt-5 inline-flex min-h-11 items-center text-base font-semibold text-white underline underline-offset-4">Not sure where to start? Find my path</Link>
           </div>
         </div>
       </section>
@@ -69,8 +49,10 @@ export default async function HomePage() {
   <section className="landing-next-move" aria-labelledby="next-move-title"><div className="landing-section-heading"><h2 id="next-move-title">What are you creating next?</h2><span>Pick your starting point.</span></div><div className="visitor-services">{[
    {href:'/distribution',title:'Release your music',tag:'Distribution',icon:Radio,copy:'Take your next release worldwide.'},
    {href:'/beat-store',title:'Find your sound',tag:'Beat Store',icon:Disc3,copy:'Discover and license your next beat.'},
+   {href:'/producer-onboarding',title:'Open your beat store',tag:'For producers',icon:Disc3,copy:'Set up your storefront and submit your first beat.'},
    {href:'/studio',title:'Finish your record',tag:'Mixing & mastering',icon:Headphones,copy:'Work with an engineer on your sound.'}
   ].map(({icon:Icon,...item})=><Link key={item.href} href={item.href} className="visitor-service"><span className="visitor-service-icon"><Icon size={21}/></span><span><small>{item.tag}</small><strong>{item.title}</strong><span>{item.copy}</span></span><ArrowRight size={17}/></Link>)}</div></section>
+  <GrowthPlanner/>
   {banners.journey}{banners.platforms}{banners.beats}{banners.studio}
   <HomeReviewsCarousel reviews={featuredReviews} compact/>
   <section className="landing-newsletter" aria-labelledby="visitor-newsletter-title"><div className="shell"><div className="visitor-newsletter-row"><div><p className="landing-eyebrow">Stay in the loop</p><h2 id="visitor-newsletter-title">A little inspiration. <br/>Your next beginning.</h2></div><HomeNewsletter/></div><div className="visitor-socials"><span>Follow the music</span><a href="https://www.instagram.com/hymnmusic.in/" target="_blank" rel="noreferrer" aria-label="HYMN on Instagram"><Instagram size={18}/></a><a href="https://www.youtube.com/@hymnmusic_in/" target="_blank" rel="noreferrer" aria-label="HYMN on YouTube"><Youtube size={19}/></a></div></div></section>

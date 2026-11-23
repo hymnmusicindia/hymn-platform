@@ -11,7 +11,7 @@ export default async function ReleasePortalPage({ searchParams }: { searchParams
   const user = await getCurrentUserForPage();
 
   if (!user) {
-    redirect("/login");
+    redirect("/login?next=%2Fdashboard%2Freleases");
   }
 
   const params = (await searchParams) ?? {};

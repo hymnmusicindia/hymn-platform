@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { chromium, expect as baseExpect, type Page } from '@playwright/test';
 import jwt from 'jsonwebtoken';
+import { configureCustomerFixtureBrowser, customerFixtureHeaders } from './customer-fixture-browser';
 const expect = baseExpect.configure({ timeout: 60000 });
 const origin = 'http://127.0.0.1:35510', root = '.cache/customer-experience';
 const f = JSON.parse(readFileSync(`${root}/fixture.json`, 'utf8'));
 const draft = f.releases.find((r: { status: string }) => r.status === 'DRAFT').id;
 async function main() {
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce', serviceWorkers:'block', extraHTTPHeaders:customerFixtureHeaders });
+  await configureCustomerFixtureBrowser(context);
   await context.addInitScript('window.__name = fn => fn');
   await context.addCookies([{ name: 'hymn_session', value: jwt.sign({ sub: f.customer.id, name: f.customer.name, email: f.customer.email, role: 'customer' }, 'customer-experience-local-fixture-secret', { expiresIn: '2h' }), url: origin }]);
   const page = await context.newPage(); page.setDefaultTimeout(60000); page.setDefaultNavigationTimeout(180000);
@@ -42,7 +44,7 @@ async function main() {
     const upload = await uploadResponse; assert.equal(upload.status(), 201); const screenshot = (await upload.json()).asset;
     await expect(form.getByRole('link', { name: 'support-screenshot.png', exact: true })).toBeVisible();
     assert.equal((await context.request.get(`${origin}/api/assets/${screenshot.id}/download`, { timeout: 120000 })).status(), 200);
-    const anonymous = await browser.newContext(); assert.ok([401, 403, 404].includes((await anonymous.request.get(`${origin}/api/assets/${screenshot.id}/download`, { timeout: 120000 })).status())); await anonymous.close();
+    const anonymous = await browser.newContext({extraHTTPHeaders:customerFixtureHeaders}); assert.ok([401, 403, 404].includes((await anonymous.request.get(`${origin}/api/assets/${screenshot.id}/download`, { timeout: 120000 })).status())); await anonymous.close();
     await expect(form.locator('input[name=callbackPhone]')).toHaveValue('+919876543210');
     assert.equal(await form.locator('input[name=upc]').evaluate((e: HTMLInputElement) => e.required), false);
     await fits(page); await page.screenshot({ path: `${root}/support-callback-mobile.png`, fullPage: true, caret: 'initial' });
@@ -73,9 +75,9 @@ async function main() {
     const sections = page.getByRole('navigation', { name: 'Release sections', exact: true });
     await expect(sections).toBeVisible();
     await sections.press('Home');
-    const artwork = sections.getByRole('button', { name: /^Cover artwork/ });
-    await expect(artwork).toHaveAttribute('aria-current', 'step');
+    await expect(sections.getByRole('button').first()).toHaveAttribute('aria-current', 'step');
     await sections.press('ArrowRight');
+    await expect(sections.getByRole('button').nth(1)).toHaveAttribute('aria-current', 'step');
     await fits(page); pass('Distribution: legacy draft link opens saved release, section carousel and keyboard navigation');
     }
     if (resume < 5) {
@@ -95,12 +97,12 @@ async function main() {
     await expect(search).toHaveValue('');
     const genre = page.getByLabel('Browse genres').getByRole('button', { name: 'Hip Hop', exact: true });
     await genre.click(); await expect(genre).toHaveAttribute('aria-pressed', 'true'); assert.ok(await genre.evaluate(e => parseFloat(getComputedStyle(e).borderRadius)) > 0); await genre.click();
-    const cart = page.getByRole('button', { name: /Add Midnight Drive WAV licence to cart/ }); await cart.click();
+    const cart = page.getByRole('button', { name: 'Add Midnight Drive to cart', exact:true }); await cart.click();
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.locator(`#beat-${f.beatId}`).getByRole('button', { name: 'Play Midnight Drive', exact: true }).click();
     await expect(page.getByRole('slider', { name: 'Seek Midnight Drive', exact: true })).toBeVisible();
     await expect(page.locator(`#beat-${f.beatId}`).getByRole('button', { name: 'Pause Midnight Drive', exact: true })).toBeVisible();
-    assert.notEqual(await page.locator(`#beat-${f.beatId} [class*=spinning]`).evaluate(e => getComputedStyle(e).animationName), 'none');
+    assert.equal(await page.locator(`#beat-${f.beatId} [class*=disc]`).first().evaluate(e => getComputedStyle(e).animationPlayState), 'running');
     await page.locator(`#beat-${f.beatId}`).getByRole('button', { name: 'Pause Midnight Drive', exact: true }).click();
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.getByRole('button', { name: /Shopping cart, 1 item/ }).click();

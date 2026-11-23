@@ -64,7 +64,9 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   }, [track]);
   useEffect(() => () => timersRef.current.forEach(window.clearTimeout), []);
   useEffect(() => {
-    if (!enabled || reduceMotion || sessionStorage.getItem("hymn:first-release-pass-revealed") === "1") setRevealState("revealed");
+    let revealed = false;
+    try { revealed = sessionStorage.getItem("hymn:first-release-pass-revealed") === "1"; } catch { /* Storage is optional. */ }
+    if (!enabled || reduceMotion || revealed) setRevealState("revealed");
   }, [enabled, reduceMotion]);
 
   const schedule = (delay: number, next: RevealState, event?: string) => timersRef.current.push(window.setTimeout(() => { setRevealState(next); if (event) void track(event); }, delay));
@@ -80,7 +82,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
     schedule(1630, "reward");
     schedule(1900, "revealed", "first_release_pass_revealed");
     schedule(2050, "revealed", "first_release_reward_cta_shown");
-    timersRef.current.push(window.setTimeout(() => sessionStorage.setItem("hymn:first-release-pass-revealed", "1"), 1900));
+    timersRef.current.push(window.setTimeout(() => { try { sessionStorage.setItem("hymn:first-release-pass-revealed", "1"); } catch { /* Storage is optional. */ } }, 1900));
     if (hapticsEnabled && typeof navigator !== "undefined" && "vibrate" in navigator) timersRef.current.push(window.setTimeout(() => navigator.vibrate(10), 105));
   };
   const claim = () => { void track("first_release_reward_cta_clicked"); void track(state.event); router.push(eligibility.draftId ? firstReleaseStartHref(attribution, eligibility.draftId) : eligibility.reason === "reserved" ? "/dashboard/releases" : isUsed ? "/distribution/start" : startHref); };
@@ -107,7 +109,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   return <main className={styles.scene} data-state={revealState}>
     <Link href="/" className={styles.home} aria-label="HYMN home"><Image src="/assets/hymnlogowhite.png" alt="HYMN" width={100} height={34} /></Link>
     <section className={styles.shell} aria-label="HYMN First Release Pass reveal">
-      <header className={styles.heading}><p>A LITTLE SOMETHING TO GET YOU STARTED</p><h1>{passRaised ? "Your first record starts here." : "Big things start with one release."}</h1><span>{passRaised ? "A first-release gift, from HYMN to you." : "One tap. Your next chapter."}</span></header>
+      <header className={styles.heading}><p>A LITTLE SOMETHING TO GET YOU STARTED</p><h1>{passRaised ? "Your first record starts here." : "Big things start with one release."}</h1><span>{passRaised ? "A first-release gift, from HYMN to you." : "One tap. Your next chapter."}</span>{!eligibility.authenticated && <Link href={`/login?next=${encodeURIComponent('/first-release' + (Object.keys(attribution).length ? '?' + new URLSearchParams(attribution).toString() : ''))}`} className={styles.emailOption}>Prefer email? Continue with a secure code</Link>}</header>
       <div className={styles.viewport} ref={viewportRef}>
       <div className={styles.stage} style={{ transform: `scale(${sceneScale})` }}>
         <div className={styles.halo} aria-hidden="true" />

@@ -7,7 +7,7 @@ export const ONBOARDING_ROUTES = {
   singleRelease: "/distribution/start?onboarding=release",
   plans: "/distribution",
   beatStore: "/beat-store",
-  producerAccess: "/producer-login",
+  producerAccess: "/producer-onboarding",
   services: "/services",
   learn: "/faq",
   dashboard: "/dashboard"
@@ -23,7 +23,20 @@ export type OnboardingContext = {
 };
 
 export function saveOnboardingContext(context: OnboardingContext) {
-  localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(context));
+  try { localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(context)); } catch { /* Storage is optional for browsing. */ }
+}
+
+export function markOnboardingSeen() {
+  try { localStorage.setItem(ONBOARDING_SEEN_KEY, "true"); } catch { /* Optional preference. */ }
+}
+
+export function readOnboardingContext(): OnboardingContext {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(ONBOARDING_STORAGE_KEY) || '{}');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const strings = new Set(['name','primaryIntent','releaseStage','releaseType','releaseFrequency','missingRequirement','beatMood','beatGenre','beatBudget','producerStage','producerNeeds','promotionGoal','releaseTiming','explorationTopic','personalGoal','discoverySource','preferredRoute','recommendedPlan']);
+    return Object.fromEntries(Object.entries(value).filter(([key, item]) => strings.has(key) ? typeof item === 'string' && item.length <= 250 : ['previouslyReleased','onboardingCompleted'].includes(key) && typeof item === 'boolean'));
+  } catch { return {}; }
 }
 
 export function beatStoreHref(context: OnboardingContext) {

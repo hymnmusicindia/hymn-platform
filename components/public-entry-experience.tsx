@@ -1,3 +1,4 @@
+import { GrowthPlanner } from './growth-planner';
 import Link from 'next/link';
 import { ArrowRight, FileCheck2, Headphones, Radio, ShieldCheck } from 'lucide-react';
 import { getPublicHomePreview } from '@/lib/public-home-data';
@@ -24,6 +25,7 @@ export async function PublicEntryProof({offer=true}:{offer?:boolean}){
    {Icon:Headphones,title:'People to help you move forward',body:'Find release guidance, answers and a way to contact HYMN when you need support.'}
   ].map(({Icon,title,body})=><article key={title}><Icon size={24}/><h3>{title}</h3><p>{body}</p></article>)}</section>
   <HomeReviewsCarousel reviews={featuredReviews} compact/>
+  {offer?<GrowthPlanner/>:null}
   {offer?<section className={styles.offer}><div><p className={styles.eyebrow}><Radio size={15}/> YOUR FIRST CHAPTER</p><h2>Your first release.<br/>Base fee? <span>FREE.</span></h2><p>Your first single’s base distribution fee is on us for eligible artists. Optional services and extras are priced separately. Check eligibility and current terms before claiming.</p></div><Link href="/first-release" className={styles.primary}>Check my free release <ArrowRight size={18}/></Link></section>:null}
  </div>;
 }

@@ -6,6 +6,8 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "test:conversion": "tsx scripts/verify-customer-experience-isolated.ts --production --conversion",
+    "test:conversion:entries": "tsx scripts/verify-customer-experience-isolated.ts --production --entry-points",
     "test:agent-readiness": "tsx scripts/verify-agent-readiness.ts && node scripts/verify-seo.cjs && node scripts/verify-agent-readiness-browser.cjs",
     "test:meetings": "tsx scripts/verify-acquisition-isolated.ts --meetings-only && node scripts/verify-meeting-scheduler-browser.cjs",
     "test:unified-crm": "tsx scripts/verify-acquisition-isolated.ts --unified-crm-only && node scripts/verify-team-calendar-oauth.cjs && node scripts/verify-unified-customer-work-browser.cjs",
@@ -24,7 +26,7 @@
     "test:premium-player": "tsx scripts/verify-waveform-generation.ts && node scripts/verify-beat-waveform-access.cjs && node scripts/verify-waveform-loading.cjs && node scripts/verify-beat-preview-playback.cjs && node scripts/verify-premium-player.cjs",
     "beats:prepare-waveforms": "tsx scripts/prepare-beat-waveforms.ts",
     "test:beat-preview-streaming": "tsx scripts/verify-audio-streaming.ts && node scripts/verify-beat-audio-access.cjs && tsx scripts/verify-audio-streaming-browser.ts && node scripts/verify-beat-preview-playback.cjs",
-    "test:distribution-automation": "node --conditions=react-server --import tsx scripts/verify-distribution-automation-policy.ts && node --import tsx scripts/verify-acquisition-isolated.ts --distribution-automation-only",
+    "test:distribution-automation": "node --import tsx scripts/verify-preparation-retry.ts && node --conditions=react-server --import tsx scripts/verify-distribution-automation-policy.ts && node --import tsx scripts/verify-acquisition-isolated.ts --distribution-automation-only",
     "test:distribution-operations": "node scripts/verify-distribution-operations-browser.cjs && node scripts/verify-distribution-admin-browser.cjs && node scripts/verify-admin-release-feed.cjs && node scripts/verify-admin-release-delta-feed.cjs",
     "test:navigation-sections": "tsx scripts/verify-navigation-sections.ts && node scripts/verify-navigation-sections-browser.cjs",
     "test:customer-experience": "tsx scripts/verify-customer-experience-isolated.ts --features",

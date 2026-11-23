@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { consumeRateLimit, requestIdentity } from "@/lib/rate-limit";
 import { clientGrowthSchema, GROWTH_COOKIE, GROWTH_COOKIE_SECONDS, growthTouch, hasCampaign, type GrowthTouch } from "@/lib/growth-domain";
+import { GROWTH_ENTRY_PATHS } from '@/lib/growth-entry-paths';
 import { growthEnabled } from "@/lib/growth";
 
 export async function POST(request: Request) {
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     if (!rate.allowed) return new NextResponse(null, { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } });
     const body = parsed.data;
     const touch = growthTouch(body.url, body.referrer);
-    if (!["/", "/distribution", "/first-release", "/contact", "/partnership-program", "/login"].includes(touch.landing_page)) return new NextResponse(null, { status: 204 });
+    if (!GROWTH_ENTRY_PATHS.includes(touch.landing_page)) return new NextResponse(null, { status: 204 });
     const session = await getSession();
     const cookieId = (await cookies()).get(GROWTH_COOKIE)?.value;
     const old = cookieId && /^[a-f0-9-]{36}$/.test(cookieId) ? await prisma.growthVisitor.findUnique({ where: { id: cookieId } }) : null;

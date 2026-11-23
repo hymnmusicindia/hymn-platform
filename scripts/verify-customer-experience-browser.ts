@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { chromium, type Page } from '@playwright/test';
 import jwt from 'jsonwebtoken';
+import { configureCustomerFixtureBrowser, customerFixtureHeaders } from './customer-fixture-browser';
 
 const origin = 'http://127.0.0.1:35510';
 const root = '.cache/customer-experience';
@@ -48,7 +49,8 @@ async function main() {
   mkdirSync(root, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   const results: Finding[] = process.env.CUSTOMER_AUDIT_RESUME==='true'&&existsSync(`${root}/${output}.json`)?JSON.parse(readFileSync(`${root}/${output}.json`,'utf8')):[];
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce', serviceWorkers:'block', extraHTTPHeaders:customerFixtureHeaders });
+  await configureCustomerFixtureBrowser(context);
   // tsx preserves helper names in functions serialised by Playwright.
   await context.addInitScript('window.__name = fn => fn');
   await context.addCookies([{ name: 'hymn_session', value: jwt.sign({ sub: fixture.customer.id, name: fixture.customer.name, email: fixture.customer.email, role: 'customer' }, 'customer-experience-local-fixture-secret', { expiresIn: '2h' }), url: origin }]);

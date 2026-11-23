@@ -7,7 +7,7 @@ import { producerHasApprovedBeat } from '@/lib/beat-publication';
 
 export default async function ProducerDashboardPage() {
   const user = await getCurrentUserForPage();
-  if (!user) redirect("/login?role=producer");
+  if (!user) redirect("/login?role=producer&next=%2Fproducer%2Fdashboard");
   if (user.role !== "producer" && user.role !== "admin") redirect("/dashboard?producerAccess=disabled");
 
   const [beats, orders, earnings, finance, autoPublishUnlocked] = await Promise.all([

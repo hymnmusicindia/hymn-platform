@@ -53,17 +53,22 @@ export function UnifiedAuthForm({
       <div className="flex justify-center">
         <Image src="/assets/hymnlogowhite.png" alt="HYMN" width={184} height={60} priority className="h-auto w-36 object-contain sm:w-44" style={{ filter: "var(--logo-filter)" }} />
       </div>
+      <h1 className="mt-8 text-center text-3xl font-semibold">{initialMode === 'signup' ? 'Start your next chapter.' : 'Welcome to HYMN.'}</h1>
+      <p className="mt-3 text-center text-base leading-7 text-[var(--text-muted)]">{returnTo ? 'Sign in to continue where you left off.' : 'One account for your releases, beats and studio projects.'}</p>
+      <p className="mt-2 text-center text-sm text-[var(--text-muted)]">No password to remember. Use a secure email code or Google.</p>
       <div className="mt-10 border-t border-[var(--border)] pt-8">
         {invitedBy ? <div className="mb-6 flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--bg-soft)] text-lg font-semibold">{invitedBy.slice(0, 1).toUpperCase()}</span><div><p className="text-sm font-medium">{invitedBy} invited you to HYMN</p><p className="mt-1 text-xs text-[var(--text-muted)]">Create your account. Your referral connects automatically.</p></div></div> : null}
         {initialMode === "signup" || initialReferralCode || referralError ? <details className="mb-4 rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} open={Boolean(initialReferralCode || referralError)}>
           <summary className="cursor-pointer text-sm font-medium">Have a referral code? <span className="font-normal" style={{ color: "var(--text-soft)" }}>Optional</span></summary>
-          <div className="mt-3 flex gap-2"><input className="field min-w-0 flex-1 uppercase" value={code} onChange={event => { setCode(event.target.value); setReferralState(null); }} placeholder="Enter code" maxLength={24} /><button type="button" className="btn-outline pressable" disabled={applying} onClick={applyReferralCode}>{applying ? "Checking..." : "Apply"}</button></div>
+          <div className="mt-3 flex gap-2"><input className="field min-w-0 flex-1 uppercase" value={code} onChange={event => { setCode(event.target.value); setReferralState(null); }} aria-label="Referral code (optional)" placeholder="Enter code" maxLength={24} /><button type="button" className="btn-outline pressable" disabled={applying || !code.trim()} onClick={applyReferralCode}>{applying ? "Checking..." : "Apply"}</button></div>
           {appliedCode && code !== appliedCode ? <p className="mt-2 text-xs">{appliedCode} stays applied until you apply a new code.</p> : null}
-          {referralState ? <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: referralState === "Referral code applied" ? "var(--success)" : "var(--danger)" }}>{referralState === "Referral code applied" ? <Check className="h-3.5 w-3.5" /> : null}{referralState}</p> : null}
+          {referralState ? <p role="status" className="mt-2 flex items-center gap-1.5 text-sm" style={{ color: referralState === "Referral code applied" ? "var(--success)" : "var(--danger)" }}>{referralState === "Referral code applied" ? <Check className="h-3.5 w-3.5" /> : null}{referralState}</p> : null}
         </details> : null}
         <EmailAuthForm signup={initialMode === 'signup'} returnTo={returnTo}/>
         <div className="my-5 flex items-center gap-3 text-xs text-[var(--text-muted)]"><span className="h-px flex-1 bg-[var(--border)]"/>or<span className="h-px flex-1 bg-[var(--border)]"/></div>
         <GoogleAuthButton returnTo={returnTo} label="Continue with Google" className="w-full" appearance="quiet" expectedRole={initialRole} referralCode={appliedCode || undefined} />
+        <p className="mt-6 text-center text-sm leading-6 text-[var(--text-muted)]">By continuing, you agree to the <Link className="underline" href="/terms-of-service">Terms of Service</Link> and <Link className="underline" href="/privacy-policy">Privacy Policy</Link>.</p>
+        <Link href="/services" className="mt-4 flex min-h-11 items-center justify-center text-sm underline">Explore services first</Link>
       </div>
     </section>
   );

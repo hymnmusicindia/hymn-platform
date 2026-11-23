@@ -7,6 +7,7 @@ import { getPublicAppUrl } from './public-app-url';
 import { processPendingAutomaticAmendments } from './release-amendment-automation';
 import { DISTRIBUTION_QC_POLICY_VERSION, earliestPartnerReleaseDate } from './distribution-automation-policy';
 import { hasCurrentManualQcEvidence } from './distribution-qc-evidence';
+import { preparationRetry } from './distribution-preparation-retry';
 
 export async function distributionAutomationCandidates(limit = 2) {
   return prisma.$queryRaw<Array<{ id: number }>>`
@@ -22,7 +23,9 @@ export async function distributionAutomationCandidates(limit = 2) {
           AND r.metadata->'autoQc'->>'reason'='A queued package has no confirmed safe retry.')
         OR (r.metadata->'autoQc'->>'status'='retryable' AND COALESCE(r.metadata->'autoQc'->>'nextCheckAt','')<=${new Date().toISOString()})
         OR CASE WHEN COALESCE(r.metadata->'autoQc'->>'checkedVersion','') ~ '^[0-9]{1,9}$' THEN (r.metadata->'autoQc'->>'checkedVersion')::integer ELSE -1 END <> r.version)
-      AND COALESCE(r.metadata->'deliveryPreparation'->>'state','')<>'needs_review'
+      AND (COALESCE(r.metadata->'deliveryPreparation'->>'state','')<>'needs_review'
+        OR (r.metadata->'deliveryPreparation'->>'reason' LIKE 'DireNote hourly request capacity is exhausted.%'
+          AND r.metadata->'manualQc'->>'status'='passed'))
       AND COALESCE(r.metadata->'deliveryPreparation'->>'nextAttemptAt','')<=${new Date().toISOString()}
       AND (r.status<>'QUEUED_FOR_DISTRIBUTION'
         OR (r.metadata->'manualQc'->>'status'='passed' AND NOT EXISTS (SELECT 1 FROM distribution_submission_attempts a WHERE a.release_id=r.id AND a.provider='direnote'))
@@ -95,15 +98,12 @@ export async function processDistributionAutomation(siteUrl = getPublicAppUrl(),
 
 /** Preparation failures happen before ingest. Back off transient errors; keep identity conflicts visible for review. */
 async function recordDeliveryPreparationFailure(releaseId:number,revision:string,error:unknown){
-  const reason=error instanceof Error?error.message:'Delivery preparation needs review.';
-  const retryable=!/unconfirmed|reconcil|conflict|differs|changed|missing|invalid/i.test(reason)&&/timed out|timeout|capacity|unavailable|connection|socket|ECONN|ETIMEDOUT/i.test(reason);
   await prisma.$transaction(async tx=>{
     const row=await tx.release.findUnique({where:{id:releaseId}});
     if(!row||row.status!=='QUEUED_FOR_DISTRIBUTION'||row.archivedAt)return;
     const metadata=row.metadata as Record<string,any>??{};
     if(metadata.manualQc?.packageRevision!==revision)return;
-    const failures=Number(metadata.deliveryPreparation?.failures||0)+1;
-    const nextAttemptAt=retryable&&failures<5?new Date(Date.now()+Math.min(1800,60*2**(failures-1))*1000).toISOString():undefined;
-    await tx.release.updateMany({where:{id:releaseId,version:row.version,updatedAt:row.updatedAt},data:{metadata:JSON.parse(JSON.stringify({...metadata,deliveryPreparation:{...metadata.deliveryPreparation,state:nextAttemptAt?'retryable':'needs_review',failures,reason,nextAttemptAt,updatedAt:new Date().toISOString()}}))}});
+    const retry=preparationRetry(error,Number(metadata.deliveryPreparation?.failures||0));
+    await tx.release.updateMany({where:{id:releaseId,version:row.version,updatedAt:row.updatedAt},data:{metadata:JSON.parse(JSON.stringify({...metadata,deliveryPreparation:{...metadata.deliveryPreparation,...retry,state:retry.nextAttemptAt?'retryable':'needs_review',updatedAt:new Date().toISOString()}}))}});
   },{timeout:15000,maxWait:5000});
 }

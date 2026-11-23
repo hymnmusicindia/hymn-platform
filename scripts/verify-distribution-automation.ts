@@ -150,6 +150,10 @@ async function main(){
     assert.equal((backedOff.metadata!.deliveryPreparation as any).state,'retryable');
     assert(!(await distributionAutomationCandidates(100)).some(row=>row.id===reviewed.row.id),'Transient preparation failure backs off without losing signed approval.');
     assert(hasCurrentManualQcEvidence(backedOff));
+    await prisma.release.update({where:{id:reviewed.row.id},data:{metadata:{...backedOff.metadata,deliveryPreparation:{state:'needs_review',failures:5,reason:'DireNote hourly request capacity is exhausted. Retry in 4 minute(s).'}} as never}});
+    assert((await distributionAutomationCandidates(100)).some(row=>row.id===reviewed.row.id),'Legacy capacity exhaustion must resume the signed queued package.');
+    await prisma.release.update({where:{id:reviewed.row.id},data:{metadata:{...backedOff.metadata,deliveryPreparation:{state:'needs_review',failures:5,reason:'Artist mapping differs from selected card.'}} as never}});
+    assert(!(await distributionAutomationCandidates(100)).some(row=>row.id===reviewed.row.id),'Identity review holds must never be released by capacity recovery.');
     await prisma.release.update({where:{id:reviewed.row.id},data:{metadata:{...backedOff.metadata,deliveryPreparation:{...(backedOff.metadata!.deliveryPreparation as any),nextAttemptAt:new Date(0).toISOString()}} as never,updatedAt:new Date(0)}});
     const recovered=await processDistributionAutomation('https://hymn.fixture');assert(recovered.submitted>=1,'The worker resumes the saved manual revision after backoff.');
     await prisma.release.update({where:{id:reviewed.row.id},data:{archivedAt:new Date()}});

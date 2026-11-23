@@ -32,6 +32,7 @@ export function LandingWorkspace({ children, workspaceHref, releaseNavigation = 
     return ()=>{window.removeEventListener("hymn-toggle-navigation",toggleNavigation);window.removeEventListener("hymn-reveal-service",revealService);window.removeEventListener("hymn-hide-service",hideService);};
   },[activeGroup]);
   return <div data-navigation-ready={navigationReady} className={`landing-workspace ${collapsed ? "rail-collapsed" : ""}`}>
+    <a href="#hymn-page-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-[var(--surface)] focus:p-4 focus:text-[var(--text)]">Skip to page content</a>
     <button type="button" className="landing-mobile-menu" aria-expanded={open} aria-controls="landing-navigation" onClick={()=>setOpen(!open)}><Menu size={18}/> Explore HYMN <ChevronDown size={16}/></button>
     {open && <button className="landing-rail-backdrop" aria-label="Close navigation" onClick={()=>setOpen(false)}/>}
     <aside id="landing-navigation" className={`landing-rail ${open ? "is-open" : ""}`}>
@@ -50,13 +51,13 @@ export function LandingWorkspace({ children, workspaceHref, releaseNavigation = 
           <div id={menuId} hidden={openGroup!==group.title}>{items.map(item=><Link prefetch={false} href={item.href} data-guide-route={item.href} key={item.label} aria-label={item.label} className={`landing-nav-link ${item.label === "Promotion" ? "landing-service-divider" : ""}`} onClick={()=>setOpen(false)}><item.icon size={16}/><span>{item.label}</span></Link>)}</div>
         </div>;
       })}</SlidingMenu></nav>
-      <div className="landing-rail-bottom"><Link prefetch={false} href={workspaceHref}>Your workspace <ArrowUpRight size={15}/></Link><Link prefetch={false} href="/contact">Talk to HYMN <ArrowUpRight size={15}/></Link><span>Independent music. Shared ambition.</span></div>
+      <div className="landing-rail-bottom"><Link prefetch={false} href="/welcome" onClick={()=>setOpen(false)}>Find my starting point</Link><Link prefetch={false} href="/pricing" onClick={()=>setOpen(false)}>Compare pricing</Link><Link prefetch={false} href={workspaceHref}>Your workspace <ArrowUpRight size={15}/></Link><Link prefetch={false} href="/contact">Talk to HYMN <ArrowUpRight size={15}/></Link><span>Independent music. Shared ambition.</span></div>
       <WorkspaceFooter collapsed={collapsed} onNavigate={()=>setOpen(false)}/>
     </aside>
     <div className="landing-canvas">
       {releaseNavigation ? <div ref={setNavigationTarget} className="release-navigation-header" /> : null}
       <ReleaseNavigationTarget.Provider value={releaseNavigation ? navigationTarget : undefined}>
-        <div className="landing-page-content" data-workspace-page={pathname === "/" || pathname === "/home" ? "home" : "service"}>{children}</div>
+        <div id="hymn-page-content" tabIndex={-1} className="landing-page-content" data-workspace-page={pathname === "/" || pathname === "/home" ? "home" : "service"}>{children}</div>
       </ReleaseNavigationTarget.Provider>
     </div>
   </div>;

@@ -9,7 +9,8 @@ import { reportReturnPath } from '@/lib/routes';
 type AuthRole = Exclude<UserRole, "admin">;
 
 export default async function LoginPage({ searchParams }: { searchParams?: Promise<{ role?: string; mode?: string; ref?: string; referralError?: string; next?:string }> }) {
-  const params = (await searchParams) ?? {};
+  const raw = (await searchParams) ?? {};
+  const params = Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]));
   const role = params.role === "producer" ? "producer" : "customer";
   const mode = params.mode === "signup" || params.ref ? "signup" : "login";
   const inviter = params.ref ? await prisma.user.findFirst({ where: { referralCode: { equals: normalizeReferralCode(params.ref), mode: "insensitive" }, status: "ACTIVE" }, select: { name: true, referralCode: true } }) : null;

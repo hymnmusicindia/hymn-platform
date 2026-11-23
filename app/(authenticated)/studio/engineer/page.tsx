@@ -16,7 +16,7 @@ function label(value: string) { return value.toLowerCase().replaceAll("_", " ").
 
 export default async function EngineerStudioDashboard() {
   const user = await getCurrentUserForPage();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?next=%2Fstudio%2Fengineer");
   const profile = await prisma.engineerProfile.findFirst({ where:{ contributorParty:{ claimedByUserId:user.id } }, include:{ orders:{ include:{ customer:{ select:{ name:true } }, earning:{ select:{ netAmount:true, status:true } } }, orderBy:{ updatedAt:"desc" } } } });
   if (!profile) return <main className="shell py-10"><section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8"><p className="hymn-kicker">Engineer Studio</p><h1 className="mt-2 text-3xl font-semibold">Engineer capability is not enabled</h1><p className="mt-3 text-[var(--text-muted)]">HYMN operations must verify and activate your service profile before you can accept projects.</p></section></main>;
 

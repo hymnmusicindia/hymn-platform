@@ -48,10 +48,14 @@ assert(draftUpdateRoute.includes("select: { metadata: true, status: true, update
 
 const adminControlCenter = source("components/admin-control-center.tsx");
 const adminStatusRoute = source("app/api/admin/update-status/[id]/route.ts");
-assert(adminControlCenter.includes('"Approve & Send to DireNote"') && adminControlCenter.includes('setConfirmStatusAction("sent")'), "HYMN approval must submit to DireNote in one admin action.");
+assert(adminControlCenter.includes('"Approve & queue"'), "HYMN approval must describe the persisted asynchronous delivery action accurately.");
+const reviewedQueue = source("lib/distribution-reviewed-queue.ts");
+assert(adminStatusRoute.includes('queueReviewedReleaseForDelivery(Number(id)') && reviewedQueue.includes("'queued_for_distribution'") && reviewedQueue.includes('queued:true, submitted:false'), "Approval must persist a reviewed queue entry without claiming partner acceptance.");
+assert(reviewedQueue.includes('hasCurrentManualQcEvidence(release)') && reviewedQueue.includes('pg_try_advisory_xact_lock') && reviewedQueue.includes('expectedVersion'), "Repeated or concurrent approval must preserve current review evidence and version checks.");
 const providerSubmitAt = adminStatusRoute.indexOf("const submission = await submitRelease");
 const failedSubmissionGateAt = adminStatusRoute.indexOf("if (!submission.submitted)", providerSubmitAt);
-const sentQueueAt = adminStatusRoute.indexOf('syncQueueStage(Number(id), "sent_to_direnote"', providerSubmitAt);
-assert(providerSubmitAt >= 0 && failedSubmissionGateAt > providerSubmitAt && sentQueueAt > failedSubmissionGateAt && adminStatusRoute.includes("{ syncReleaseStatus: false }"), "The queue must not be marked sent before DireNote accepts the release.");
+const acceptedResponseAt = adminStatusRoute.indexOf('const submittedRelease =', failedSubmissionGateAt);
+assert(providerSubmitAt >= 0 && failedSubmissionGateAt > providerSubmitAt && acceptedResponseAt > failedSubmissionGateAt, "The synchronous recovery action must handle failed submission before returning an accepted release.");
+assert(!adminStatusRoute.slice(providerSubmitAt, acceptedResponseAt).includes('syncQueueStage(Number(id), "sent_to_direnote"'), "The status route must leave accepted handoff queue changes to the delivery service.");
 
 console.log("Performance execution guard verification passed.");

@@ -1,4 +1,5 @@
 "use client";
+import { reportReturnPath } from '@/lib/routes';
 import {DesktopStaffHeader} from './desktop-staff-header';
 
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
@@ -67,6 +68,8 @@ function notificationTimeAgo(value: string) {
 export function SiteHeader({user=null,desktop=false}:SiteHeaderProps){return desktop?<DesktopStaffHeader name={user?.name}/>:<PublicSiteHeader user={user}/>;}
 function PublicSiteHeader({ user = null }: SiteHeaderProps) {
   const pathname = usePathname();
+  const [loginHref, setLoginHref] = useState('/login');
+  useEffect(() => { const next = reportReturnPath(pathname + window.location.search + window.location.hash); setLoginHref(next ? `/login?next=${encodeURIComponent(next)}` : '/login'); }, [pathname]);
   const workspaceHeader = true;
   const [breadcrumbs, setBreadcrumbs] = useState<WorkspaceCrumb[]>(() => workspaceBreadcrumbs(pathname));
   useEffect(() => {
@@ -672,7 +675,7 @@ function PublicSiteHeader({ user = null }: SiteHeaderProps) {
             {!isAuthenticated && !workspaceHeader ? <ThemeToggle /> : null}
             {isAuthenticated ? <AppLauncher /> : (
               <Link prefetch={false}
-                href="/login"
+                href={loginHref}
                 className="site-header-cta inline-flex min-w-[120px] items-center justify-center rounded-full border px-4 py-2 text-center text-sm font-semibold"
                 style={{ borderColor: "color-mix(in srgb, var(--accent) 42%, var(--border))", background: "linear-gradient(180deg, var(--accent-strong), var(--accent))", color: "var(--accent-foreground)", boxShadow: "0 0 32px color-mix(in srgb, var(--accent) 18%, transparent)" }}
               >
@@ -688,7 +691,7 @@ function PublicSiteHeader({ user = null }: SiteHeaderProps) {
             {!adminWorkspaceHeader ? <MusicAppInstall /> : null}
             {isAuthenticated ? <AppLauncher mobile /> : null}
             {isAuthenticated ? <NotificationBell mobile /> : null}
-            {isAuthenticated ? <ProfileMenu /> : <Link prefetch={false} href="/login" className="mobile-login-link"><UserRound size={17} aria-hidden="true" /><span>Login</span></Link>}
+            {isAuthenticated ? <ProfileMenu /> : <Link prefetch={false} href={loginHref} className="mobile-login-link"><UserRound size={17} aria-hidden="true" /><span>Login</span></Link>}
           </div>
 
           {!adminWorkspaceHeader ? <>
@@ -724,7 +727,7 @@ function PublicSiteHeader({ user = null }: SiteHeaderProps) {
               </Link>
             ))}
             {!isAuthenticated ? (
-              <Link prefetch={false} href="/login" className="site-header-cta w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "color-mix(in srgb, var(--accent) 42%, var(--border))", background: "linear-gradient(180deg, var(--accent-strong), var(--accent))", color: "var(--accent-foreground)" }} onClick={() => setOpen(false)}>
+              <Link prefetch={false} href={loginHref} className="site-header-cta w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "color-mix(in srgb, var(--accent) 42%, var(--border))", background: "linear-gradient(180deg, var(--accent-strong), var(--accent))", color: "var(--accent-foreground)" }} onClick={() => setOpen(false)}>
                 Login
               </Link>
             ) : null}

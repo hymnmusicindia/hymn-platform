@@ -9,7 +9,7 @@ const reuse=process.argv.find(arg=>arg.startsWith('--reuse='))?.slice(8);
 const fixture = reuse ? path.resolve(reuse) : mkdtempSync(path.join(root, 'fixture-'));
 if(!fixture.startsWith(path.join(root,'fixture-')))throw Error('Reuse must stay inside the isolated customer fixture directory.');
 const databaseDir = path.join(fixture, 'pg');
-const env = { ...process.env, DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:55481/customer_fixture', DIRECT_URL: 'postgresql://fixture:fixture@127.0.0.1:55481/customer_fixture', EMAIL_ENABLED: 'false', HYMN_CRON_WORKER_ENABLED: 'false', CRON_SECRET: '', JWT_SECRET: 'customer-experience-local-fixture-secret', ADMIN_JWT_SECRET: 'customer-experience-local-admin-secret', NEXT_DIST_DIR: '.next-customer-experience', APP_URL: 'http://127.0.0.1:35510', NEXT_PUBLIC_APP_URL: 'http://127.0.0.1:35510', CANONICAL_HOST: '127.0.0.1', RAZORPAY_KEY_ID: '', RAZORPAY_KEY_SECRET: '', RAZORPAY_WEBHOOK_SECRET: '', DIRENOTE_ENABLED: 'false', DIRENOTE_CLIENT_ID: '', DIRENOTE_PIN: '', PRIVATE_STORAGE_ROOT: path.join(fixture, 'private'), HYMN_STORAGE_ROOT: '', HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', NO_PROXY: '127.0.0.1,localhost' };
+const env = { ...process.env, TEMP: fixture, TMP: fixture, NODE_OPTIONS: process.env.NODE_OPTIONS || '', HYMN_BUILD_DISABLE_CACHE: process.env.HYMN_BUILD_DISABLE_CACHE || 'false', DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:55481/customer_fixture', DIRECT_URL: 'postgresql://fixture:fixture@127.0.0.1:55481/customer_fixture', EMAIL_ENABLED: 'false', HYMN_ALLOW_STORAGE_ROOT_OVERRIDE: 'true', HYMN_CRON_WORKER_ENABLED: 'false', CRON_SECRET: '', JWT_SECRET: 'customer-experience-local-fixture-secret', ADMIN_JWT_SECRET: 'customer-experience-local-admin-secret', NEXT_DIST_DIR: '.next-customer-experience', CUSTOMER_AUDIT_PUBLIC_ORIGIN: 'http://127.0.0.1:35510', APP_URL: 'http://127.0.0.1:35510', NEXT_PUBLIC_APP_URL: 'http://127.0.0.1:35510', CANONICAL_HOST: '127.0.0.1', RAZORPAY_KEY_ID: '', RAZORPAY_KEY_SECRET: '', RAZORPAY_WEBHOOK_SECRET: '', DIRENOTE_ENABLED: 'false', DIRENOTE_CLIENT_ID: '', DIRENOTE_PIN: '', PRIVATE_STORAGE_ROOT: path.join(fixture, 'private'), HYMN_STORAGE_ROOT: '', HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', NO_PROXY: '127.0.0.1,localhost' };
 const run = (args: string[]) => new Promise<void>((resolve, reject) => { const child = spawn(process.execPath, args, { env, stdio: 'inherit', windowsHide: true }); child.on('error', reject); child.on('exit', code => code === 0 ? resolve() : reject(Error(`Customer fixture command exited ${code}`))); });
 async function main() {
   const pg = new EmbeddedPostgres({ databaseDir, port: 55481, user: 'fixture', password: 'fixture', persistent: true, initdbFlags: ['--encoding=UTF8', '--locale=C'], postgresFlags: ['-h', '127.0.0.1'] });
@@ -21,21 +21,32 @@ async function main() {
     await run(['--conditions=react-server', '--import', 'tsx', 'scripts/fixtures/customer-experience.ts']);
     if(process.argv.includes('--sitewide'))await run(['--conditions=react-server','--import','tsx','scripts/fixtures/sitewide-ux.ts']);
     }
+    const production = process.argv.includes('--production');
+    if (production) {
+      env.NEXT_DIST_DIR = '.next-conversion-production';
+      env.HYMN_BUILD_DISABLE_CACHE = 'true';
+      env.NODE_OPTIONS = `${env.NODE_OPTIONS} --max-old-space-size=5632`.trim();
+      env.APP_URL = env.CUSTOMER_AUDIT_PUBLIC_ORIGIN = 'http://hymn.fixture.test:35510';
+      if (!process.argv.includes('--reuse-build')) await run(['--max-old-space-size=5632', 'node_modules/next/dist/bin/next', 'build', '--webpack']);
+      else if (!existsSync(path.join(env.NEXT_DIST_DIR,'BUILD_ID'))) throw Error('Build the isolated production fixture before reusing its output.');
+    }
     const log = await import('node:fs').then(fs => fs.openSync(path.join(root, 'server.log'), 'w'));
     const heap = process.env.CUSTOMER_AUDIT_HEAP_MB || '4096';
     if (!/^\d{4,5}$/.test(heap)) throw Error('Choose a valid development heap size.');
-    server = spawn(process.execPath, [`--max-old-space-size=${heap}`, 'node_modules/next/dist/bin/next', 'dev', process.argv.includes('--turbo')?'--turbopack':'--webpack', '--hostname', '127.0.0.1', '--port', '35510'], { env: { ...env, NODE_OPTIONS: `--max-old-space-size=${heap}` }, stdio: ['ignore', log, log], windowsHide: true });
-    for (let i = 0; i < 150; i++) { if (server.exitCode !== null) throw Error('Customer audit server exited.'); try { if ((await fetch(`${env.APP_URL}/api/workspaces`)).status === 401) break; } catch {} if (i === 149) throw Error('Customer audit server unavailable.'); await new Promise(resolve => setTimeout(resolve, 1000)); }
+    server = spawn(process.execPath, [`--max-old-space-size=${heap}`, 'node_modules/next/dist/bin/next', ...(production ? ['start'] : ['dev', process.argv.includes('--turbo')?'--turbopack':'--webpack']), '--hostname', '127.0.0.1', '--port', '35510'], { env: { ...env, NODE_OPTIONS: `--max-old-space-size=${heap}` }, stdio: ['ignore', log, log], windowsHide: true });
+    for (let i = 0; i < 150; i++) { if (server.exitCode !== null) throw Error('Customer audit server exited.'); try { if ((await fetch('http://127.0.0.1:35510/api/workspaces', {headers:production ? {'x-forwarded-proto':'https'} : {}, signal:AbortSignal.timeout(3000)})).status === 401) break; } catch {} if (i === 149) throw Error('Customer audit server unavailable.'); await new Promise(resolve => setTimeout(resolve, 1000)); }
     console.log('Customer audit server ready at http://127.0.0.1:35510. Fixture data only; external delivery and payments disabled.');
     if (process.argv.includes('--serve')) { writeFileSync(path.join(root, 'ready'), fixture); while (!existsSync(path.join(root, 'stop'))) { if (server.exitCode !== null) throw Error('Customer audit server exited.'); await new Promise(resolve => setTimeout(resolve, 1000)); } }
     else {
-      await run(['--import', 'tsx', 'scripts/verify-customer-experience-browser.ts']);
+      if (process.argv.includes('--conversion')) await run(['--import', 'tsx', 'scripts/verify-conversion-experience.ts']);
+      else if (process.argv.includes('--entry-points')) await run(['--import', 'tsx', 'scripts/verify-entry-points-browser.ts']);
+      else await run(['--import', 'tsx', 'scripts/verify-customer-experience-browser.ts']);
       if(process.argv.includes('--sitewide'))await run(['--import','tsx','scripts/verify-sitewide-ux-browser.ts']);
       if (process.argv.includes('--features')) await run(['--import', 'tsx', 'scripts/verify-customer-experience-features.ts']);
     }
   } finally {
     if (server?.pid) {
-      if (process.platform === 'win32') await new Promise<void>(resolve => { const child = spawn('taskkill', ['/PID', String(server!.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); child.on('exit', () => resolve()); });
+      if (process.platform === 'win32') await new Promise<void>(resolve => { const child = spawn('taskkill', ['/PID', String(server!.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); child.on('exit', code => { if (code !== 0) server?.kill(); resolve(); }); });
       else server.kill();
     }
     if (process.platform === 'win32') await new Promise<void>(resolve => { const child = spawn(path.resolve('node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe'), ['-D', databaseDir, '-m', 'fast', '-w', 'stop'], { stdio: 'ignore', windowsHide: true }); child.on('exit', () => resolve()); });
