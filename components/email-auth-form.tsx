@@ -6,10 +6,11 @@ import styles from './email-auth-form.module.css';
 export function EmailAuthForm({ signup = false, askForName = signup, showCallbackErrors = false, initialName = "", returnTo, onAuthenticated, dark = false }: { signup?: boolean; askForName?: boolean; showCallbackErrors?: boolean; initialName?: string; returnTo?: string; onAuthenticated?: () => Promise<void> | void; dark?: boolean }) {
   const id = useId(), locked = useRef(false), controller = useRef<AbortController | null>(null);
   const codeInput = useRef<HTMLInputElement>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [email, setEmail] = useState(''), [name, setName] = useState(initialName), [code, setCode] = useState('');
   const [challenge, setChallenge] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState(''), [resendAt, setResendAt] = useState(0), [seconds, setSeconds] = useState(0);
   useEffect(() => { const tick = () => setSeconds(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000))); tick(); const timer = window.setInterval(tick, 1000); return () => clearInterval(timer); }, [resendAt]);
-  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => { setHydrated(true); return () => controller.current?.abort(); }, []);
   useEffect(() => { if (challenge && !busy) codeInput.current?.focus(); }, [challenge, busy]);
   async function request(action: 'request' | 'verify') {
     if (locked.current) return; locked.current = true; setBusy(true); setError(''); setMessage('');
@@ -40,9 +41,9 @@ export function EmailAuthForm({ signup = false, askForName = signup, showCallbac
     finally { clearTimeout(timer); locked.current = false; setBusy(false); }
   }
   function submit(event: FormEvent) { event.preventDefault(); void request(challenge ? 'verify' : 'request'); }
-  return <form className={styles.form} data-tone={dark ? 'dark' : undefined} onSubmit={submit} aria-busy={busy}>
+  return <form className={styles.form} data-tone={dark ? 'dark' : undefined} onSubmit={submit} aria-busy={busy || !hydrated}>
     <div className={styles.heading}><Mail size={17}/><span>{challenge ? 'Check your email' : 'Continue with email'}</span><small>No password needed</small></div>
-    <fieldset className={styles.fields} disabled={busy}>
+    <fieldset className={styles.fields} disabled={busy || !hydrated}>
       {!challenge && signup && askForName && <label htmlFor={`${id}-name`}>Your name (optional) <input id={`${id}-name`} autoComplete="name" value={name} onChange={e => setName(e.target.value)} maxLength={100} placeholder="Artist or full name" /></label>}
       <label htmlFor={`${id}-email`}>Email address <input id={`${id}-email`} type="email" autoComplete="email" inputMode="email" required maxLength={254} value={email} disabled={!!challenge} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></label>
       {challenge && <label htmlFor={`${id}-code`}>Six-digit code <input ref={codeInput} id={`${id}-code`} className={styles.code} autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} minLength={6} required value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" aria-describedby={`${id}-code-hint`} /></label>}
