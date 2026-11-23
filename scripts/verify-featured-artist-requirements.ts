@@ -15,6 +15,8 @@ async function main() {
   assert.deepEqual(await artistProvisionIssues(payload,async()=>"known"),[]);
   const missing=await artistProvisionIssues(payload,async()=>"profile-required");assert.equal(missing.length,3);assert.equal(missing[0].field,"artists.0.instagram_url");assert.equal(missing[1].field,"tracks.0.artists.0.instagram_url");assert.equal(missing[2].field,"tracks.0.featuring_artists.0.instagram_url");assert.match(missing[0].message,/Instagram/);
   const unavailable=await artistProvisionIssues(payload,async()=>{throw Error("unavailable")});assert.match(unavailable[0].message,/could not verify/);
+  const capacity=Object.assign(new Error('Provider capacity'),{code:'DIRENOTE_RATE_LIMIT',retryAfterSeconds:1200});
+  await assert.rejects(()=>artistProvisionIssues(payload,async()=>{throw capacity}),error=>error===capacity,'Capacity exhaustion must defer delivery rather than request a customer profile correction.');
   payload.artists![0].instagram_url="https://instagram.com/primary";
   assert.equal((await artistProvisionIssues(payload,async()=>"profile-required")).some(issue=>issue.field==="artists.0.instagram_url"),false,"an Instagram profile should avoid a missing-profile correction");
   payload.tracks[0].artists![0].instagram_url="https://instagram.com/track-artist";

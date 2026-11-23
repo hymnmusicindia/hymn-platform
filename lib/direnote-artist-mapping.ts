@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from './prisma';
 import { getDireNoteArtistInformation } from './direnote/direnote-client';
 import { requestDireNoteV24 } from './direnote/v24-client';
-import { reserveDireNoteRequest } from './direnote-rate-limit';
+import { reserveDireNoteRequest, enforceDireNoteResponseLimit } from './direnote-rate-limit';
 import { verifiedArtistStoreLinks, savedArtistStoreLinks } from './artist-store-links';
 import { confirmsDireNoteIdentityChange } from './direnote/v24-reconciliation';
 import { redactDireNoteDiagnostic, type DireNotePayload } from './direnote';
@@ -22,7 +22,7 @@ export async function flagArtistMappingReview(input: { releaseId?: number | null
   }
 }
 async function rememberCooldown(result: { httpStatus: number | null; retryAfterSeconds?: number }) {
-  if (result.httpStatus === 429) await prisma.direNoteLog.create({ data: { action: 'provider_rate_limit', success: false, httpStatus: 429, responseJson: { retryAt: new Date(Date.now() + Math.max(1, result.retryAfterSeconds ?? 60) * 1000).toISOString() } } });
+  await enforceDireNoteResponseLimit(result);
 }
 
 /** Fill only empty provider identities. A different stored identity always needs review. */

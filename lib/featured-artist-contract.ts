@@ -37,7 +37,8 @@ export async function artistProvisionIssues(payload: Pick<DireNotePayload,"artis
   for (const {name,field} of candidates.values()) {
     try {
       if (await lookup(name) === "profile-required") issues.push({field,message:`Add an Instagram profile link for ${name}. HYMN could not identify a unique existing artist profile by name.`});
-    } catch {
+      } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'DIRENOTE_RATE_LIMIT') throw error;
       issues.push({field,message:`HYMN could not verify the artist profile for ${name}. Try again, or add their Instagram profile link.`});
     }
   }

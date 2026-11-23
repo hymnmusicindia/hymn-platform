@@ -13,6 +13,7 @@ import { submitRelease } from '../lib/distribution-service';
 import { adminReleaseDelta, withAdminQcReviewTasks } from '../lib/admin-release-delta';
 import { automaticQcRevision, automationSensitiveSnapshot, earliestPartnerReleaseDate } from '../lib/distribution-automation-policy';
 import { distributionAutomationCandidates, processDistributionAutomation } from '../lib/distribution-automation';
+import { reserveDireNoteRequest } from '../lib/direnote-rate-limit';
 
 const fixture=globalThis as typeof globalThis & {qcReadiness?:()=>Promise<unknown>;qcSubmissions?:number;qcDeliveryFailure?:string};
 async function main(){
@@ -209,6 +210,19 @@ async function main(){
     assert.equal(await runIntelligentDistributionQc(replacement.row.id,'https://hymn.fixture'),false,'Durable high-risk alerts must block even without editable metadata flags.');
     assert.match(String(((await getDetailedReleaseById(replacement.row.id))!.metadata!.autoQc as {reason:string}).reason),/fraud alert/);
     assert.notEqual(automaticQcRevision(checked),automaticQcRevision(held));
+    await prisma.direNoteLog.deleteMany({where:{action:'rate_limit_reservation'}});
+    await prisma.direNoteLog.createMany({data:Array.from({length:55},(_,i)=>({action:'rate_limit_reservation',success:true,createdAt:new Date(Date.now()-1800000+i*1000)}))});
+    await assert.rejects(reserveDireNoteRequest('release_information'),(e:any)=>e.code==='DIRENOTE_RATE_LIMIT');
+    await reserveDireNoteRequest('artist_mapping_check',reviewed.row.id);
+    await reserveDireNoteRequest('content_ingestion',reviewed.row.id);
+    await reserveDireNoteRequest('ingest_status',reviewed.row.id);
+    await prisma.direNoteLog.createMany({data:Array.from({length:37},()=>({action:'rate_limit_reservation',success:true}))});
+    await assert.rejects(reserveDireNoteRequest('content_ingestion'),(e:any)=>e.code==='DIRENOTE_RATE_LIMIT');
+    await reserveDireNoteRequest('release_information',null,user.id);
+    await prisma.direNoteLog.createMany({data:Array.from({length:4},()=>({action:'rate_limit_reservation',success:true}))});
+    await assert.rejects(reserveDireNoteRequest('content_ingestion',null,user.id),(e:any)=>e.code==='DIRENOTE_RATE_LIMIT');
+    await prisma.direNoteLog.deleteMany({where:{action:'rate_limit_reservation'}});
+    console.log('PASS delivery capacity: routine polling stops at 55, delivery can use 95, administrators can use 100; the global ceiling remains enforced.');
     console.log('PASS isolated automation: real protected JPEG/WAV verification, safe formatting, signed evidence, identity-change hold, stale/concurrent revision rejection, source replacement, corrupt media, requested corrections, uncertain-send guard, kill switch and archived feed delta. No external provider writes or mail.');
   }finally{globalThis.fetch=nativeFetch;await prisma.$disconnect();}
 }

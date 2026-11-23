@@ -34,12 +34,13 @@ export async function reserveDireNoteRequest(action: string, releaseId?: number 
       where: { action: "rate_limit_reservation", createdAt: { gte: since } }
     });
 
-    // Keep five requests available for an administrator to diagnose or submit
-    // a release while scheduled work is active.
-    const capacity = actorId != null ? 100 : 95;
+    // Routine catalogue polling must leave room for approved-package checks,
+    // ingestion and acknowledgement polling, plus five administrator requests.
+    const routineRead = /^(?:release_information(?:_.*)?|artist_information|songwriter_information|upc_lookup|check_release_status|revenue_report|correction_qc_report|legacy_amendment_recovery)$/.test(action);
+    const capacity = actorId != null ? 100 : routineRead ? 55 : 95;
     if (used >= capacity) {
-      const oldest = await tx.direNoteLog.findFirst({ where: { action: "rate_limit_reservation", createdAt: { gte: since } }, orderBy: { createdAt: "asc" }, select: { createdAt: true } });
-      const retryAfterSeconds = Math.max(1, Math.ceil(((oldest?.createdAt.getTime() ?? Date.now()) + 60 * 60 * 1000 - Date.now()) / 1000));
+      const [available] = await tx.direNoteLog.findMany({ where: { action: "rate_limit_reservation", createdAt: { gte: since } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip: Math.max(0, used - capacity), take: 1, select: { createdAt: true } });
+      const retryAfterSeconds = Math.max(1, Math.ceil(((available?.createdAt.getTime() ?? Date.now()) + 60 * 60 * 1000 - Date.now()) / 1000));
       const error = new Error(`DireNote hourly request capacity is exhausted. Retry in ${Math.ceil(retryAfterSeconds / 60)} minute(s).`);
       Object.assign(error, { code: "DIRENOTE_RATE_LIMIT", retryAfterSeconds });
       throw error;

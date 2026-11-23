@@ -17,4 +17,3 @@ async function main() {
   } finally { await db.$disconnect(); }
 }
 main().catch(()=>{ console.error('Read-only inspection failed; credentials withheld.');process.exitCode=1; });
-
