@@ -41,7 +41,7 @@ export function HomeReviewsCarousel({ reviews, compact = false }: { reviews: Rev
     </div>;
   }
   return <section className={`${styles.root} ${compact ? styles.compact : ''}`} aria-label="Customer reviews">
-    <div className={styles.intro}><p className={styles.eyebrow}>THE ARTIST PERSPECTIVE</p><h2>Real artists.<br/><span>Real experiences.</span></h2><p className={styles.summary}>In their own words. From their own journey.</p></div>
+    <div className={styles.intro}><p className={styles.eyebrow}>FROM ARTISTS USING HYMN</p><h2>Hear from artists<br/><span>who have used HYMN.</span></h2><p className={styles.summary}>Their experience with releases and beats, in their own words.</p></div>
     <div className={styles.viewport} tabIndex={0} role="region" aria-roledescription="carousel" aria-label="Artist reviews. Hover or focus to pause.">
       <div className={styles.track} data-moving={moving} style={{"--review-duration":`${Math.max(40,items.length*12)}s`} as CSSProperties}>{cards()}{moving && cards(true)}</div>
     </div>

@@ -42,7 +42,7 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
   });
   return {
     platforms: (<section className="landing-platforms home-platform-editorial shell" aria-labelledby="home-platform-title">
-      <h2 id="home-platform-title">Where your music <span>lands.</span></h2>
+      <h2 id="home-platform-title">Release to the platforms <span>your listeners use.</span></h2>
       <div className="home-platform-carousel" aria-hidden="true">{[0, 1, 2].map(column => {
         const logos = storeLogos.filter((_, index) => index % 3 === column);
         return <div className="home-platform-column" key={column}><div className="home-platform-track">{[0, 1].map(copy => <div className="home-platform-logo-set" key={copy}>{logos.map(item => <div key={item.name}><Image src={item.src} alt="" width={144} height={48} className={`distribution-store-logo${item.name === "YouTube Music" || item.name === "Boomplay" || item.name === "JioSaavn" ? " home-platform-logo-detailed" : ""}`} /></div>)}</div>)}</div></div>;
@@ -55,13 +55,13 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
             <div className="home-release-copy">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/50">#releasedonhymn</p>
               <h2 className="home-release-title">
-                Yes, these releases<br />moved through<br /><span>HYMN.</span>
+                Independent music.<br />Released with<br /><span>HYMN.</span>
               </h2>
               <p className="mt-6 max-w-md text-sm font-medium leading-7 sm:text-base" style={{ color: "#d4d4d8" }}>
-                Discover the music and independent artists building their next chapter with HYMN.
+                Explore tracks from independent artists who released through HYMN. When your music is ready, you can submit yours too.
               </p>
               <Link prefetch={false} href={signedIn ? "/distribution/start" : "/login?mode=signup"} className="home-editorial-link">
-                Your next release is waiting
+                Start your release
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -90,11 +90,11 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
         </div>
       </section>),
     beats: (<section id="beats" className="landing-beats shell py-10">
-        <div className="landing-section-heading"><div><p className="landing-eyebrow">Beatstore</p><h2>A new sound. A new beginning.</h2></div><Link prefetch={false} href="/beat-store">Browse all beats <ArrowRight size={16}/></Link></div>
+        <div className="landing-section-heading"><div><p className="landing-eyebrow">Beatstore</p><h2>Find a beat for the song you have in mind.</h2></div><Link prefetch={false} href="/beat-store">Browse all beats <ArrowRight size={16}/></Link></div>
         <HomeBeatCarousel beats={catalog.slice(0, 8)}/>
       </section>),
     journey: <div id="journey" className="landing-banner landing-journey"><MusicLifecycleBanner compact={!signedIn} /></div>,
     producers: <div id="producers" className="landing-banner landing-producers"><HomeProducerInvitation /></div>,
-    studio: <section className="home-path-studio home-studio-editorial"><div><p className="landing-eyebrow">Mixing / Mastering</p><h2>Your sound.<br />Release-ready.</h2><p>Give your next record its finishing touch.</p><Link prefetch={false} href="/studio">Explore studio services <ArrowRight size={16}/></Link></div><Image src="/home-studio.jpg" alt="Professional recording studio and mixing console" width={1400} height={900} className="home-path-studio-image" /></section>
+    studio: <section className="home-path-studio home-studio-editorial"><div><p className="landing-eyebrow">Mixing / Mastering</p><h2>Get your recording<br />ready for release.</h2><p>Work with a mixing or mastering engineer to prepare your recorded track for release.</p><Link prefetch={false} href="/studio">Explore studio services <ArrowRight size={16}/></Link></div><Image src="/home-studio.jpg" alt="Professional recording studio and mixing console" width={1400} height={900} className="home-path-studio-image" /></section>
   };
 }

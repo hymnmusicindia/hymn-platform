@@ -2,13 +2,13 @@ import { publicBusiness, publicServices } from "./public-business";
 import { distributionPlanCards } from "./distribution-plans";
 import { getTrackPricingQuote, UGC_ADDON_PRICE } from "./distribution-pricing";
 import { CONTENT_ID_REQUEST_FEE } from "./content-id-access";
-const publicRoyaltyTermsNotice = "Review the Distribution Terms and Royalty & Payout Policy for royalty calculations, the distribution partner share and payout conditions. Applicable terms are presented for approval before submission.";
+const publicRoyaltyTermsNotice = "HYMN adds zero royalty commission. The distribution partner's share applies. Review the Distribution Terms and Royalty & Payout Policy for royalty calculations, the distribution partner share and payout conditions. Applicable terms are presented for approval before submission.";
 
 export const publicPricingNotes = `One-time distribution is priced per track, with bulk discounts. UGC platforms cost INR ${UGC_ADDON_PRICE} extra on one-time purchases when selected. YouTube Content ID access requests cost INR ${CONTENT_ID_REQUEST_FEE} when applicable and require eligibility and approval. Optional add-ons and extra Yearly+ artist slots may increase the total. Eligible first releases can receive the base-track discount; review the eligibility rules. Checkout confirms the final payable amount and terms before payment.`;
 export const publicFaqs = [
-  { question: "What does HYMN Music offer?", answer: publicBusiness.description },
+  { question: "How can HYMN help me release my music?", answer: "HYMN helps independent artists license beats, work with mixing and mastering engineers, and submit finished music for distribution to streaming platforms. Choose the service your track needs." },
   { question: "How much does music distribution cost?", answer: `One-time distribution starts at INR ${getTrackPricingQuote(1).finalPrice} for one track. Subscription prices are listed on the public pricing page. Optional add-ons cost extra.` },
-  { question: "Where can I review royalty and payout terms?", answer: publicRoyaltyTermsNotice },
+  { question: "What should I know about royalties and payouts?", answer: publicRoyaltyTermsNotice },
 ];
 
 export function distributionPricing(trackCount = 1) {

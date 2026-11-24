@@ -91,7 +91,7 @@ export function HomeNewsletter({ accountEmail, compact = false }: { accountEmail
     <details className="sidebar-newsletter-disclosure">
     <summary className="sidebar-newsletter-heading"><Mail size={13} aria-hidden="true"/><strong>{checking ? "Checking newsletter..." : checkFailed ? "Check newsletter subscription" : subscription ? "You're subscribed to our newsletter" : "Sign up to newsletter"}</strong><ChevronDown size={12} className="sidebar-newsletter-chevron" aria-hidden="true"/></summary>
     <div className="sidebar-newsletter-content">
-    {!subscription && !checking ? <p>Artist news &amp; updates.</p> : null}
+    {!subscription && !checking ? <p>Release tips and HYMN updates.</p> : null}
     {checking ? <p role="status">Checking your subscription...</p> : checkFailed ? <button type="button" className="sidebar-newsletter-retry" onClick={()=>setCheckVersion(value=>value+1)}>Retry subscription check</button> : subscription ? <div className="sidebar-newsletter-subscribed"><span><Check size={13} aria-hidden="true"/>Subscribed</span><small title={subscription.email}>{subscription.email}</small><button type="button" onClick={unsubscribe} disabled={sending}>{sending ? "Unsubscribing..." : "Unsubscribe"}</button></div> : <><label className="sr-only" htmlFor={emailId}>Newsletter email address</label><div className="sidebar-newsletter-input"><input id={emailId} name="email" type="email" required placeholder="Your email address" defaultValue={accountEmail || ""} autoComplete="email"/><button type="submit" aria-label="Subscribe to newsletter" title="Subscribe to newsletter" disabled={sending}>{sending ? <span aria-hidden="true">...</span> : <ArrowRight size={16} aria-hidden="true"/>}</button></div><small>Unsubscribe anytime.</small></>}
     {message ? <p role="status" className="sidebar-newsletter-message">{message}</p> : null}
     </div></details>
@@ -120,7 +120,7 @@ export function HomeNewsletter({ accountEmail, compact = false }: { accountEmail
           <div className="relative">
             <div className="flex items-start gap-4">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.06] text-[var(--text)]"><Mail className="h-5 w-5" /></span>
-              <div className="min-w-0"><p className="text-base font-semibold text-[var(--text)]">Stay in the HYMN loop?</p><p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Release insights, platform updates and artist opportunities.</p></div>
+              <div className="min-w-0"><p className="text-base font-semibold text-[var(--text)]">Get release tips from HYMN</p><p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Release tips, HYMN updates and opportunities for independent artists.</p></div>
             </div>
             <div className="mt-5 flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3"><span className="h-2 w-2 shrink-0 rounded-full bg-[#62d99a] shadow-[var(--shadow-soft)]" /><span className="min-w-0 flex-1 truncate text-sm text-[var(--text-muted)]">{accountEmail}</span><Check className="h-4 w-4 shrink-0 text-[var(--text-muted)]" /></div>
             <div className="mt-4 flex flex-wrap items-center gap-4">
@@ -130,7 +130,7 @@ export function HomeNewsletter({ accountEmail, compact = false }: { accountEmail
           </div>
         ) : (
           <div className="relative">
-            <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-base font-semibold text-[var(--text)]">Choose your newsletter email</p><p className="mt-1 text-xs text-[var(--text-muted)]">You can unsubscribe whenever you want.</p></div>{accountEmail ? <button type="button" onClick={() => { setUseDifferentEmail(false); setMessage(null); }} className="shrink-0 text-xs font-medium text-[var(--text-muted)] underline decoration-white/25 underline-offset-4 hover:text-[var(--text)]">Use Google email</button> : null}</div>
+            <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-base font-semibold text-[var(--text)]">Where should we send your updates?</p><p className="mt-1 text-xs text-[var(--text-muted)]">Release tips, HYMN news and offers. Unsubscribe anytime.</p></div>{accountEmail ? <button type="button" onClick={() => { setUseDifferentEmail(false); setMessage(null); }} className="shrink-0 text-xs font-medium text-[var(--text-muted)] underline decoration-white/25 underline-offset-4 hover:text-[var(--text)]">Use Google email</button> : null}</div>
             <div className="flex overflow-hidden rounded-xl border border-white/15 bg-white shadow-[var(--shadow-soft)] focus-within:ring-2 focus-within:ring-white/25">
               <label className="sr-only" htmlFor={emailId}>Email address</label>
               <input id={emailId} name="email" type="email" required autoFocus={Boolean(accountEmail)} defaultValue={accountEmail || ""} placeholder="Enter your email" className="min-w-0 flex-1 border-0 bg-white px-4 py-3.5 text-sm text-[#131313] outline-none placeholder:text-[#777]" />

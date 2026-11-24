@@ -19,24 +19,24 @@ export function MusicLifecycleBanner({ compact = false }: { compact?: boolean })
     <section className="shell py-7 sm:py-9" aria-labelledby="music-journey-heading">
       <div className={`${styles.banner} ${compact ? styles.compact : ''}`}>
         <div className={styles.heading}>
-          <div><h2 id="music-journey-heading">Your sound. <span>Release-ready.</span></h2><p>Beat to master to worldwide release. All with HYMN.</p></div>
+          <div><h2 id="music-journey-heading">From your first beat <span>to your finished release.</span></h2><p>Find a beat, finish your recording and submit your release with HYMN.</p></div>
           <Link href="/beat-store" className={styles.cta}>Start with a beat <ArrowRight size={17} aria-hidden="true" /></Link>
         </div>
-        <p className={styles.hint}>Three steps. One connected journey. <span>Select a step to explore.</span></p>
+        <p className={styles.hint}>Start at the step your track needs. <span>Select a step to explore.</span></p>
         <div className={styles.journey}>
           <button type="button" className={styles.stage} aria-pressed={activeStep === 0} aria-controls="music-journey-detail" onClick={() => setActiveStep(0)}>
             <div className={styles.art} aria-hidden="true"><div className={styles.record}><span>H</span></div><div className={styles.sleeve} /></div>
-            <div className={styles.caption}><span className={styles.number}>01</span><div><h3>Buy your beat</h3><p>Your sound starts here.</p></div><ArrowRight size={16} aria-hidden="true" /></div>
+            <div className={styles.caption}><span className={styles.number}>01</span><div><h3>Buy your beat</h3><p>Choose a license for your track.</p></div><ArrowRight size={16} aria-hidden="true" /></div>
           </button>
           <div className={styles.connector} aria-hidden="true"><ArrowRight size={18} /></div>
           <button type="button" className={styles.stage} aria-pressed={activeStep === 1} aria-controls="music-journey-detail" onClick={() => setActiveStep(1)}>
             <div className={styles.art} aria-hidden="true"><div className={styles.console}><div className={styles.wave}>{bars.map((height, i) => <i key={i} style={{ height: height + "%", "--bar-delay": i * -0.07 + "s" } as CSSProperties} />)}</div><div className={styles.controls}><SlidersHorizontal size={18} /><span /><span /><span /></div></div></div>
-            <div className={styles.caption}><span className={styles.number}>02</span><div><h3>Mix & master</h3><p>Polished by our engineers.</p></div><ArrowRight size={16} aria-hidden="true" /></div>
+            <div className={styles.caption}><span className={styles.number}>02</span><div><h3>Mix & master</h3><p>Work with an engineer.</p></div><ArrowRight size={16} aria-hidden="true" /></div>
           </button>
           <div className={styles.connector} aria-hidden="true"><ArrowRight size={18} /></div>
           <button type="button" className={`${styles.stage} ${styles.distributionStage}`} aria-pressed={activeStep === 2} aria-controls="music-journey-detail" onClick={() => setActiveStep(2)}>
             <div className={styles.art} aria-hidden="true"><div className={styles.world}><span className={styles.globe} /><span className={styles.platformOne} title="Spotify" /><span className={styles.platformTwo} title="Apple Music" /><span className={styles.platformThree} title="YouTube Music" /></div></div>
-            <div className={styles.caption}><span className={styles.number}>03</span><div><h3>Reach global listeners</h3><p>Distribute to streaming platforms.</p></div><ArrowRight size={16} aria-hidden="true" /></div>
+            <div className={styles.caption}><span className={styles.number}>03</span><div><h3>Release to streaming platforms</h3><p>Distribute to streaming platforms.</p></div><ArrowRight size={16} aria-hidden="true" /></div>
           </button>
         </div>
         <div id="music-journey-detail" className={styles.detail}>
