@@ -50,7 +50,7 @@
   --hymn-selection-bg:#b9d3f5;
   --hymn-selection-text:#111820;
   --hymn-material-ink:#c2cfdd;
-  --hymn-material-teal:#9cd2c4;
+  --hymn-material-teal:var(--hymn-material-ink);
   --hymn-material-wash:rgba(162,189,220,.04);
   --hymn-material-warm:transparent;
   --hymn-material-edge:rgba(255,255,255,.08);
@@ -114,7 +114,7 @@ html[data-theme][data-theme="light"] {
   --hymn-selection-bg:#234f83;
   --hymn-selection-text:#ffffff;
   --hymn-material-ink:#354e68;
-  --hymn-material-teal:#276454;
+  --hymn-material-teal:var(--hymn-material-ink);
   --hymn-material-wash:rgba(50,80,110,.025);
   --hymn-material-warm:transparent;
   --hymn-material-edge:rgba(255,255,255,.9);
