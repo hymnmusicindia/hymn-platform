@@ -1,4 +1,5 @@
 import { GrowthPlanner } from '@/components/growth-planner';
+import { HomeCreatorInvitation } from '@/components/home-creator-invitation';
 import { ArtistFeatureShowcase } from '@/components/artist-feature-showcase';
 import { VisitorReleaseHero } from '@/components/visitor-release-hero';
 import { PublicHomeInformation } from "@/components/public-home-information";
@@ -37,8 +38,9 @@ export default async function HomePage() {
   ].map(store => <Image key={store.name} src={store.src} alt={store.name} width={132} height={40} loading="lazy"/>)}</div></section>
   <HomeReviewsCarousel reviews={featuredReviews} compact/>
   {banners.releases}
-  <ArtistFeatureShowcase releases={featuredReleases.slice(0, 3)}/>
+  <ArtistFeatureShowcase releases={featuredReleases.slice(0, 3)} beats={catalog.slice(0, 1).map(beat => ({ title: beat.title, coverImage: beat.coverImage, producerName: beat.producer.name }))}/>
   {banners.beats}{banners.studio}
+  <HomeCreatorInvitation/>
   <details className="visitor-planner"><summary>Plan your releases<span>Explore your schedule and costs</span></summary><GrowthPlanner/></details>
   <section className="visitor-release-start" aria-labelledby="visitor-release-start-title">
     <div className="visitor-release-start-copy"><p className="landing-eyebrow">YOUR NEXT RELEASE STARTS HERE</p><h2 id="visitor-release-start-title">Ready for your<br/>next release?</h2><Link href="/distribution/start" className="visitor-primary">Prepare my release <ArrowUpRight size={18}/></Link></div>
