@@ -11,6 +11,8 @@ export const publicFaqs = [
   { question: "What should I know about royalties and payouts?", answer: publicRoyaltyTermsNotice },
 ];
 
+export const publicHomeFaqs = publicFaqs.filter(faq => faq.question !== "What should I know about royalties and payouts?");
+
 export function distributionPricing(trackCount = 1) {
   return { currency: "INR", oneTime: getTrackPricingQuote(trackCount), plans: distributionPlanCards.map(plan => ({ key: plan.key, name: plan.title, price: plan.price, cadence: plan.cadence, artistLimit: plan.artistLimit })), notes: publicPricingNotes, royaltyTerms: publicRoyaltyTermsNotice };
 }
@@ -19,16 +21,16 @@ export function publicOffers(origin: string) {
   return distributionPlanCards.map(plan => ({ "@type": "Offer", "@id": `${origin}/pricing#${plan.key}`, name: plan.title, price: plan.price, priceCurrency: "INR", url: `${origin}/pricing#${plan.key}`, description: `${plan.cadence}. ${plan.featureList.join(". ")}. ${publicPricingNotes}`, seller: { "@id": `${origin}/#organization` }, itemOffered: { "@id": `${origin}/#service-distribution` } }));
 }
 
-export function homeStructuredData(origin: string) {
+export function homeStructuredData(origin: string, faqs = publicHomeFaqs) {
   return { "@context": "https://schema.org", "@graph": [
     { "@type": "WebPage", "@id": `${origin}/#page`, url: `${origin}/`, name: "HYMN Music — Music Distribution, Beats & Artist Services", isPartOf: { "@id": `${origin}/#website` }, about: { "@id": `${origin}/#organization` } },
     ...publicServices.map(service => ({ "@type": "Service", "@id": `${origin}/#service-${service.key}`, name: service.name, description: service.description, serviceType: service.name, url: `${origin}${service.path}`, provider: { "@id": `${origin}/#organization` }, ...(service.key === "distribution" ? { offers: publicOffers(origin) } : {}) })),
-    { "@type": "FAQPage", "@id": `${origin}/#questions`, mainEntity: publicFaqs.map(faq => ({ "@type": "Question", name: faq.question, acceptedAnswer: { "@type": "Answer", text: faq.answer } })) },
+    { "@type": "FAQPage", "@id": `${origin}/#questions`, mainEntity: faqs.map(faq => ({ "@type": "Question", name: faq.question, acceptedAnswer: { "@type": "Answer", text: faq.answer } })) },
   ] };
 }
 
 export function homeMarkdown(origin: string) {
-  return `# HYMN Music\n\n> ${publicBusiness.description}\n\n## Services\n\n${publicServices.map(service => `- [${service.name}](${origin}${service.path}): ${service.description}`).join("\n")}\n\n## Distribution pricing\n\n${distributionPlanCards.map(plan => `- ${plan.title}: INR ${plan.price} / ${plan.cadence}. ${plan.artistLimit} artist profiles.`).join("\n")}\n\n${publicPricingNotes}\n\n${publicRoyaltyTermsNotice}\n\n[Full pricing and fees](${origin}/pricing) · [First-release eligibility](${origin}/first-release)\n\n## Contact\n\n- Email: [${publicBusiness.email}](mailto:${publicBusiness.email})\n- Phone: [${publicBusiness.telephone}](tel:${publicBusiness.telephone})\n- [Contact HYMN](${origin}/contact)\n- Official profiles: ${publicBusiness.sameAs.join(", ")}\n\n## Frequently asked questions\n\n${publicFaqs.map(faq => `### ${faq.question}\n\n${faq.answer}`).join("\n\n")}\n\n## More information\n\n- [About HYMN](${origin}/about)\n- [Music guides](${origin}/blog)\n- [Help and FAQs](${origin}/faq)\n- [Policies](${origin}/policies)\n- [Agent index](${origin}/llms.txt)\n- [MCP server card](${origin}/.well-known/mcp/server-card.json)\n\nAccount, checkout, uploads and consultation booking require signing in. Public agent tools only read public business, service and pricing information; they cannot place orders or book meetings.\n`;
+  return `# HYMN Music\n\n> ${publicBusiness.description}\n\n## Services\n\n${publicServices.map(service => `- [${service.name}](${origin}${service.path}): ${service.description}`).join("\n")}\n\n## Distribution pricing\n\n${distributionPlanCards.map(plan => `- ${plan.title}: INR ${plan.price} / ${plan.cadence}. ${plan.artistLimit} artist profiles.`).join("\n")}\n\n${publicPricingNotes}\n\n[Full pricing and fees](${origin}/pricing) · [First-release eligibility](${origin}/first-release)\n\n## Contact\n\n- Email: [${publicBusiness.email}](mailto:${publicBusiness.email})\n- Phone: [${publicBusiness.telephone}](tel:${publicBusiness.telephone})\n- [Contact HYMN](${origin}/contact)\n- Official profiles: ${publicBusiness.sameAs.join(", ")}\n\n## Frequently asked questions\n\n${publicHomeFaqs.map(faq => `### ${faq.question}\n\n${faq.answer}`).join("\n\n")}\n\n## More information\n\n- [About HYMN](${origin}/about)\n- [Music guides](${origin}/blog)\n- [Help and FAQs](${origin}/faq)\n- [Policies](${origin}/policies)\n- [Agent index](${origin}/llms.txt)\n- [MCP server card](${origin}/.well-known/mcp/server-card.json)\n\nAccount, checkout, uploads and consultation booking require signing in. Public agent tools only read public business, service and pricing information; they cannot place orders or book meetings.\n`;
 }
 
 export function llmsText(origin: string) {

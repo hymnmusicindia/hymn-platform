@@ -26,10 +26,8 @@ export function ArtistVideoReview({ compact = false, onPlaybackChange }: { compa
   useEffect(() => {
     if (!started) return;
     const pause = () => { if (document.hidden) video.current?.pause(); };
-    const observer = new IntersectionObserver(entries => { if (!entries[0]?.isIntersecting) video.current?.pause(); });
-    if (video.current) observer.observe(video.current);
     document.addEventListener('visibilitychange', pause);
-    return () => { observer.disconnect(); document.removeEventListener('visibilitychange', pause); };
+    return () => document.removeEventListener('visibilitychange', pause);
   }, [started]);
   return <div className={`${styles.card} ${compact ? styles.compact : ''}`} data-playing={playing} data-video-review onKeyDown={event => { if (event.key === 'Escape' && started && !document.fullscreenElement) { event.stopPropagation(); stop(); } }}>
     {!started ? <button type="button" ref={preview} className={styles.preview} aria-label="Watch Viraj's video review of HYMN" onClick={() => { setFailed(false); setStarted(true); }}>

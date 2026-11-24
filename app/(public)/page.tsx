@@ -1,4 +1,5 @@
 import { GrowthPlanner } from '@/components/growth-planner';
+import { ArtistFeatureShowcase } from '@/components/artist-feature-showcase';
 import { VisitorReleaseHero } from '@/components/visitor-release-hero';
 import { PublicHomeInformation } from "@/components/public-home-information";
 import { publicPageMetadata } from '@/lib/seo';
@@ -6,7 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ShieldCheck, ArrowUpRight } from 'lucide-react';
 import { getTrackPricingQuote } from '@/lib/distribution-pricing';
-import { ArrowRight, Disc3, Headphones, Radio, Instagram, Youtube } from 'lucide-react';
+import { ArrowRight, Instagram, Youtube } from 'lucide-react';
 import { buildHomePathBanners } from '@/components/home-path-banners';
 import { HomeGoalWorkspace } from '@/components/home-goal-workspace';
 import { LandingWorkspace } from '@/components/landing-workspace';
@@ -26,7 +27,7 @@ export default async function HomePage() {
  if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners}/><HomeReviewsCarousel reviews={featuredReviews} signedIn/><PublicHomeInformation/></LandingWorkspace></main>;
  return <main id="home" className="hymn-landing landing-visitor"><LandingWorkspace workspaceHref="/login">
   <VisitorReleaseHero releases={featuredReleases}/>
-  <section className="visitor-trust" aria-label="Our commitments"><div><ShieldCheck size={21}/><span><strong>Your music stays yours.</strong></span></div><div><span className="visitor-zero">0%</span><span><strong>Additional HYMN royalty commission.</strong><small>The distribution partner&apos;s share applies.</small></span></div></section>
+  <section className="visitor-trust" aria-label="Our commitments"><div><ShieldCheck size={21}/><span><strong>Your music stays yours.</strong></span></div></section>
   <section className="visitor-destinations" aria-label="Music distribution destinations"><p>Distribute to</p><div>{[
     {name:'Spotify',src:'/assets/store-logos/wordmark-spotify.png'},
     {name:'Apple Music',src:'/assets/store-logos/wordmark-apple.png'},
@@ -36,12 +37,7 @@ export default async function HomePage() {
   ].map(store => <Image key={store.name} src={store.src} alt={store.name} width={132} height={40} loading="lazy"/>)}</div></section>
   <HomeReviewsCarousel reviews={featuredReviews} compact/>
   {banners.releases}
-  <section className="landing-next-move" aria-labelledby="next-move-title"><div className="landing-section-heading"><div><p className="landing-eyebrow">A LITTLE HELP, AT THE RIGHT MOMENT</p><h2 id="next-move-title">What are you creating next?</h2></div><span>Every artist starts somewhere.</span></div><div className="visitor-services">{[
-   {href:'/distribution',title:'Release your music',tag:'Distribution',icon:Radio,copy:'Submit your finished tracks to streaming platforms.'},
-   {href:'/beat-store',title:'Find your sound',tag:'Beat Store',icon:Disc3,copy:'Listen to beats and choose a license for your track.'},
-   {href:'/producer-onboarding',title:'Open your beat store',tag:'For producers',icon:Disc3,copy:'Create a storefront where artists can license your beats.'},
-   {href:'/studio',title:'Finish your record',tag:'Mixing & mastering',icon:Headphones,copy:'Bring your recorded tracks to a mixing or mastering engineer.'}
-  ].map(({icon:Icon,...item})=><Link key={item.href} href={item.href} className="visitor-service"><span className="visitor-service-icon"><Icon size={21}/></span><span><small>{item.tag}</small><strong>{item.title}</strong><span>{item.copy}</span></span><ArrowRight size={17}/></Link>)}</div></section>
+  <ArtistFeatureShowcase releases={featuredReleases}/>
   {banners.beats}{banners.studio}
   <details className="visitor-planner"><summary>Plan your releases<span>Explore your schedule and costs</span></summary><GrowthPlanner/></details>
   <section className="visitor-release-start" aria-labelledby="visitor-release-start-title">
