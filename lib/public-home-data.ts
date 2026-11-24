@@ -26,7 +26,8 @@ export async function homeReleaseShowcase(selected: number[] = []) {
     return rows.map(row => ({ id: row.id, title: row.releaseTitle || row.title, artistName: row.artistName, artworkUrl: canonicalReleaseArtworkUrl(row.id, row.artworkUrl), releaseType: row.releaseType, status: 'live' }));
   }
   const order = new Map(ids.map((id, index) => [id, index]));
-  const live = (await listAllReleases()).filter(row => row.status === 'live' && !row.archivedAt && row.artworkUrl);
+  // The fallback Release type represents archival through status, not a timestamp.
+  const live = (await listAllReleases()).filter(row => row.status === 'live' && row.artworkUrl);
   const rows = diverseHomeReleases(live.map(row => ({ ...row, title: row.releaseTitle || row.trackName })));
   if (ids.length) rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
   return rows.slice(0, HOME_RELEASE_SHOWCASE_LIMIT).map(row => ({ id: row.id, title: row.releaseTitle || row.trackName, artistName: row.artistName, artworkUrl: row.artworkUrl, releaseType: row.releaseType, status: row.status }));
