@@ -26,7 +26,7 @@ export default async function HomePage() {
  const banners = buildHomePathBanners({ featuredReleases, catalog, signedIn: Boolean(session) });
  if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners}/><HomeReviewsCarousel reviews={featuredReviews} signedIn/><PublicHomeInformation/></LandingWorkspace></main>;
  return <main id="home" className="hymn-landing landing-visitor"><LandingWorkspace workspaceHref="/login">
-  <VisitorReleaseHero releases={featuredReleases}/>
+  <VisitorReleaseHero releases={featuredReleases.slice(0, 4)} beats={catalog.slice(0, 3).map(beat => ({ id: beat.id, title: beat.title, coverImage: beat.coverImage, producerName: beat.producer.name }))}/>
   <section className="visitor-trust" aria-label="Our commitments"><div><ShieldCheck size={21}/><span><strong>Your music stays yours.</strong></span></div></section>
   <section className="visitor-destinations" aria-label="Music distribution destinations"><p>Distribute to</p><div>{[
     {name:'Spotify',src:'/assets/store-logos/wordmark-spotify.png'},
@@ -37,7 +37,7 @@ export default async function HomePage() {
   ].map(store => <Image key={store.name} src={store.src} alt={store.name} width={132} height={40} loading="lazy"/>)}</div></section>
   <HomeReviewsCarousel reviews={featuredReviews} compact/>
   {banners.releases}
-  <ArtistFeatureShowcase releases={featuredReleases}/>
+  <ArtistFeatureShowcase releases={featuredReleases.slice(0, 3)}/>
   {banners.beats}{banners.studio}
   <details className="visitor-planner"><summary>Plan your releases<span>Explore your schedule and costs</span></summary><GrowthPlanner/></details>
   <section className="visitor-release-start" aria-labelledby="visitor-release-start-title">

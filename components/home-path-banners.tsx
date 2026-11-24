@@ -1,12 +1,13 @@
 import { CoverArt } from "@/components/cover-art";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Headphones } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { HomeBeatCarousel } from "@/components/home-beat-carousel";
 import { MusicLifecycleBanner } from "@/components/music-lifecycle-banner";
 import { HomeProducerInvitation } from "@/components/home-producer-invitation";
 import type { getPublicHomePreview } from "@/lib/public-home-data";
 import type { buildBeatStorefront } from "@/lib/beat-store";
+import { homeReleaseRows } from "@/lib/home-release-variety";
 
 const storeLogos = [
   { name: "Spotify", src: "/assets/store-logos/wordmark-spotify.png", className: "h-8 w-auto" },
@@ -31,12 +32,10 @@ const storeLogos = [
 
 export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{featuredReleases:Awaited<ReturnType<typeof getPublicHomePreview>>["featuredReleases"];catalog:ReturnType<typeof buildBeatStorefront>["catalog"];signedIn?:boolean}) {
   const homepageShowcaseReleases = [...new Map(featuredReleases.map(release => [release.id, release])).values()];
-  const rowCount = Math.min(3, homepageShowcaseReleases.length);
-  const showcaseRows = ["left", "right", "left"].slice(0, rowCount).map((direction, rowIndex) => {
-    // Disjoint pools keep a release in one row throughout the entire animation.
-    const source = homepageShowcaseReleases.filter((_, index) => index % rowCount === rowIndex);
+  const showcaseRows = homeReleaseRows(homepageShowcaseReleases).map((source, rowIndex) => {
     return {
-      direction,
+      direction: rowIndex === 1 ? 'right' : 'left',
+      uniqueCount: source.length,
       items: Array.from({ length: source.length * Math.ceil(8 / source.length) }, (_, index) => source[index % source.length])
     };
   });
@@ -69,12 +68,12 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
             <div className="home-release-showcase-viewport relative grid min-w-0 gap-4 overflow-hidden">
               {!homepageShowcaseReleases.length ? <p className="py-12 text-center text-sm" style={{ color: "#d4d4d8" }}>Released music will appear here soon.</p> : null}
               {showcaseRows.map((row, rowIndex) => (
-                <div key={rowIndex} className="home-release-showcase-row overflow-hidden">
+                <div key={rowIndex} className="home-release-showcase-row overflow-hidden" aria-label={`Live releases, row ${rowIndex + 1}`}>
                   <div className={`home-release-showcase-track home-release-showcase-track-${row.direction}`}>
                     {[...row.items, ...row.items].map((release, index) => (
-                      <article key={`${rowIndex}-${release.id}-${index}`} data-release-id={release.id} aria-hidden={index >= row.items.length ? true : undefined} className="group relative w-[140px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)] sm:w-[170px]">
+                      <article key={`${rowIndex}-${release.id}-${index}`} data-release-id={release.id} data-release-artist={release.artistName} aria-hidden={index >= row.uniqueCount ? true : undefined} className="group relative w-[140px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)] sm:w-[170px]">
                         <div className="aspect-square overflow-hidden">
-                          <CoverArt src={release.artworkUrl} previewWidth={192} width={135} height={135} alt={`${release.title} artwork`} loading={index < row.items.length ? "eager" : "lazy"} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+                          <CoverArt src={release.artworkUrl} previewWidth={192} width={135} height={135} alt={`${release.title} artwork`} loading={index < Math.min(row.uniqueCount, 6) ? "eager" : "lazy"} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
                         </div>
                         <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.58)_30%,rgba(0,0,0,0.94)_100%)] px-3 pb-3 pt-12 text-white">
                           <p className="line-clamp-1 text-xs font-extrabold uppercase tracking-[-0.02em] drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">{release.title}</p>

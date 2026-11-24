@@ -1,6 +1,12 @@
 ﻿/* Use the existing HYMN typeface consistently across homepage sections. */
 .hymn-landing{font-family:"HYMN Manrope",Inter,Arial,sans-serif}
 .hymn-landing :is(h1,h2,h3){font-family:inherit;font-style:normal}
+.landing-visitor .home-release-layout{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr);gap:36px;align-items:center}
+.landing-visitor .home-release-copy{width:100%;max-width:none}
+.landing-visitor .home-release-editorial .home-release-showcase-viewport{position:relative;top:auto;left:auto;right:auto;transform:none;width:100%;height:430px;mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent)}
+.landing-visitor .home-release-stage::after{display:none}
+.landing-visitor .home-release-editorial .home-release-showcase-viewport:hover .home-release-showcase-track{animation-play-state:paused}
+@media(max-width:760px){.landing-visitor .home-release-layout{grid-template-columns:1fr;gap:20px}.landing-visitor .home-release-copy{max-width:none;padding:8px 4px}.landing-visitor .home-release-editorial .home-release-showcase-viewport{height:354px}.landing-visitor .home-release-editorial .home-release-showcase-track article{width:110px}.landing-visitor .home-release-copy>p:not(:first-child){max-width:42ch}.landing-visitor .home-release-copy .home-editorial-link{margin-top:14px}}
 /* The visitor homepage is an editorial introduction, separate from the artist workspace. */
 .landing-visitor{--visitor-accent:var(--hymn-material-ink);--visitor-ink:var(--hymn-text);padding:0 24px 32px!important}
 .landing-visitor .landing-workspace{display:block}.landing-visitor .landing-rail{display:none}.landing-visitor .landing-canvas{max-width:1440px;margin:auto;border:0;border-radius:0;background:var(--bg);overflow:clip}.landing-visitor .landing-page-content{display:flex;flex-direction:column;gap:0}.landing-visitor .landing-page-content>section,.landing-visitor .landing-page-content>div{order:0}
