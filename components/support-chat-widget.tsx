@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Check, Compass, ChevronDown, LoaderCircle, MessageCircle, Send, Ticket } from 'lucide-react';
 import { SupportMascot } from './support-mascot';
+import { SupportLauncher } from './support-launcher';
 import { useAccessibleDialog } from './ui/use-accessible-dialog';
 import type { SupportService } from '@/lib/support-chat-knowledge';
 import { supportContactPhone } from '@/lib/support-contact-phone';
@@ -19,7 +20,7 @@ type ChatTicket={id:number;subject:string;message:string;status:string;createdAt
 type Step='tickets'|'service'|'release'|'issue'|'contact'|'review'|'done';
 type Receipt={id:number;href:string;contactSaved:boolean};
 const services:Array<{id:SupportService;label:string;description:string}>=[{id:'distribution',label:'Distribution',description:'Releases, stores & QC'},{id:'beats',label:'Beat Store',description:'Licences & downloads'},{id:'studio',label:'Studio',description:'Mixing & mastering'},{id:'payments',label:'Payments',description:'Billing & subscriptions'},{id:'account',label:'My account',description:'Access & profile'},{id:'general',label:'Something else',description:'Talk to our team'}];
-const initialMessage:Message={role:'assistant',text:'Hi, I am your HYMN support guide. What can I help you with today? Choose a topic below, or tell me what happened.'};
+const initialMessage:Message={role:'assistant',text:'Hi, how can I help you? I can explain release costs, help you choose your next step, or guide you to the HYMN team. Ask a question below.'};
 
 export function SupportChatWidget({userId}:{userId:number|null}){
   const pathname=usePathname(),[mounted,setMounted]=useState(false),[open,setOpen]=useState(false);
@@ -35,7 +36,7 @@ export function SupportChatWidget({userId}:{userId:number|null}){
 
   const [tickets,setTickets]=useState<ChatTicket[]>([]),[ticketLoading,setTicketLoading]=useState(false),[ticketError,setTicketError]=useState(''),[ticketMore,setTicketMore]=useState(false);
   const ticketVersion=useRef(0);
-  useEffect(()=>{setMounted(true);const show=()=>setOpen(true);window.addEventListener('hymn-support-chat-open',show);if(new URLSearchParams(window.location.search).get('supportChat')==='1')show();return()=>window.removeEventListener('hymn-support-chat-open',show);},[]);
+  useEffect(()=>{setMounted(true);const show=(event?:Event)=>{const draft=(event as CustomEvent<{question?:string}>|undefined)?.detail?.question;if(typeof draft==='string')setQuestion(draft.slice(0,3000));setOpen(true);};window.addEventListener('hymn-support-chat-open',show);if(new URLSearchParams(window.location.search).get('supportChat')==='1')show();return()=>window.removeEventListener('hymn-support-chat-open',show);},[]);
   async function loadTickets(offset=0){
     const version=++ticketVersion.current;setTicketLoading(true);setTicketError('');
     try{const response=await fetch(`/api/support-chat?view=tickets&offset=${offset}`,{cache:'no-store',signal:AbortSignal.timeout(20000)});const data=await response.json().catch(()=>null);if(version!==ticketVersion.current)return;if(!response.ok||!Array.isArray(data?.tickets))throw Error(data?.error||'Tickets could not be loaded. Please retry.');setTickets(previous=>offset?[...new Map([...previous,...data.tickets].map((ticket:ChatTicket)=>[ticket.id,ticket])).values()]:data.tickets);setTicketMore(Boolean(data.hasMore));}
@@ -94,6 +95,6 @@ export function SupportChatWidget({userId}:{userId:number|null}){
       </div>
       {!step?<form className={styles.composer} onSubmit={event=>{event.preventDefault();void ask(question);}}><label className={styles.srOnly} htmlFor="hymn-support-question">Your support question</label><textarea id="hymn-support-question" rows={1} maxLength={3000} value={question} onChange={event=>setQuestion(event.target.value)} placeholder="Type your question…" onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void ask(question);}}}/><button type="submit" disabled={loading||!question.trim()} aria-label="Send question"><Send size={18}/></button></form>:null}
     </section></>:null}
-    {!open?<div className={styles.dock}><button type="button" ref={launcherButton} className={styles.launcher} aria-label="Open HYMN support" aria-expanded={false} aria-controls="hymn-support-chat" onClick={()=>setOpen(true)}><SupportMascot/></button></div>:null}
+    <SupportLauncher open={open} onOpen={()=>setOpen(true)} launcherRef={launcherButton}/>
   </div>,document.body);
 }

@@ -10,6 +10,7 @@ async function main(){
   assert.equal(answerSupportQuestion('Where is my UPC?').title,'Find a UPC or ISRC');
   assert.match(answerSupportQuestion('My money was deducted but payment failed').answer,/before paying again/);
   assert.match(answerSupportQuestion('Is my first release free?').answer,/eligible first single/i);
+  assert.equal(answerSupportQuestion('What do I need for my first release?').title,'Your first release');
   assert.equal(answerSupportQuestion('nonsensewordxyz').matched,false);
   assert.equal(answerSupportQuestion('I need a refund','distribution').service,'payments','A new topic must not stay locked to the previous service.');
   assert.equal(supportContactPhone('+1 202 555 0123'),'+12025550123');

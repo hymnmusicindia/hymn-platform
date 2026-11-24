@@ -1,9 +1,10 @@
 import { GrowthPlanner } from '@/components/growth-planner';
+import { VisitorReleaseHero } from '@/components/visitor-release-hero';
 import { PublicHomeInformation } from "@/components/public-home-information";
 import { publicPageMetadata } from '@/lib/seo';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Check, ShieldCheck, ArrowUpRight, FileAudio, Image as ArtworkIcon, ListMusic } from 'lucide-react';
+import { ShieldCheck, ArrowUpRight, FileAudio, Image as ArtworkIcon, ListMusic } from 'lucide-react';
 import { getTrackPricingQuote } from '@/lib/distribution-pricing';
 import { ArrowRight, Disc3, Headphones, Radio, Instagram, Youtube } from 'lucide-react';
 import { buildHomePathBanners } from '@/components/home-path-banners';
@@ -17,35 +18,15 @@ import { getSession } from '@/lib/session';
 import { destinationForRole } from '@/lib/routes';
 import './homepage.css';
 export const metadata = publicPageMetadata('Music Distribution, Beats & Artist Services', 'Get your music ready and release it worldwide with HYMN. Beats, mixing, mastering and distribution for independent artists.', '/');
-const images = {hero:{alt:'Artist performing in front of a massive concert crowd'}};
 export default async function HomePage() {
  const [session, { beats, producerProfiles, featuredReviews, featuredReleases }] = await Promise.all([getSession(), getPublicHomePreview()]);
  const { catalog } = buildBeatStorefront(beats, producerProfiles);
  const singleReleasePrice = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(getTrackPricingQuote(1).finalPrice);
  const banners = buildHomePathBanners({ featuredReleases, catalog, signedIn: Boolean(session) });
- if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners}/><HomeReviewsCarousel reviews={featuredReviews}/><PublicHomeInformation/></LandingWorkspace></main>;
+ if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners}/><HomeReviewsCarousel reviews={featuredReviews} signedIn/><PublicHomeInformation/></LandingWorkspace></main>;
  return <main id="home" className="hymn-landing landing-visitor"><LandingWorkspace workspaceHref="/login">
   <div className="visitor-intro"><span>Independent music. Real possibilities.</span><nav aria-label="Homepage sections"><a href="#released">The artists</a><a href="#artist-growth">Your growth</a><Link href="/contact">Talk to HYMN <ArrowUpRight size={14}/></Link></nav></div>
-  <section className="landing-hero force-dark">
-    <div className="visitor-hero-photo"><picture><source media="(max-width: 640px)" srcSet="/images/home-hero-640.webp"/><img src="/images/home-hero-1280.webp" alt={images.hero.alt} fetchPriority="high" loading="eager" decoding="async"/></picture></div>
-    <div className="landing-hero-content">
-      <div className="landing-hero-copy">
-        <p className="landing-eyebrow"><span className="visitor-status-dot"/> MADE FOR INDEPENDENT ARTISTS</p>
-        <h1>Get your music ready.<br/><span className="home-hero-promise">Release it worldwide.</span></h1>
-        <p>You made something worth hearing. Let&apos;s help you take it from your room to the world, with beats, studio support and music distribution in one place.</p>
-        <div className="visitor-hero-actions"><Link href="/first-release" className="visitor-primary">Start my first release <ArrowUpRight size={18}/></Link><Link href="/pricing" className="visitor-secondary">See release costs <ArrowRight size={16}/></Link></div>
-        <p className="visitor-offer-note">Your first single may qualify for covered base distribution. Optional extras cost separately.</p>
-        <div className="visitor-hero-assurances"><span><Check size={15}/>Clear costs before checkout</span><span><Check size={15}/>Support from HYMN</span></div>
-      </div>
-      <div className="visitor-record-scene" aria-hidden="true">
-        <div className="visitor-record-orbit"/>
-        <div className="visitor-vinyl"><div><span>HYMN</span><small>INDEPENDENT BY NATURE</small></div></div>
-        <div className="visitor-record-sleeve"><span>YOUR NEXT<br/>CHAPTER.</span><div className="visitor-sleeve-flower"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" strokeWidth="12"><path d="M60 8v104M8 60h104M23 23l74 74M23 97l74-74"/></svg></div><small>WRITTEN BY YOU. HEARD WORLDWIDE.</small></div>
-        <div className="visitor-release-note"><span><Radio size={15}/></span><div>Distribution from {singleReleasePrice}<small>Per track. Optional extras cost separately.</small></div></div>
-        <p className="visitor-scene-caption">A little more heard. A little more you.</p>
-      </div>
-    </div>
-  </section>
+  <VisitorReleaseHero singleReleasePrice={singleReleasePrice} releases={featuredReleases}/>
   <section className="visitor-trust" aria-label="Our commitments"><div><ShieldCheck size={21}/><span><strong>Your music stays yours.</strong><small>Review rights and terms before you submit.</small></span></div><div><span className="visitor-zero">0%</span><span><strong>Additional HYMN royalty commission.</strong><small>The distribution partner&apos;s share applies.</small></span></div><Link href="/welcome">New here? Find your next step <ArrowUpRight size={17}/></Link></section>
   <section className="visitor-destinations" aria-label="Music distribution destinations"><p>Meet your listeners<br/><strong>where they already listen.</strong></p><div>{[
     {name:'Spotify',src:'/assets/store-logos/wordmark-spotify.png'},

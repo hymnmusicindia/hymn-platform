@@ -26,32 +26,43 @@ export function PostPurchaseReviewPrompt() {
     let active = true;
     let pending: EligiblePurchase | null = null;
     let departed = recentlyLeftReviewConfirmation();
+    let manual = new URLSearchParams(window.location.search).get('review') === '1';
+    const notice = (message: string) => window.dispatchEvent(new CustomEvent('hymn:purchase-review-notice', { detail: message }));
+    if (manual) { const url = new URL(window.location.href); url.searchParams.delete('review'); window.history.replaceState(window.history.state, '', url); }
     const tryShow = () => {
       if (!active || !pending || visible.current) return;
-      if (deferPurchaseReview(window.location.pathname, window.location.search)) return;
+      if (!manual && deferPurchaseReview(window.location.pathname, window.location.search)) return;
       if (document.querySelector('[data-release-review-confirmation]')) return;
       // Cart drawers stay mounted when closed. Only an active modal may defer feedback.
       if ([...document.querySelectorAll('[role="dialog"][aria-modal="true"]:not([data-purchase-review])')].some(dialog => !dialog.closest('[aria-hidden="true"],[hidden],[inert]'))) return;
-      if (pending.purchaseType !== "beat" && !departed && !recentlyLeftReviewConfirmation()) return;
+      if (!manual && pending.purchaseType !== "beat" && !departed && !recentlyLeftReviewConfirmation()) return;
       let snoozedUntil = 0;
       try { snoozedUntil = Number(localStorage.getItem(`hymn-review-snooze:${pending.purchaseType}:${pending.purchaseId}`) || 0); } catch {}
-      if (snoozedUntil > Date.now()) { pending = null; return; }
-      const eligible = pending; pending = null; visible.current = true;
+      if (!manual && snoozedUntil > Date.now()) { pending = null; return; }
+      const eligible = pending; pending = null; manual = false; visible.current = true;
       setRating(0); setReviewId(null); setText(""); setError(""); setPurchase(eligible);
     };
     const loadEligible = async () => {
       try {
         const response = await fetch("/api/reviews/eligible", { cache:"no-store" });
-        if (!response.ok || !active) return;
+        if (!active) return;
+        if (!response.ok) { if (manual) notice("Could not load your purchases. Please try again."); return; }
         const data = await response.json();
         if (active && data.eligible) { pending = data.eligible; tryShow(); }
-      } catch {}
+        else if (active && manual) { notice("Reviews open after a completed purchase. Already shared yours? Thank you."); manual = false; }
+      } catch { if (active && manual) notice("Could not load your purchases. Please try again."); }
     };
     const handlePurchase = (event: Event) => {
       pending = (event as CustomEvent<EligiblePurchase>).detail;
       if (pending && pending.purchaseType !== "beat") { departed = false; clearReviewConfirmationDeparture(); }
       tryShow();
     };
+    const handleManual = (event: Event) => {
+      const eligible = (event as CustomEvent<EligiblePurchase>).detail;
+      if (!eligible || !['beat', 'service', 'subscription'].includes(eligible.purchaseType) || !Number.isSafeInteger(eligible.purchaseId) || eligible.purchaseId < 1 || visible.current) return;
+      manual = true; pending = eligible; tryShow();
+    };
+    window.addEventListener("hymn:purchase-review-open", handleManual);
     const handleLeft = () => { departed = true; if (pending) tryShow(); else void loadEligible(); };
     window.addEventListener("hymn:purchase-review-eligible", handlePurchase);
     window.addEventListener(CONFIRMATION_LEFT_EVENT, handleLeft);
@@ -59,7 +70,7 @@ export function PostPurchaseReviewPrompt() {
     const observer = new MutationObserver(tryShow);
     observer.observe(document.body, { childList:true, subtree:true });
     void loadEligible();
-    return () => { active = false; observer.disconnect(); window.removeEventListener("hymn:purchase-review-eligible", handlePurchase); window.removeEventListener(CONFIRMATION_LEFT_EVENT, handleLeft); };
+    return () => { active = false; observer.disconnect(); window.removeEventListener("hymn:purchase-review-open", handleManual); window.removeEventListener("hymn:purchase-review-eligible", handlePurchase); window.removeEventListener(CONFIRMATION_LEFT_EVENT, handleLeft); };
   }, []);
   function saveRating() {
     if (!purchase || !rating || isPending || reviewId) return;
