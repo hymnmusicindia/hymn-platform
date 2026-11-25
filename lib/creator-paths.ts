@@ -4,3 +4,21 @@ export const creatorPaths = {
   curator: { title: 'Playlist curators', eyebrow: 'YOUR TASTE. A THOUGHTFUL LISTEN.', headline: 'Give new music a considered listen.', copy: 'Bring your playlist to HYMN and help artists understand where their music fits.', action: 'Add my playlist', href: '/dashboard/playlists?reviewView=curator', steps: ['Sign in', 'Add your playlist', 'Verify ownership'], needs: ['A Spotify playlist you control', 'Cover artwork and audience details', 'Your review fee and queue capacity'], note: 'HYMN checks playlist ownership before opening your listing. Reviews require personal listening; placement and streams are never guaranteed.', preview: 'Your curator listing', detail: 'Your audience. Your editorial choice.' }
 } as const;
 export type CreatorRole = keyof typeof creatorPaths;
+
+export const creatorPerks = {
+  producer: [
+    { title: 'Purchase-linked licence PDFs', copy: 'HYMN prepares the agreement for the purchased licence and keeps its terms with the order.' },
+    { title: 'Your prices. Your identity.', copy: 'Set licence prices and share a storefront built around your producer profile.' },
+    { title: 'Private file delivery', copy: 'Purchased files are tied to buyer access. You remain responsible for the rights you offer.' }
+  ],
+  engineer: [
+    { title: 'A portfolio ready to share', copy: 'Show your selected work, services, starting price and delivery time in one profile.' },
+    { title: 'One project workspace', copy: 'Keep source files, client messages, revisions and deliveries together.' },
+    { title: 'A clearer delivery process', copy: 'Track project progress and two included revisions, with paid revision requests when needed.' }
+  ],
+  curator: [
+    { title: 'Your fee. Your capacity.', copy: 'Set your review fee and the number of active reviews you can take on.' },
+    { title: 'A queue that keeps you organised', copy: 'Track submissions, listening notes and feedback deadlines in one place.' },
+    { title: 'Your editorial independence', copy: 'Make your own fit decisions. A paid review never promises placement or streams.' }
+  ]
+} as const;
