@@ -7,7 +7,7 @@ import {activeWindows,acceptsAssignmentsNow} from './availability-rules';
 import {employeeCallSlot} from './availability';
 import {syncCallbackCalendar} from './callback-calendar';
 import {callWorkload} from './call-workload';
-import {callLoadScore} from './call-allocation';
+import {callLoadScore,callRepresentativePriority} from './call-allocation';
 import {activityOpen} from './work-station-policy';
 import {internalIdentities,matchesInternalIdentity} from './internal-identity';
 import {whatsappNumber} from './phone';
@@ -80,7 +80,7 @@ export async function syncDailyCallSchedule(tx:Prisma.TransactionClient,a:Actor,
    if(old?.kind==='CALL'||old?.status==='SCHEDULED'&&old.startsAt>=now){result.held++;continue;}
    const priorToday=today.find(t=>t.id===task.id);
    const eligible=members.filter(m=>m.availability==='AVAILABLE'&&acceptsAssignmentsNow(m.preferences,now)&&(used.get(m.id)||0)-(priorToday?.ownerId===m.id?1:0)<(capacities.get(m.id)||0)&&(!Array.isArray(callContext(m.preferences).crm?.callServices)||!callContext(m.preferences).crm.callServices.length||callContext(m.preferences).crm.callServices.includes(c.service)));
-   eligible.sort((l,r)=>callLoadScore(l.preferences,load.get(l.id)||0)-callLoadScore(r.preferences,load.get(r.id)||0)||l.id.localeCompare(r.id));
+   eligible.sort((l,r)=>callRepresentativePriority(r)-callRepresentativePriority(l)||callLoadScore(l.preferences,load.get(l.id)||0)-callLoadScore(r.preferences,load.get(r.id)||0)||l.id.localeCompare(r.id));
    let assigned=false;
    for(const member of eligible){
      if(Date.now()>deadline)break;

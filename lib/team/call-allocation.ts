@@ -8,3 +8,9 @@ export function callAllocationWeight(preferences: unknown) {
 export function callLoadScore(preferences: unknown, openCalls: number) {
   return (openCalls + 1) / callAllocationWeight(preferences);
 }
+
+/** Dedicated call representatives take new call work before backup callers. */
+export function callRepresentativePriority(member: { preferences: unknown; role: { name: string } }) {
+  const crm = (member.preferences as { crm?: { workRole?: string } } | null)?.crm;
+  return crm?.workRole === 'caller' || /call representative/i.test(member.role.name) ? 1 : 0;
+}

@@ -6,7 +6,7 @@ import { callSlotFromSnapshot } from "./call-capacity";
 import { callTaskWhere } from "./daily-call-policy";
 import { indiaWorkday } from "./daily-work";
 import { callWorkload } from "./call-workload";
-import { callLoadScore } from "./call-allocation";
+import { callLoadScore, callRepresentativePriority } from "./call-allocation";
 import { expertiseScore } from "@/lib/consultation-domain";
 
 export async function loadCallAllocation(tx: Prisma.TransactionClient, workspaceId: string, after: Date, eventId?: string, taskId?: string) {
@@ -32,7 +32,7 @@ export async function allocateCustomerCall(tx: Prisma.TransactionClient, options
   const order = new Map(rotated.map((member, index) => [member.id, index]));
   const workload = snapshot.workload;
   const expertise = (member: typeof eligible[number]) => expertiseScore({ ...member, name: member.user.name, load: 0, lastAssignedAt: 0 }, options.interests || []);
-  eligible.sort((a, b) => Number(b.id === options.preferredMemberId) - Number(a.id === options.preferredMemberId) || expertise(b) - expertise(a) || callLoadScore(a.preferences, workload.get(a.id) || 0) - callLoadScore(b.preferences, workload.get(b.id) || 0) || (order.get(a.id) || 0) - (order.get(b.id) || 0));
+  eligible.sort((a, b) => Number(b.id === options.preferredMemberId) - Number(a.id === options.preferredMemberId) || callRepresentativePriority(b) - callRepresentativePriority(a) || expertise(b) - expertise(a) || callLoadScore(a.preferences, workload.get(a.id) || 0) - callLoadScore(b.preferences, workload.get(b.id) || 0) || (order.get(a.id) || 0) - (order.get(b.id) || 0));
   for (const member of eligible) {
     const reservations = snapshot.events.filter(event => event.assigneeId === member.id && event.status === "SCHEDULED");
     const dates = [...snapshot.tasks.filter(task => task.ownerId === member.id && task.dueAt).map(task => task.dueAt!), ...snapshot.events.filter(event => event.assigneeId === member.id && !event.followUpTaskId && ["CALL", "FOLLOW_UP"].includes(event.kind)).map(event => event.startsAt)];
