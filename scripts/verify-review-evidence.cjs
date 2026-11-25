@@ -29,10 +29,10 @@ const { chromium, expect } = require('@playwright/test');
       const watch = page.getByRole('button', { name: "Watch Viraj's video review of HYMN", exact: true });
       await expect(watch).toBeVisible(); assert.equal(videoRequests, 0, 'No video download before a visitor presses play');
       await expect(page.getByRole('dialog')).toHaveCount(0); // Automatic review requests remain deferred.
-      const carousel=page.getByRole('region',{name:'Artist reviews. Hover, focus or select a review to pause.',exact:true});
+      const carousel=page.getByRole('region',{name:'Artist reviews. Focus or select a review to pause.',exact:true});
       assert.equal(await page.getByRole('button',{name:/Next artist review|Previous artist review/}).count(),0,'No manual arrow controls');
       await carousel.scrollIntoViewIfNeeded();await page.mouse.move(0,0);const before=await carousel.evaluate(el=>el.scrollLeft);await page.waitForTimeout(700);const after=await carousel.evaluate(el=>el.scrollLeft);assert.equal(reduced?after===before:after>before+5,true,'Automatic movement respects reduced motion');
-      const textReview=page.getByRole('button',{name:'Review by Artist 1',exact:true});await textReview.hover();await expect(textReview).toHaveAttribute('data-review-active','true');const hovered=await carousel.evaluate(el=>el.scrollLeft);await page.waitForTimeout(300);assert.equal(await carousel.evaluate(el=>el.scrollLeft),hovered,'Hover pauses movement');await textReview.click();await page.mouse.move(0,0);const pinned=await carousel.evaluate(el=>el.scrollLeft);await page.waitForTimeout(300);assert.equal(await carousel.evaluate(el=>el.scrollLeft),pinned,'Clicked review remains active');await page.locator('#outside').click();
+      const textReview=page.getByRole('button',{name:'Review by Artist 1',exact:true});await textReview.hover();await expect(textReview).toHaveAttribute('data-review-active','true');const hovered=await carousel.evaluate(el=>el.scrollLeft);await page.waitForTimeout(300);assert.equal(reduced?await carousel.evaluate(el=>el.scrollLeft)===hovered:await carousel.evaluate(el=>el.scrollLeft)>hovered,true,'Hover keeps movement running unless reduced motion');await textReview.click();await page.mouse.move(0,0);const pinned=await carousel.evaluate(el=>el.scrollLeft);await page.waitForTimeout(300);assert.equal(await carousel.evaluate(el=>el.scrollLeft),pinned,'Clicked review remains active');await page.locator('#outside').click();
       await watch.click(); await expect(page.getByRole('dialog')).toHaveCount(0);
       await page.waitForFunction(() => { const video = document.querySelector('video'); return video && Number.isFinite(video.duration); });
       const metadata = await page.locator('video').evaluate(video => ({ duration: video.duration, width: video.videoWidth, controls: video.controls }));
@@ -59,7 +59,7 @@ const { chromium, expect } = require('@playwright/test');
       assert.match(await page.getByRole('link', { name: 'Share your experience', exact: false }).getAttribute('href'), /review%3D1/);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); assert.deepEqual(errors, []);
       await page.screenshot({ path: path.join(dir, `carousel-${width}.png`), fullPage: true });
-      console.log(`PASS ${width}px ${reduced?'reduced':'normal'} motion: supplied video, click-only loading, original metadata, native inline controls, automatic movement, hover/select pause, reduced motion, no arrows or popup, verified-purchase review, critical feedback, no-purchase and retry states, guest sign-in.`);
+      console.log(`PASS ${width}px ${reduced?'reduced':'normal'} motion: supplied video, click-only loading, original metadata, native inline controls, automatic movement, uninterrupted hover, select pause, reduced motion, no arrows or popup, verified-purchase review, critical feedback, no-purchase and retry states, guest sign-in.`);
       await context.close();
     }
   } finally { await browser.close(); }

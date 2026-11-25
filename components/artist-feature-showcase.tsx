@@ -8,6 +8,17 @@ import { homePlaylists } from '@/lib/home-playlists';
 import { CoverArt } from './cover-art';
 import styles from './artist-feature-showcase.module.css';
 
+const storeLogos = [
+  { name: 'Spotify', src: '/assets/store-logos/wordmark-spotify.png' },
+  { name: 'Apple Music', src: '/assets/store-logos/wordmark-apple.png' },
+  { name: 'YouTube Music', src: '/assets/store-logos/wordmark-youtube.png' },
+  { name: 'Amazon Music', src: '/assets/store-logos/wordmark-amazon.png' },
+  { name: 'JioSaavn', src: '/assets/store-logos/wordmark-jiosaavn.png' },
+  { name: 'Deezer', src: '/assets/store-logos/wordmark-deezer.png' },
+  { name: 'TIDAL', src: '/assets/store-logos/wordmark-tidal.png' },
+  { name: 'SoundCloud', src: '/assets/store-logos/wordmark-soundcloud.png' }
+] as const;
+
 const features = [
   { label: 'Find your sound', title: 'Give your next idea a sound.', copy: 'License a beat. Work with an engineer. Make a record that feels like you.', href: '/beat-store', action: 'Explore beats', icon: AudioLines },
   { label: 'Reach more places', title: 'Be where your listeners are.', copy: 'Submit your finished music for distribution to the platforms they already use.', href: '/distribution', action: 'Explore distribution', icon: Radio },
@@ -15,25 +26,37 @@ const features = [
   { label: 'Playlist reviews', title: 'Find a fresh pair of ears.', copy: 'Personal listening and written feedback from curators. Reviews do not guarantee placement or streams.', href: '/login?next=%2Fdashboard%2Fplaylists', action: 'Explore playlist reviews', icon: ListMusic }
 ] as const;
 
+function ArtworkRails({ covers, stores = false }: { covers: { src: string; title: string }[]; stores?: boolean }) {
+  const unique = [...new Map(covers.filter(cover => cover.src).map(cover => [cover.src, cover])).values()];
+  const pool = unique.length ? Array.from({ length: Math.max(8, unique.length) }, (_, index) => unique[index % unique.length]) : [];
+  return <div className={styles.coverRails} data-kind={stores ? "stores" : "artwork"} aria-hidden="true">{[0, 1].map(row => <div className={styles.coverTrack} key={row} data-direction={row === 1 ? 'reverse' : 'forward'}>{[0, 1].map(copy => <div className={styles.coverGroup} key={copy}>{pool.map((cover, index) => <div className={styles.wallCover} key={`${index}-${cover.title}`}>{stores ? <Image unoptimized src={cover.src} alt="" width={180} height={180}/> : <CoverArt src={cover.src} alt="" previewWidth={192} width={180} height={180}/>}</div>)}</div>)}</div>)}</div>;
+}
+
 export function ArtistFeatureShowcase({ releases, beats = [] }: { beats?: { title: string; coverImage: string; producerName: string }[]; releases: { id: number; title: string; artistName: string; artworkUrl: string }[] }) {
   const { root, index: selected, select, paused, tapped, visible, handlers } = useShowcaseRotation(features.length);
   const feature = features[selected];
-  const beatCovers = [...new Map(beats.filter(beat => beat.coverImage).map(beat => [beat.coverImage, beat])).values()];
-  const coverPool = beatCovers.length ? Array.from({ length: Math.max(8, beatCovers.length) }, (_, index) => beatCovers[index % beatCovers.length]) : [];
+  const beatCovers = beats.map(beat => ({ src: beat.coverImage, title: beat.title }));
+  const releaseCovers = releases.map(release => ({ src: release.artworkUrl, title: release.title }));
   function openPlanner() {
     if (selected !== 2) return;
     const planner = document.querySelector<HTMLDetailsElement>('.visitor-planner');
     if (planner) planner.open = true;
   }
   return <section ref={root} tabIndex={0} {...handlers} data-feature-slide={selected} data-rotation-paused={paused} aria-roledescription="carousel" aria-describedby="feature-rotation-help" className={`landing-next-move ${styles.root}`} data-visible={visible} aria-labelledby="next-move-title">
-    <span id="feature-rotation-help" className={styles.srOnly}>Hover to pause. Tap the background on a phone to pause or resume. Use arrow keys to choose a feature.</span><header><p className={styles.eyebrow}>MORE POSSIBILITIES FOR YOUR MUSIC</p><h2 id="next-move-title">Your next chapter.<br/><span>Built with HYMN.</span></h2></header>
+    <span id="feature-rotation-help" className={styles.srOnly}>Tap the background on a phone to pause or resume. Use arrow keys to choose a feature.</span><header><p className={styles.eyebrow}>MORE POSSIBILITIES FOR YOUR MUSIC</p><h2 id="next-move-title">Your next chapter.<br/><span>Built with HYMN.</span></h2></header>
     <div className={styles.tabs} role="group" aria-label="Explore how HYMN helps artists">{features.map((item, index) => <button type="button" key={item.label} aria-pressed={selected === index} onClick={() => select(index)}><item.icon size={16}/>{item.label}</button>)}</div>
     <div className={styles.stage} aria-live={paused ? "polite" : "off"}>
-      <div key={selected} className={styles.scene} aria-hidden={selected === 2 ? true : undefined} data-scene={selected}>
-        {selected === 0 ? <div className={styles.beatWall}>
-          <div className={styles.coverRails} aria-hidden="true">{[0, 1].map(row => <div className={styles.coverTrack} key={row} data-direction={row === 1 ? 'reverse' : 'forward'}>{[0, 1].map(copy => <div className={styles.coverGroup} key={copy}>{coverPool.map((beat, index) => <div className={styles.wallCover} key={`${index}-${beat.title}`}><CoverArt src={beat.coverImage} alt="" previewWidth={192} width={180} height={180}/></div>)}</div>)}</div>)}</div>
-          <div className={styles.beatWallCopy}><span>HYMN BEAT STORE</span><h3>Find the beat<br/>that suits you.</h3></div>
-        </div> : selected === 1 ? <div className={styles.network}><div className={styles.networkCore}>{releases[0] ? <CoverArt src={releases[0].artworkUrl} alt="" width={150} height={150}/> : <Disc3 size={65}/>}</div>{[{name:'Spotify',src:'wordmark-spotify.png'},{name:'Apple Music',src:'wordmark-apple.png'},{name:'YouTube Music',src:'wordmark-youtube.png'},{name:'Amazon Music',src:'wordmark-amazon.png'}].map((store, index) => <span className={styles.destination} key={store.name} data-position={index}><Image unoptimized src={`/assets/store-logos/${store.src}`} alt={store.name} width={132} height={40}/></span>)}<svg viewBox="0 0 600 340" preserveAspectRatio="none"><path d="M300 170Q200 40 90 70M300 170Q400 40 510 70M300 170Q200 300 90 270M300 170Q400 300 510 270"/></svg><span className={styles.sceneLabel}>ONE RELEASE. MORE PLACES TO BE FOUND.</span></div> : selected === 3 ? <div className={styles.playlistCollection}>{homePlaylists.map(playlist => <a href={playlist.href} key={playlist.title} target="_blank" rel="noreferrer"><Image unoptimized src={playlist.cover} alt={playlist.title} width={140} height={140}/><span>{playlist.title}</span></a>)}</div> : <div className={styles.catalogue}><div className={styles.sleeves}>{Array.from({ length: 3 }, (_, index) => { const release = releases[index % Math.max(1, releases.length)]; return <div key={index}>{release ? <CoverArt src={release.artworkUrl} alt="" width={160} height={160}/> : <Disc3 size={75}/>}</div>; })}</div><div className={styles.timeline}><i/><span/><i/><span/><i/></div><span className={styles.sceneLabel}>YOUR FIRST. YOUR NEXT. YOUR BODY OF WORK.</span></div>}
+      <div key={selected} className={styles.scene} data-scene={selected}>
+        <div className={styles.beatWall} data-story={selected}>
+          <ArtworkRails stores={selected === 1} covers={selected === 0 ? beatCovers : selected === 1 ? storeLogos.map(store => ({ src: store.src, title: store.name })) : selected === 3 ? homePlaylists.map(playlist => ({ src: playlist.cover, title: playlist.title })) : releaseCovers}/>
+          <div className={styles.beatWallCopy} data-has-details={selected !== 0}>
+            <span>{['HYMN BEAT STORE', 'WORLDWIDE DISTRIBUTION', 'YOUR RELEASE JOURNEY', 'HYMN PLAYLIST REVIEWS'][selected]}</span>
+            <h3>{selected === 0 ? <>Find the beat<br/>that suits you.</> : selected === 1 ? <>Be where<br/>listeners listen.</> : selected === 2 ? <>Your music.<br/>A body of work.</> : <>Your track.<br/>A fresh perspective.</>}</h3>
+          </div>
+          {selected === 1 && <div className={styles.storeRibbon}>{storeLogos.slice(0, 4).map(store => <span key={store.name}><Image unoptimized src={store.src} alt={store.name} width={132} height={40}/></span>)}</div>}
+          {selected === 2 && <div className={styles.catalogueJourney} aria-label="Build your catalogue one release at a time"><span>Your first</span><i aria-hidden="true"/><span>Your next</span><i aria-hidden="true"/><span>Your body of work</span></div>}
+          {selected === 3 && <div className={styles.playlistRibbon}>{homePlaylists.map(playlist => <a key={playlist.title} href={playlist.href} target="_blank" rel="noreferrer" aria-label={`Listen to ${playlist.title} on Spotify`}><Image unoptimized src={playlist.cover} alt="" width={80} height={80}/></a>)}</div>}
+        </div>
       </div>
       <div className={styles.benefit}><span>{["Stand out with a sound that is yours", "More destinations for listeners to find you", "More music for listeners to return to", "Feedback to shape your next move"][selected]}</span><small>{tapped ? "Paused. Tap to continue" : "Explore what comes next"}</small></div><div className={styles.caption} key={`copy-${selected}`}><div><h3>{feature.title}</h3><p>{feature.copy}</p></div><Link href={feature.href} onClick={openPlanner}>{feature.action}<ArrowUpRight size={16}/></Link></div>
     </div>

@@ -1,20 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState, type FocusEvent, type TouchEvent, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type FocusEvent, type TouchEvent, type KeyboardEvent } from 'react';
 
-/** Shared autoplay: mouse hover, keyboard focus and a deliberate touch tap pause it. */
-export function useShowcaseRotation(count: number, interval = 7000) {
+/** Shared autoplay: keyboard focus and a deliberate touch tap pause it. */
+export function useShowcaseRotation(count: number, interval = 4500) {
   const root = useRef<HTMLElement>(null);
   const touch = useRef<{ x: number; y: number } | null>(null);
   const [index, setIndex] = useState(0);
   const [cycle, setCycle] = useState(0);
-  const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [tapped, setTapped] = useState(false);
   const [visible, setVisible] = useState(false);
   const [pageVisible, setPageVisible] = useState(true);
   const [reduced, setReduced] = useState(false);
-  const paused = hovered || focused || tapped || !visible || !pageVisible || reduced;
+  const paused = focused || tapped || !visible || !pageVisible || reduced;
   useEffect(() => {
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     const motion = () => setReduced(media.matches);
@@ -32,8 +31,6 @@ export function useShowcaseRotation(count: number, interval = 7000) {
   }, [count, interval, index, cycle, paused]);
   function select(next: number) { setIndex((next + count) % count); setCycle(current => current + 1); }
   const handlers = {
-    onPointerEnter(event: PointerEvent<HTMLElement>) { if (event.pointerType === 'mouse') setHovered(true); },
-    onPointerLeave() { setHovered(false); },
     onFocusCapture(event: FocusEvent<HTMLElement>) { setFocused(event.target.matches(':focus-visible')); },
     onBlurCapture(event: FocusEvent<HTMLElement>) { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); },
     onTouchStart(event: TouchEvent<HTMLElement>) { if (event.touches.length !== 1) { touch.current = null; return; } const start = event.touches[0]; touch.current = start ? { x: start.clientX, y: start.clientY } : null; },

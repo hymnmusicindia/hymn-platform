@@ -18,7 +18,7 @@ const slides = [
   { name: 'Growth', title: 'More than a release.', promise: 'A bigger artist presence.', copy: 'Shape your sound. Reach streaming platforms. Get curator feedback and plan what comes next.', action: 'Explore artist services', href: '/services', secondary: 'Hear from artists', secondaryHref: '#artist-reviews' },
   { name: 'Artists', title: 'Independent music.', promise: 'Already out there.', copy: 'Real releases. Real artists. Explore the music they brought to the world with HYMN.', action: 'Explore artist releases', href: '#released', secondary: 'Hear from artists', secondaryHref: '#artist-reviews' }
 ] as const;
-const INTERVAL = 7000;
+const INTERVAL = 4500;
 
 export function VisitorReleaseHero({ releases, beats = [] }: { releases: ShowcaseRelease[]; beats?: ShowcaseBeat[] }) {
   const { root, index: active, select, paused, tapped, handlers } = useShowcaseRotation(slides.length, INTERVAL);
@@ -26,7 +26,7 @@ export function VisitorReleaseHero({ releases, beats = [] }: { releases: Showcas
   const release = releases[0];
   const backgrounds = [release?.artworkUrl || '/images/home-hero-1280.webp', homePlaylists[0].cover, beats[0]?.coverImage || '/home-studio.jpg', '/home-studio.jpg', '/images/home-hero-1280.webp', releases[1]?.artworkUrl || release?.artworkUrl || '/images/home-hero-1280.webp'];
   return <section ref={root} tabIndex={0} {...handlers} className={`landing-hero force-dark ${styles.hero}`} aria-label="Discover HYMN" aria-describedby="hero-rotation-help" aria-roledescription="carousel" data-hero-slide={active} data-rotation-paused={paused}>
-    <span id="hero-rotation-help" className={styles.srOnly}>Hover to pause. On a phone, tap the background to pause or resume. Use arrow keys to choose a slide. Keyboard focus also pauses rotation.</span>
+    <span id="hero-rotation-help" className={styles.srOnly}>On a phone, tap the background to pause or resume. Use arrow keys to choose a slide. Keyboard focus also pauses rotation.</span>
     <div className={styles.backdrops} aria-hidden="true">{backgrounds.map((src, index) => <div key={index} className={styles.backdrop} data-active={active === index}><CoverArt src={src} alt="" previewWidth={960} width={1200} height={800} loading={index === 0 ? 'eager' : 'lazy'} fetchPriority={index === 0 ? 'high' : 'low'}/></div>)}</div>
     <div className={styles.layout} aria-live={paused ? 'polite' : 'off'} aria-atomic="true">
       <div key={`copy-${active}`} className={styles.copy}>
