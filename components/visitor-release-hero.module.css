@@ -12,3 +12,32 @@
 @media(prefers-reduced-motion:reduce){.earth,.releasePopup,.beatTrack{animation:none!important}.releasePopup,.creatorCard,.playlistGrid>a{transition:none}.beatWindow{overflow-x:auto;mask-image:none}.beatSet[aria-hidden=true]{display:none}}
 
 .hero[data-rotation-paused=true] .beatTrack{animation-play-state:paused}
+
+/* Let the release globe reach the hero edge; keep covers close to its horizon. */
+.hero[data-hero-slide="0"] .visual{align-self:stretch;height:calc(100% + 65px)}
+.releaseScene{height:100%;max-height:none;overflow:visible}
+.earth{width:140%;left:-20%;mask-image:linear-gradient(#000,#000 47%,transparent 55%)}
+.releasePopup{width:clamp(88px,20%,118px);display:block;padding:5px;border-radius:13px;background:#182333c9}
+.releasePopup img{display:block;width:100%;height:auto;aspect-ratio:1;border-radius:8px;object-fit:cover}
+.releasePopup>span{padding:7px 3px 4px;gap:4px}
+.releasePopup strong{font-size:9px}.releasePopup small{font-size:7px}.releasePopup>svg{display:none}
+.releasePopup:nth-child(1){left:39%;top:12%;rotate:-3deg}
+.releasePopup:nth-child(2){left:8%;top:28%;rotate:-7deg}
+.releasePopup:nth-child(3){right:0;top:31%;rotate:6deg}
+.releasePopup:nth-child(4){left:23%;top:53%;rotate:-4deg}
+.releasePopup:nth-child(5){right:15%;top:58%;rotate:5deg}
+.sceneLabel{bottom:25px}
+@media(max-width:760px){
+.hero[data-hero-slide="0"] .visual{height:100%;align-self:center}
+.releaseScene{position:absolute;top:0;height:calc(100% + 58px);max-height:none}
+.earth{width:130%;left:-15%}
+.releasePopup{width:clamp(58px,22%,77px);padding:3px;border-radius:9px}
+.releasePopup img{width:100%;height:auto;border-radius:6px}
+.releasePopup>span{padding:5px 2px 3px;gap:3px}.releasePopup strong{font-size:7px}.releasePopup small{font-size:5px}
+.releasePopup:nth-child(1){left:39%;top:4%}.releasePopup:nth-child(2){left:5%;top:23%}.releasePopup:nth-child(3){right:0;top:27%}.releasePopup:nth-child(4){left:21%;top:49%}.releasePopup:nth-child(5){right:13%;top:55%}
+.sceneLabel{bottom:50px;font-size:4px}
+}
+@media(max-height:700px) and (max-width:760px){.releasePopup{width:52px;padding:2px}.releasePopup>span{padding:3px 2px}.releasePopup strong{font-size:5px}.releasePopup small{display:none}.releasePopup:nth-child(4){top:46%}.releasePopup:nth-child(5){top:51%}.sceneLabel{display:none}}
+@media(max-height:600px) and (min-width:761px){.hero[data-hero-slide="0"] .visual{height:calc(100% + 45px)}.releaseScene{height:100%;max-height:none}.releasePopup{width:65px;padding:3px}.releasePopup img{width:100%;height:auto}.releasePopup>span{padding:4px 2px}.releasePopup strong{font-size:6px}.releasePopup small{font-size:5px}.sceneLabel{bottom:15px}}
+
+@media(min-height:701px) and (max-width:760px){.releasePopup:nth-child(1){top:36%}.releasePopup:nth-child(2){top:49%}.releasePopup:nth-child(3){top:53%}.releasePopup:nth-child(4){top:60%}.releasePopup:nth-child(5){top:62%}}

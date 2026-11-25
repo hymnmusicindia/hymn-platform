@@ -40,7 +40,7 @@ export function VisitorReleaseHero({ releases, beats = [] }: { releases: Showcas
       <div className={styles.visual} key={`visual-${active}`}>
         {active===0 && <div className={styles.releaseScene} data-hero-visual="releases">
           <div className={styles.earth}><Image src="/assets/home/earth-silver-v1.webp" alt="" width={768} height={768} priority/></div>
-          <div className={styles.releasePopups}>{releaseCovers.map((item,index)=><a key={item.title} href={item.href} aria-label={`Explore ${item.title} by ${item.artist}`} className={styles.releasePopup} style={{'--popup':index} as CSSProperties}><CoverArt src={item.cover} alt={item.title} width={60} height={60} previewWidth={120}/><span><strong>{item.title}</strong><small>{item.artist}</small></span><Globe2 size={11}/></a>)}</div>
+          <div className={styles.releasePopups}>{releaseCovers.map((item,index)=><a key={item.title} href={item.href} aria-label={`Explore ${item.title} by ${item.artist}`} className={styles.releasePopup} style={{'--popup':index} as CSSProperties}><CoverArt src={item.cover} alt={item.title} width={180} height={180} previewWidth={240}/><span><strong>{item.title}</strong><small>{item.artist}</small></span><Globe2 size={11}/></a>)}</div>
           <div className={styles.sceneLabel}><Globe2 size={12}/> ONE RELEASE. A WORLD OF POSSIBILITY.</div>
         </div>}
         {active===1 && <div className={styles.beatScene} data-hero-visual="beats">
