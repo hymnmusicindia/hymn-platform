@@ -8,7 +8,7 @@ export function publicPageMetadata(title:string, description:string, path:string
   const url=new URL(path,getPublicAppUrl()).href;
   const socialTitle=title.includes('HYMN')?title:`${title} | HYMN Music`;
   const validImage=image&&/^(https?:\/\/|\/(?!\/))/.test(image)?image:null;
-  const images=[{url:validImage||'/opengraph-image',alt:title,...(!validImage?{width:1200,height:630}:{})}];
+  const images=[{url:validImage||'/opengraph-image?v=hymn-logo-20261125',alt:title,...(!validImage?{width:1200,height:630}:{})}];
   return {title,description,alternates:{canonical:url},openGraph:{type:'website',siteName:'HYMN Music',locale:'en_IN',url,title:socialTitle,description,images},twitter:{card:'summary_large_image',title:socialTitle,description,images:images.map(item=>item.url)}};
 }
 

@@ -19,7 +19,12 @@ import { getPublicHomePreview } from '@/lib/public-home-data';
 import { getSession } from '@/lib/session';
 import { destinationForRole } from '@/lib/routes';
 import './homepage.css';
-export const metadata = publicPageMetadata('Music Distribution, Beats & Artist Services', 'Get your music ready and release it worldwide with HYMN. Beats, mixing, mastering and distribution for independent artists.', '/');
+const homeMetadata = publicPageMetadata('Music Distribution, Beats & Artist Services', 'Release your music worldwide. Find beats, finish your record and explore playlist reviews with HYMN, built for independent artists.', '/');
+export const metadata = {
+ ...homeMetadata,
+ openGraph: { ...homeMetadata.openGraph, title: 'Your music. Ready for the world. | HYMN Music' },
+ twitter: { ...homeMetadata.twitter, title: 'Your music. Ready for the world. | HYMN Music' }
+};
 export default async function HomePage() {
  const [session, { beats, producerProfiles, featuredReviews, featuredReleases }] = await Promise.all([getSession(), getPublicHomePreview()]);
  const { catalog } = buildBeatStorefront(beats, producerProfiles);
@@ -27,15 +32,15 @@ export default async function HomePage() {
  const banners = buildHomePathBanners({ featuredReleases, catalog, signedIn: Boolean(session) });
  if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners}/><HomeReviewsCarousel reviews={featuredReviews} signedIn/><PublicHomeInformation/></LandingWorkspace></main>;
  return <main id="home" className="hymn-landing landing-visitor"><LandingWorkspace workspaceHref="/login">
-  <VisitorReleaseHero releases={featuredReleases.slice(0, 4)} beats={catalog.slice(0, 3).map(beat => ({ id: beat.id, title: beat.title, coverImage: beat.coverImage, producerName: beat.producer.name }))}/>
+  <VisitorReleaseHero releases={featuredReleases.slice(0, 6)} beats={catalog.slice(0, 5).map(beat => ({ id: beat.id, title: beat.title, coverImage: beat.coverImage, producerName: beat.producer.name }))}/>
   <section className="visitor-trust" aria-label="Our commitments"><div><ShieldCheck size={21}/><span><strong>Your music stays yours.</strong></span></div></section>
-  <section className="visitor-destinations" aria-label="Music distribution destinations"><p>Distribute to</p><div>{[
+  <section className="visitor-destinations" aria-label="Music distribution destinations"><p><strong>Distribute to</strong><span>Where your listeners already are.</span></p><div>{[
     {name:'Spotify',src:'/assets/store-logos/wordmark-spotify.png'},
     {name:'Apple Music',src:'/assets/store-logos/wordmark-apple.png'},
     {name:'YouTube Music',src:'/assets/store-logos/wordmark-youtube.png'},
     {name:'Amazon Music',src:'/assets/store-logos/wordmark-amazon.png'},
     {name:'JioSaavn',src:'/assets/store-logos/wordmark-jiosaavn.png'}
-  ].map(store => <Image key={store.name} src={store.src} alt={store.name} width={132} height={40} loading="lazy"/>)}</div></section>
+  ].map(store => <span key={store.name}><Image src={store.src} alt={store.name} width={132} height={40} loading="lazy"/></span>)}</div></section>
   <HomeReviewsCarousel reviews={featuredReviews} compact/>
   {banners.releases}
   <ArtistFeatureShowcase releases={featuredReleases.slice(0, 8)} beats={catalog.slice(0, 8).map(beat => ({ title: beat.title, coverImage: beat.coverImage, producerName: beat.producer.name }))}/>

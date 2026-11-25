@@ -24,7 +24,16 @@ function load(file){const box={exports:{},require:name=>name in mocks?mocks[name
   const seo=load('lib/seo.ts');mocks['@/lib/seo']=seo;
   const metadata=seo.publicPageMetadata('Beat licensing','Learn about licences.','/beat-store');
   assert.equal(metadata.alternates.canonical,origin+'/beat-store');assert.equal(metadata.openGraph.url,metadata.alternates.canonical);assert.equal(metadata.twitter.card,'summary_large_image');assert.equal(metadata.openGraph.images[0].width,1200);
-  assert.equal(seo.publicPageMetadata('Profile','Description','/profile','data:image/svg+xml,').openGraph.images[0].url,'/opengraph-image');
+  assert.equal(seo.publicPageMetadata('Profile','Description','/profile','data:image/svg+xml,').openGraph.images[0].url,'/opengraph-image?v=hymn-logo-20261125');
+  assert.equal(seo.publicPageMetadata('Artist','Description','/artist','https://cdn.example.test/artist.png').openGraph.images[0].url,'https://cdn.example.test/artist.png','Page-specific artwork remains intact.');
+  const root=load('app/layout.tsx').metadata;
+  assert.equal(root.openGraph.title,root.twitter.title);
+  assert.equal(root.openGraph.images[0].url,metadata.openGraph.images[0].url);
+  assert.equal(root.twitter.images[0],root.openGraph.images[0].url);
+  const home=load('app/(public)/page.tsx').metadata;
+  assert.equal(home.title,'Music Distribution, Beats & Artist Services','Search-page title is preserved.');
+  assert.equal(home.openGraph.title,root.openGraph.title);
+  assert.equal(home.twitter.title,home.openGraph.title);
   assert.equal(seo.policyCanonicalPath('privacy'),'/privacy-policy');assert.equal(seo.policyCanonicalPath('terms'),'/terms-of-service');assert.equal(seo.policyCanonicalPath('distribution'),'/policies/distribution');
   const encoded=seo.jsonLd(seo.profileStructuredData('Artist </script>','/profile','Studio','/studio'));assert.ok(!encoded.includes('</script>'));assert.equal(JSON.parse(encoded)['@graph'][1].itemListElement[2].position,3);
   for(const [page,url] of [['page.tsx','/'],['about/page.tsx','/about'],['services/page.tsx','/services'],['beat-store/page.tsx','/beat-store'],['studio/page.tsx','/studio'],['faq/page.tsx','/faq'],['contact/page.tsx','/contact'],['mission/page.tsx','/mission'],['partnership-program/page.tsx','/partnership-program'],['policies/page.tsx','/policies'],['privacy-policy/page.tsx','/privacy-policy'],['terms-of-service/page.tsx','/terms-of-service'],['music-distribution/page.tsx','/music-distribution']]){

@@ -73,12 +73,12 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "HYMN Music",
-    title: "HYMN Music | Music Distribution, Beats & Artist Services",
-    description: "From beat licensing and professional mixing to worldwide music distribution and royalty management.",
+    title: "Your music. Ready for the world. | HYMN Music",
+    description: "Release your music worldwide. Find beats, finish your record and explore playlist reviews with HYMN, built for independent artists.",
     url: "/",
-    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "HYMN Music" }]
+    images: [{ url: "/opengraph-image?v=hymn-logo-20261125", width: 1200, height: 630, alt: "HYMN Music" }]
   },
-  twitter: { card: "summary_large_image", title: "HYMN Music", description: "Music distribution, beats, mixing, mastering and artist services in one platform.", images: ["/opengraph-image"] },
+  twitter: { card: "summary_large_image", title: "Your music. Ready for the world. | HYMN Music", description: "Release your music worldwide. Beats, studio support and playlist reviews for independent artists.", images: ["/opengraph-image?v=hymn-logo-20261125"] },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } }
 };
 

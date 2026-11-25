@@ -11,7 +11,7 @@ const scenes = {
 export function CreatorPathPreview({ role, compact = false }: { role: CreatorRole; compact?: boolean }) {
   const scene = scenes[role];
   return <div className={styles.scene} data-compact={compact} aria-hidden="true">
-    <div className={styles.orbit}/><span className={styles.spark}>+</span>
+    <div className={styles.backdrop}><Image src="/home-studio.jpg" alt="" fill sizes="(max-width:760px) 100vw, 50vw"/></div><div className={styles.orbit}/><span className={styles.spark}>+</span>
     <Image src={scene.image} alt="" fill sizes="(max-width:760px) 100vw, 50vw" className={styles.artwork}/>
     <div className={styles.badge}><AudioLines size={14}/>YOUR CRAFT, CONNECTED.</div>
     <div className={styles.card}><div className={styles.cardTitle}><span><scene.Icon size={17} strokeWidth={1.5}/></span><strong>{scene.label}</strong></div><div className={styles.rows}>{scene.rows.map(row=><span key={row}><Check size={12}/>{row}</span>)}</div></div>
