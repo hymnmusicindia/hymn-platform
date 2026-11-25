@@ -26,10 +26,10 @@ const features = [
   { label: 'Playlist reviews', title: 'Find a fresh pair of ears.', copy: 'Personal listening and written feedback from curators. Reviews do not guarantee placement or streams.', href: '/login?next=%2Fdashboard%2Fplaylists', action: 'Explore playlist reviews', icon: ListMusic }
 ] as const;
 
-function ArtworkRails({ covers, stores = false }: { covers: { src: string; title: string }[]; stores?: boolean }) {
+function ArtworkRails({ covers }: { covers: { src: string; title: string }[] }) {
   const unique = [...new Map(covers.filter(cover => cover.src).map(cover => [cover.src, cover])).values()];
   const pool = unique.length ? Array.from({ length: Math.max(8, unique.length) }, (_, index) => unique[index % unique.length]) : [];
-  return <div className={styles.coverRails} data-kind={stores ? "stores" : "artwork"} aria-hidden="true">{[0, 1].map(row => <div className={styles.coverTrack} key={row} data-direction={row === 1 ? 'reverse' : 'forward'}>{[0, 1].map(copy => <div className={styles.coverGroup} key={copy}>{pool.map((cover, index) => <div className={styles.wallCover} key={`${index}-${cover.title}`}>{stores ? <Image unoptimized src={cover.src} alt="" width={180} height={180}/> : <CoverArt src={cover.src} alt="" previewWidth={192} width={180} height={180}/>}</div>)}</div>)}</div>)}</div>;
+  return <div className={styles.coverRails} data-kind="artwork" aria-hidden="true">{[0, 1].map(row => <div className={styles.coverTrack} key={row} data-direction={row === 1 ? 'reverse' : 'forward'}>{[0, 1].map(copy => <div className={styles.coverGroup} key={copy}>{pool.map((cover, index) => <div className={styles.wallCover} key={`${index}-${cover.title}`}><CoverArt src={cover.src} alt="" previewWidth={192} width={180} height={180}/></div>)}</div>)}</div>)}</div>;
 }
 
 export function ArtistFeatureShowcase({ releases, beats = [] }: { beats?: { title: string; coverImage: string; producerName: string }[]; releases: { id: number; title: string; artistName: string; artworkUrl: string }[] }) {
@@ -48,13 +48,17 @@ export function ArtistFeatureShowcase({ releases, beats = [] }: { beats?: { titl
     <div className={styles.stage} aria-live={paused ? "polite" : "off"}>
       <div key={selected} className={styles.scene} data-scene={selected}>
         <div className={styles.beatWall} data-story={selected}>
-          <ArtworkRails stores={selected === 1} covers={selected === 0 ? beatCovers : selected === 1 ? storeLogos.map(store => ({ src: store.src, title: store.name })) : selected === 3 ? homePlaylists.map(playlist => ({ src: playlist.cover, title: playlist.title })) : releaseCovers}/>
-          <div className={styles.beatWallCopy} data-has-details={selected !== 0}>
+          <ArtworkRails covers={selected === 0 ? beatCovers : selected === 3 ? homePlaylists.map(playlist => ({ src: playlist.cover, title: playlist.title })) : releaseCovers}/>
+          {selected === 2 ? <div className={styles.catalogueFocus}>
+            <span>YOUR RELEASE JOURNEY</span>
+            <div className={styles.releaseFan}>{releases.slice(0, 3).map(release => <a key={release.id} href="#released" aria-label={`Explore ${release.title} by ${release.artistName}`}><CoverArt src={release.artworkUrl} alt={`${release.title} by ${release.artistName}`} previewWidth={192} width={160} height={160}/></a>)}</div>
+            <h3>Your music.<br/>A body of work.</h3>
+          </div> : <div className={styles.beatWallCopy} data-has-details={selected !== 0}>
             <span>{['HYMN BEAT STORE', 'WORLDWIDE DISTRIBUTION', 'YOUR RELEASE JOURNEY', 'HYMN PLAYLIST REVIEWS'][selected]}</span>
-            <h3>{selected === 0 ? <>Find the beat<br/>that suits you.</> : selected === 1 ? <>Be where<br/>listeners listen.</> : selected === 2 ? <>Your music.<br/>A body of work.</> : <>Your track.<br/>A fresh perspective.</>}</h3>
-          </div>
-          {selected === 1 && <div className={styles.storeRibbon}>{storeLogos.slice(0, 4).map(store => <span key={store.name}><Image unoptimized src={store.src} alt={store.name} width={132} height={40}/></span>)}</div>}
-          {selected === 2 && <div className={styles.catalogueJourney} aria-label="Build your catalogue one release at a time"><span>Your first</span><i aria-hidden="true"/><span>Your next</span><i aria-hidden="true"/><span>Your body of work</span></div>}
+            <h3>{selected === 0 ? <>Find the beat<br/>that suits you.</> : selected === 1 ? <>Be where<br/>listeners listen.</> : <>Your track.<br/>A fresh perspective.</>}</h3>
+          </div>}
+          {selected === 1 && <div className={styles.storeRibbon}><span className={styles.storeRibbonLabel}>YOUR RELEASE, DELIVERED TO</span><div className={styles.storeLogoLine}>{storeLogos.slice(0, 4).map(store => <span key={store.name}><Image unoptimized src={store.src} alt={store.name} width={132} height={40}/></span>)}</div></div>}
+
           {selected === 3 && <div className={styles.playlistRibbon}>{homePlaylists.map(playlist => <a key={playlist.title} href={playlist.href} target="_blank" rel="noreferrer" aria-label={`Listen to ${playlist.title} on Spotify`}><Image unoptimized src={playlist.cover} alt="" width={80} height={80}/></a>)}</div>}
         </div>
       </div>
