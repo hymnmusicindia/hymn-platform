@@ -3,7 +3,7 @@
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, AudioLines, Globe2, Headphones, ListMusic, Play, Check } from 'lucide-react';
+import { ArrowRight, AudioLines, Globe2, Headphones, ListMusic, Play, Disc3, FileCheck2, TrendingUp } from 'lucide-react';
 import { CoverArt } from './cover-art';
 import { homePlaylists } from '@/lib/home-playlists';
 import { useShowcaseRotation } from './use-showcase-rotation';
@@ -15,11 +15,11 @@ const slides = [
   { name: 'Distribution', title: 'Get your music ready.', promise: 'Release it worldwide.', copy: 'Distribution, beats, studio support and playlist reviews. One home for your next release.', action: 'Start my first release', href: '/first-release', secondary: 'See release costs', secondaryHref: '/pricing', Icon: Globe2 },
   { name: 'Your sound', title: 'Find your sound.', promise: 'Make it release-ready.', copy: 'Discover independent beats. Work with a mixing or mastering engineer. Bring your recording together.', action: 'Find my next beat', href: '/beat-store', secondary: 'Explore studio services', secondaryHref: '/studio', Icon: AudioLines },
   { name: 'Discovery', title: 'Your music.', promise: 'Its next introduction.', copy: 'Explore playlists, get personal feedback and find a useful next step for your track.', action: 'Explore playlist reviews', href: '/login?next=%2Fdashboard%2Fplaylists', secondary: 'How reviews work', secondaryHref: '/playlist-review-terms', Icon: ListMusic },
-  { name: 'Creators', title: 'Bring your craft.', promise: 'Build your next chapter.', copy: 'A home for producers, engineers and playlist curators. Your work up front. The details in one place.', action: 'Find my creator path', href: '#creator-invitation', secondary: 'Open my beat store', secondaryHref: '/producer-onboarding', Icon: Headphones }
+  { name: 'Creators', title: 'Work with HYMN.', promise: 'Make room to grow.', copy: 'Sell your beats, deliver your best mixes or discover new artists. Build your presence with tools that take care of the details.', action: 'Find my creator path', href: '#creator-invitation', secondary: 'Open my beat store', secondaryHref: '/producer-onboarding', Icon: Headphones }
 ] as const;
 
 export function VisitorReleaseHero({ releases, beats = [] }: { releases: ShowcaseRelease[]; beats?: ShowcaseBeat[] }) {
-  const { root, index: active, select, paused, tapped, handlers } = useShowcaseRotation(slides.length, 4500);
+  const { root, index: active, select, paused, tapped, handlers } = useShowcaseRotation(slides.length, 8000);
   const slide = slides[active];
   const releaseCovers = releases.slice(0, 5).map(item=>({title:item.title,artist:item.artistName,cover:item.artworkUrl,href:'#released'}));
   const beatCovers = beats.slice(0, 5).map(item=>({title:item.title,artist:item.producerName,cover:item.coverImage,href:'/beat-store'}));
@@ -50,18 +50,28 @@ export function VisitorReleaseHero({ releases, beats = [] }: { releases: Showcas
         </div>}
         {active===2 && <div className={styles.playlistScene} data-hero-visual="playlists">
           <div className={styles.sceneHeading}><Headphones size={15}/><span>A FRESH PAIR OF EARS.</span></div>
-          <div className={styles.playlistGrid}>{playlistCovers.map((item,index)=><a href={item.href} key={item.title} target="_blank" rel="noreferrer" aria-label={`Listen to ${item.title} on Spotify`}><CoverArt src={item.cover} alt={item.title} width={140} height={140} previewWidth={240}/><span><small>0{index+1} / HYMN PLAYLIST</small><strong>{item.title}</strong><span>Listen on Spotify <ArrowRight size={11}/></span></span><Play className={styles.playlistPlay} size={15}/></a>)}</div>
-          <div className={styles.feedback}><Check size={13}/><span>Personal listening. Thoughtful feedback.</span></div>
+          <div className={styles.discoveryDeck}>
+            <a className={styles.playlistSpotlight} href={playlistCovers[0].href} target="_blank" rel="noreferrer" aria-label={`Listen to ${playlistCovers[0].title} on Spotify`}>
+              <CoverArt src={playlistCovers[0].cover} alt={playlistCovers[0].title} width={220} height={220} previewWidth={320}/>
+              <span><small>CURATED BY HYMN</small><strong>{playlistCovers[0].title}</strong><span className={styles.listeningBars} aria-hidden="true">{[9,18,12,26,17,31,22,12,24,16,29,11,19,26,14].map((height,index)=><i key={index} style={{height}}/>)}</span><span>Find your next listen <ArrowRight size={12}/></span></span>
+              <span className={styles.spotlightPlay}><Play size={17}/></span>
+            </a>
+            <div className={styles.discoveryShelf}>{playlistCovers.slice(1).map(item=><a href={item.href} key={item.title} target="_blank" rel="noreferrer" aria-label={`Listen to ${item.title} on Spotify`}><CoverArt src={item.cover} alt={item.title} width={160} height={160} previewWidth={240}/><span><strong>{item.title}</strong><ArrowRight size={10}/></span></a>)}</div>
+          </div>
+          <div className={styles.reviewJourney}><span>Choose a curator</span><ArrowRight size={11}/><span>Get heard</span><ArrowRight size={11}/><span>Get feedback</span></div>
           <small className={styles.note}>A review does not guarantee playlist placement or streams.</small>
         </div>}
         {active===3 && <div className={styles.creatorScene} data-hero-visual="creators">
           <div className={styles.sceneHeading}><AudioLines size={15}/><span>THE PEOPLE BEHIND THE MUSIC.</span></div>
-          <div className={styles.creatorCards}>{[
-            {name:'Producers', image:'producer', href:'/producer-onboarding', perk:'Your sound. Your own store.'},
-            {name:'Engineers', image:'engineer', href:'/join/engineer', perk:'Your craft. One workspace.'},
-            {name:'Curators', image:'curator', href:'/join/curator', perk:'Your taste. New discoveries.'}
-          ].map(item=><Link href={item.href} key={item.image} className={styles.creatorCard}><Image src={`/assets/creators/${item.image}-doodle-v1.png`} alt="" width={260} height={260}/><span><strong>{item.name}</strong><small>{item.perk}</small><ArrowRight size={14}/></span></Link>)}</div>
-          <div className={styles.feedback}><Check size={13}/><span>Your identity. Clear terms. Tools for the work.</span></div>
+          <div className={styles.growthWorkspace}>
+            <header><span>YOUR NEXT CHAPTER</span><TrendingUp size={16}/></header>
+            <div className={styles.creatorRows}>
+              <Link href="/producer-onboarding" className={styles.creatorRow}><span className={styles.roleArt}>{soundCovers[0] ? <CoverArt src={soundCovers[0].cover} alt="" width={80} height={80} previewWidth={160}/>:<Disc3 size={26}/>}</span><span className={styles.roleCopy}><strong>Beat sellers</strong><small>Build a store around your sound.</small><span>Storefront <i/> Licence PDFs <i/> Private delivery</span></span><span className={styles.roleEnd}><FileCheck2 size={19}/><span>Ready to sell</span><ArrowRight size={13}/></span></Link>
+              <Link href="/join/engineer" className={styles.creatorRow}><span className={`${styles.roleArt} ${styles.waveArt}`} aria-hidden="true"><AudioLines size={32}/></span><span className={styles.roleCopy}><strong>Mixing &amp; mastering engineers</strong><small>Put your work in front of artists.</small><span>Portfolio <i/> Revisions <i/> Final delivery</span></span><span className={styles.roleEnd}><Headphones size={19}/><span>Built to deliver</span><ArrowRight size={13}/></span></Link>
+              <Link href="/join/curator" className={styles.creatorRow}><span className={styles.roleArt}><CoverArt src={playlistCovers[1].cover} alt="" width={80} height={80} previewWidth={160}/></span><span className={styles.roleCopy}><strong>Playlist curators</strong><small>Turn your taste into useful feedback.</small><span>Your fee <i/> Review queue <i/> Your editorial choice</span></span><span className={styles.roleEnd}><ListMusic size={19}/><span>Room to discover</span><ArrowRight size={13}/></span></Link>
+            </div>
+            <footer><TrendingUp size={15}/><span>More time for your craft. More room for what comes next.</span></footer>
+          </div>
         </div>}
       </div>
     </div>
