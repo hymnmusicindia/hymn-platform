@@ -38,7 +38,7 @@ export default async function HomePage() {
   ].map(store => <Image key={store.name} src={store.src} alt={store.name} width={132} height={40} loading="lazy"/>)}</div></section>
   <HomeReviewsCarousel reviews={featuredReviews} compact/>
   {banners.releases}
-  <ArtistFeatureShowcase releases={featuredReleases.slice(0, 3)} beats={catalog.slice(0, 1).map(beat => ({ title: beat.title, coverImage: beat.coverImage, producerName: beat.producer.name }))}/>
+  <ArtistFeatureShowcase releases={featuredReleases.slice(0, 3)} beats={catalog.slice(0, 8).map(beat => ({ title: beat.title, coverImage: beat.coverImage, producerName: beat.producer.name }))}/>
   {banners.beats}{banners.studio}
   <HomeCreatorInvitation/>
   <details className="visitor-planner"><summary>Plan your releases<span>Explore your schedule and costs</span></summary><GrowthPlanner/></details>
