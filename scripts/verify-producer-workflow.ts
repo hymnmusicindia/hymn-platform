@@ -26,7 +26,9 @@ async function main(){
   const make=async()=>{const beat=await prisma.beat.create({data:{userId:user.id,title:'Workflow beat',bpm:100,genre:'Trap',mood:'Dark, Energetic',keySignature:'C Minor',priceCents:99900,mp3PriceCents:12000,generalPriceCents:50000,exclusivePriceCents:500000,status:'PENDING_REVIEW',enabled:false,audioUploadId:audio.id,artworkUploadId:artwork.id}});const master=await localPrivateStorage.upload({ownerUserId:user.id,beatId:beat.id,assetType:'private_beat_deliverable',fileName:'master.wav',mimeType:'audio/wav',bytes:Buffer.from(fixtureWav())});await prisma.auditLog.create({data:{actorId:user.id,actorType:'user',entity:'beat',entityId:String(beat.id),action:'beat.sample_rights_declared',metadata:{sampleDeclaration:'NO_UNCONTROLLED_SAMPLES'}}});await prisma.auditLog.create({data:{actorId:user.id,actorType:"user",entity:"beat",entityId:String(beat.id),action:"beat.master_content_confirmed",metadata:{beatTitle:beat.title,checksum:master.checksum}}});return beat;};
   const first=await make();
   assert.equal(await producerHasApprovedBeat(user.id),false);
-  assert.equal(await autoPublishProducerBeat(first.id),true,'The first original beat should publish when all automatic checks pass.');
+  const firstPublished = await autoPublishProducerBeat(first.id);
+  const firstQc = await prisma.auditLog.findFirst({ where: { entity: 'beat', entityId: String(first.id), action: 'beat.qc_checked' }, orderBy: { createdAt: 'desc' } });
+  assert.equal(firstPublished,true,`The first original beat should publish when all automatic checks pass: ${JSON.stringify(firstQc?.metadata)}`);
   const nativeRequire=createRequire(import.meta.url);
   const compiled=ts.transpileModule(fs.readFileSync('app/api/admin/beats/[id]/review/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
   const route={exports:{} as {PATCH:(request:Request,context:{params:Promise<{id:string}>})=>Promise<Response>}};

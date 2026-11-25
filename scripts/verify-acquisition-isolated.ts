@@ -210,6 +210,12 @@ async function main() {
       await run(['--conditions=react-server','--import','tsx','scripts/verify-music-master-save.ts']);
       return;
     }
+    if (process.argv.includes('--creator-onboarding-only')) {
+      await run(['node_modules/prisma/build/index.js', 'db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate']);
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-producer-workflow.ts'], process.execPath, { ...env, HYMN_STORAGE_ROOT: path.join(fixture, 'storage'), PRIVATE_STORAGE_ROOT: path.join(fixture, 'storage') });
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-creator-approvals.ts']);
+      return;
+    }
     if (process.argv.includes('--creator-approvals-only')) {
       await run(['node_modules/prisma/build/index.js', 'db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate']);
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-creator-approvals.ts']);

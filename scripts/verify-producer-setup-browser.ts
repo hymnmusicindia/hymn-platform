@@ -7,7 +7,7 @@ import tailwindcss from "tailwindcss";
 
 async function main() {
   writeFileSync(".cache/producer-setup-entry.tsx", `import React from 'react';import {createRoot} from 'react-dom/client';import {ProducerDashboardShell} from '../components/producer-dashboard-shell';const fixture=(window as any).fixture;createRoot(document.getElementById('app')!).render(<ProducerDashboardShell user={{id:123,name:'Fixture Producer',email:'fixture@example.com',role:'producer'}} beats={fixture.beats} orders={[]} earnings={{totalSales:0,totalRevenue:0,beatsSold:0}} finance={{profile:fixture.profile,totalSales:0,producerEarnings:0,availableBalance:0,sales:[],ledger:[]}}/>);`);
-  await build({ entryPoints: [".cache/producer-setup-entry.tsx"], outfile: ".cache/producer-setup-browser.js", bundle: true, platform: "browser", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' }, plugins: [{ name: "browser-fixture-adapters", setup(build) {
+  await build({ entryPoints: [".cache/producer-setup-entry.tsx"], outfile: ".cache/producer-setup-browser.js", bundle: true, platform: "browser", jsx: "automatic", external: ["/fonts/*"], define: { "process.env.NODE_ENV": '"production"' }, plugins: [{ name: "browser-fixture-adapters", setup(build) {
     build.onResolve({ filter: /^(next\/(link|image|dynamic|navigation)|@\/components\/(subscription-options|workspace-footer|workspace-switcher|first-login-referral-prompt|beat-card))$/ }, args => ({ path: args.path, namespace: "fixture" }));
     build.onLoad({ filter: /.*/, namespace: "fixture" }, args => ({ loader: "tsx", resolveDir: process.cwd(), contents: args.path === "next/link" ? `import React from 'react';export default function Link({children,...props}:any){return <a {...props}>{children}</a>}` : args.path === "next/image" ? `import React from 'react';export default function Image({fill,priority,...props}:any){return <img {...props}/>} ` : args.path === "next/dynamic" ? "export default function dynamic(){return ()=>null}" : args.path === "next/navigation" ? "export const usePathname=()=>'/producer/dashboard';export const useRouter=()=>({push(){},refresh(){}});" : "export const SubscriptionButton=()=>null;export const openSubscriptions=()=>{};export const WorkspaceFooter=()=>null;export const WorkspaceSwitcher=()=>null;export const FirstLoginReferralPrompt=()=>null;export const BeatCard=()=>null;" }));
   } }] });
@@ -112,7 +112,8 @@ async function main() {
       await page.getByRole("button", {name:"Submit for review",exact:true}).click();
       await page.waitForURL("**/producer/dashboard?tab=overview");
       await page.addScriptTag({ path: ".cache/producer-setup-browser.js" });
-      await page.getByRole("heading", { name: "Your sound. Your business." }).waitFor();
+      await page.getByRole("button", { name: "Performance", exact: true }).waitFor();
+      assert.equal(await page.getByRole('navigation', { name: 'Producer setup steps' }).count(), 0, 'Saved storefront and first beat unlock the workspace.');
       await load("analytics");
       await page.getByRole("heading", { name: "Catalogue performance" }).waitFor();
       assert.deepEqual(errors, []);

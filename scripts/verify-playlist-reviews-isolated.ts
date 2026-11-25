@@ -21,6 +21,9 @@ async function main() {
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261014190000_playlist_reviews/migration.sql", "--schema", "prisma/schema.prisma"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261015023000_playlist_release_scheduling/migration.sql", "--schema", "prisma/schema.prisma"]);
+    // Keep the historical migration check, then add subsequent schema fields.
+    // This URL belongs only to the newly created fixture database above.
+    await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate", "--accept-data-loss"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-playlist-reviews-integration.ts"]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe")); else await pg.stop();
