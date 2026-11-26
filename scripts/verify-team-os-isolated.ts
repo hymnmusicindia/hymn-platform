@@ -11,6 +11,16 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("team_fixture");
+    if (process.argv.includes('--operations-only') || process.argv.includes('--operations-build') || process.argv.includes('--operations-http-only')) {
+      await run(['node_modules/prisma/build/index.js', 'db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate']);
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-operations-planning.ts']);
+      if (process.argv.includes('--operations-build') || process.argv.includes('--operations-http-only')) {
+        Object.assign(env, { NEXT_DIST_DIR: '.next-enterprise-operations', HYMN_BUILD_DISABLE_CACHE: 'true', HYMN_CRON_WORKER_ENABLED: 'false', JWT_SECRET: 'isolated-operations-build-secret-at-least-thirty-two-characters', ADMIN_JWT_SECRET: 'isolated-operations-admin-secret-at-least-thirty-two-characters', NODE_OPTIONS: '--max-old-space-size=6144' });
+        if (!process.argv.includes('--operations-http-only')) await run(['node_modules/next/dist/bin/next', 'build', '--webpack']);
+        await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-operations-planning-http.ts']);
+      }
+      return;
+    }
     if (process.argv.includes("--consultation-only") || process.argv.includes("--consultation-build")) {
       await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-consultation-portal.ts"]);

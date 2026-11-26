@@ -13,15 +13,22 @@ const kindLabel: Record<string, string> = {
   task: "Work",
   consultation: "Consultation",
   lead: "Lead",
+  command: "Workspace",
+  member: "Team member",
 };
 
-export function TeamGlobalSearch({ api }: { api: Api }) {
+export function TeamGlobalSearch({ api, commands = [], onCreateTask }: { api: Api; commands?: Result[]; onCreateTask?: () => void }) {
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<Result[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const [recent, setRecent] = useState<string[]>([]);
+  const matches = (title: string) => { const words = query.trim().toLowerCase().split(/\s+/); return words.every(word => title.toLowerCase().includes(word)); };
+  const commandItems = commands.filter(item => matches(item.title)).sort((a, b) => recent.indexOf(b.id) - recent.indexOf(a.id));
+  const results = [...(onCreateTask && matches('Create task') ? [{ id: 'create-task', kind: 'command', title: 'Create task', detail: 'Start a new delegated task', href: '#' }] : []), ...commandItems, ...items];
+  useEffect(() => { try { const saved: unknown = JSON.parse(localStorage.getItem('hymn-team-command-history') || '[]'); if (Array.isArray(saved)) setRecent(saved.filter((value): value is string => typeof value === 'string').slice(0, 6)); } catch {} }, []);
   const input = useRef<HTMLInputElement>(null);
   const links = useRef<(HTMLAnchorElement | null)[]>([]);
   const listId = "team-global-search-results";
@@ -73,15 +80,15 @@ export function TeamGlobalSearch({ api }: { api: Api }) {
     if (event.key === "Escape") {
       setOpen(false);
       input.current?.focus();
-    } else if ((event.key === "ArrowDown" || event.key === "ArrowUp") && items.length) {
+    } else if ((event.key === "ArrowDown" || event.key === "ArrowUp") && results.length) {
       event.preventDefault();
       setOpen(true);
       const currentIndex = links.current.findIndex(link => link === document.activeElement);
       const step = event.key === "ArrowDown" ? 1 : -1;
-      const next = currentIndex < 0 ? 0 : (currentIndex + step + items.length) % items.length;
+      const next = currentIndex < 0 ? 0 : (currentIndex + step + results.length) % results.length;
       setActive(next);
       links.current[next]?.focus();
-    } else if (event.key === "Enter" && items.length && event.currentTarget === input.current) {
+    } else if (event.key === "Enter" && results.length && event.currentTarget === input.current) {
       event.preventDefault();
       links.current[active]?.click();
     }
@@ -97,7 +104,7 @@ export function TeamGlobalSearch({ api }: { api: Api }) {
       role="combobox"
       aria-label="Search contacts, consultations and work"
       aria-autocomplete="list"
-      aria-expanded={open && query.trim().length >= 2}
+      aria-expanded={open}
       aria-controls={listId}
       placeholder="Search contacts, consultations, work…"
       value={query}
@@ -106,11 +113,11 @@ export function TeamGlobalSearch({ api }: { api: Api }) {
       onKeyDown={onKeyDown}
     />
     <kbd>Ctrl K</kbd>
-    {open && query.trim().length >= 2 ? <div id={listId} className={styles.results} role="listbox" aria-label="Search results">
+    {open ? <div id={listId} className={styles.results} role="listbox" aria-label="Search results">
       {loading ? <p role="status">Searching…</p> : null}
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
-      {!loading && !error && !items.length ? <p>No contacts, consultation requests or open work matched that search.</p> : null}
-      {items.map((item, index) => <Link
+      {!loading && !error && !results.length ? <p>No accessible workspaces or records matched that search.</p> : null}
+      {results.map((item, index) => <Link
         key={`${item.kind}:${item.id}`}
         ref={element => { links.current[index] = element; }}
         className={styles.result}
@@ -119,7 +126,7 @@ export function TeamGlobalSearch({ api }: { api: Api }) {
         aria-selected={active === index}
         onMouseEnter={() => setActive(index)}
         onKeyDown={onKeyDown}
-        onClick={() => setOpen(false)}
+        onClick={event => { setOpen(false); if (item.id === 'create-task') { event.preventDefault(); onCreateTask?.(); } else if (item.kind === 'command') { const next = [...recent.filter(id => id !== item.id), item.id].slice(-6); setRecent(next); try { localStorage.setItem('hymn-team-command-history', JSON.stringify(next)); } catch {} } }}
       >
         <span className={styles.kind}>{kindLabel[item.kind] || "Record"}</span>
         <span className={styles.copy}><strong>{item.title}</strong><small>{item.detail}</small></span>

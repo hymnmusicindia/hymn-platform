@@ -25,6 +25,6 @@ const teamSections: Record<string, string[]> = {
   "Team queue": ["team-queue"],
   Schedule: ["calendar", "availability"],
   Messages: ["inbox", "chat", "emails"],
-  Manage: ["overview", "projects", "approvals", "acquisition", "crm", "consultations", "referral", "creator-applications", "release-qc", "reports", "leadership", "directory", "audit", "settings"],
+  Manage: ["owner-operations", "overview", "projects", "approvals", "acquisition", "crm", "consultations", "referral", "creator-applications", "release-qc", "reports", "leadership", "directory", "audit", "settings"],
 };
 export const teamSectionFor = (key: string) => Object.entries(teamSections).find(([, keys]) => keys.includes(key))?.[0] ?? "Manage";
