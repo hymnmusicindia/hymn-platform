@@ -1,3 +1,4 @@
+import { workQueueType, workQueueWhere } from './work-queues';
 import { isKnownMinor } from '@/lib/client-details';
 import 'server-only';
 import { randomUUID } from 'node:crypto';
@@ -17,7 +18,7 @@ import { CLIENT_INTERESTS } from './client-interests';
 import { currentConversationBrief } from './conversation-guide';
 import { whatsappNumber } from './phone';
 import { teamSenderRole } from './outreach-content';
-import { activityOpen, workActivity, activitySeconds, activityEmailTemplates, MISSED_EMAIL_GAP_MS, type WorkActivity } from './work-station-policy';
+import { workTaskModule, activityOpen, workActivity, activitySeconds, activityEmailTemplates, MISSED_EMAIL_GAP_MS, type WorkActivity } from './work-station-policy';
 const obj = (x: unknown): Record<string, unknown> => x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : {};
 const json = (x: unknown) => JSON.parse(JSON.stringify(x)) as Prisma.InputJsonValue;
 const terminal = ['COMPLETED', 'CANCELLED'];
@@ -81,7 +82,8 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
     const bucket = p.get('bucket') || 'today';
     const offset = z.coerce.number().int().min(0).max(100000).catch(0).parse(p.get('offset') || 0);
     const team = p.get('team') === '1' && (can(a,'tasks.all')||mayHelp(a));
-    const base: Prisma.TeamTaskWhereInput = { ...(team?sharedWorkScope(a):taskScope(a)), ...(!team ? { OR: [{ ownerId: a.id }, { collaboratorIds: { has: a.id } }] } : {}) };
+    const queueType = workQueueType(p.get('workType'));
+    const base: Prisma.TeamTaskWhereInput = { AND: [team ? sharedWorkScope(a) : taskScope(a), ...(!team ? [{ OR: [{ ownerId: a.id }, { collaboratorIds: { has: a.id } }] }] : []), workQueueWhere(queueType)] };
     const date: Prisma.TeamTaskWhereInput = bucket==='assigned'?{}:bucket==='unanswered'?{OR:[{followUpContext:{path:['workActivity','outcome'],equals:'NO_ANSWER'}},{followUpContext:{path:['workActivity','outcome'],equals:'BUSY'}}]}:bucket === 'upcoming' ? { dueAt: { gte: end } } : bucket === 'overdue' ? { dueAt: { lt: start } } : bucket === 'finished' ? {} : { OR: [{ dueAt: { lt: end } }, { dueAt: null }, { followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] };
     const where: Prisma.TeamTaskWhereInput = { AND:[base,date], status: bucket === 'finished' ? { in: terminal } : { notIn: terminal }, ...(p.get('q') ? { AND: [base,date,{ OR: [{ title: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } }, { client: { name: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } } }, { client: { phone: { contains: p.get('q')!.replace(/[^\d+]/g, '') || p.get('q')! } } }, { client: { email: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } } }, {project:{title:{contains:p.get('q')!.slice(0,160),mode:'insensitive'}}}] }] } : {}) };
     const phase = p.get('phase');
@@ -93,7 +95,7 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
         const items = await prisma.teamTask.findMany({ where, select: { ...summarySelect, owner: false }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 31 });
         return { items: items.slice(0, 30).map(currentConversationBrief), hasMore: items.length > 30, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all')||mayHelp(a) };
     }
-    const [items, total, active, counts] = await Promise.all([prisma.teamTask.findMany({ where, select: summarySelect, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 30 }), prisma.teamTask.count({ where }), prisma.teamTask.findFirst({ where: { workspaceId: a.workspaceId, ownerId: a.id, archivedAt: null, status: { notIn: terminal }, OR: [{ followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] }, select: summarySelect }), prisma.teamTask.groupBy({ by: ['status'], where: { ...base, ...date }, _count: true })]);
+    const [items, total, active, counts] = await Promise.all([prisma.teamTask.findMany({ where, select: summarySelect, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 30 }), prisma.teamTask.count({ where }), prisma.teamTask.findFirst({ where: { workspaceId: a.workspaceId, ownerId: a.id, archivedAt: null, status: { notIn: terminal }, OR: [{ followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] }, select: summarySelect }), prisma.teamTask.groupBy({ by: ['status'], where: { ...where, status: undefined }, _count: true })]);
     return { items:items.map(currentConversationBrief), total, active:active?currentConversationBrief(active):null, counts, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all')||mayHelp(a) };
 }
 const startSchema = z.object({ requestKey: z.string().uuid(), taskId: z.string().optional(), clientId: z.string().optional(), ticketId: z.number().int().positive().optional(), kind: z.enum(['CALL', 'TASK', 'SUPPORT', 'QC']).default('CALL'), title: z.string().trim().min(3).max(180).default('Manual customer activity') });
@@ -265,7 +267,7 @@ export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, re
         const updated=await tx.teamTask.update({where:{id:task.id},data:{ownerId:a.id,version:{increment:1}}});
         if(appointment)await tx.teamCalendarEvent.update({where:{id:appointment.id},data:{assigneeId:a.id,scheduleRevision:{increment:1}}});
         await audit(tx,a,'workstation.claimed',task.id,{previousOwnerId:task.ownerId,ownerId:a.id,title:task.title});
-        await tx.teamNotification.create({data:{memberId:task.ownerId,title:'A teammate picked up your assignment: '+task.title,href:`/team?module=work-station&task=${task.id}`}});
+        await tx.teamNotification.create({data:{memberId:task.ownerId,title:'A teammate picked up your assignment: '+task.title,href:`/team?module=${workTaskModule(task)}&task=${task.id}`}});
         return {id:updated.id};
     }
     if(resource==='workstation-reopen'){
@@ -524,7 +526,7 @@ export async function syncWorkStationTickets(tx: Prisma.TransactionClient, a: Ac
         created++;
         if (callback)
             await tx.supportTicket.update({ where: { id: ticket.id }, data: { details: json({ ...details, callbackStatus: 'ASSIGNED' }) } });
-        await tx.teamNotification.create({ data: { memberId: assignment.id, title: `Assigned: ${task.title}`, href: `/team?workspace=${a.workspaceId}&module=work-station&task=${task.id}` } });
+        await tx.teamNotification.create({ data: { memberId: assignment.id, title: `Assigned: ${task.title}`, href: `/team?workspace=${a.workspaceId}&module=${workTaskModule(task)}&task=${task.id}` } });
         await audit(tx, a, 'workstation.ticket_routed', task.id, { ticketId: ticket.id, ownerId: assignment.id, clientId: client.id });
     }
     if (!tickets.length)
@@ -554,7 +556,7 @@ export async function recoverWorkStationCoverage(tx: Prisma.TransactionClient, a
             await syncCallbackCalendar(tx, a, updated);
         else {const event=await tx.teamCalendarEvent.findUnique({where:{followUpTaskId:updated.id}});if(event){const closed=['COMPLETED','CANCELLED','BLOCKED','IN_REVIEW'].includes(updated.status);const startsAt=updated.dueAt||event.startsAt;const changed=await tx.teamCalendarEvent.update({where:{id:event.id},data:{startsAt,endsAt:new Date(startsAt.getTime()+1800000),status:updated.status==='COMPLETED'?'COMPLETED':closed?'CANCELLED':'SCHEDULED',version:{increment:1},scheduleRevision:{increment:1}}});await (await import('./appointments')).queueAppointment(tx,changed,now);}}
         await audit(tx, a, 'workstation.coverage_recovered', task.id, { clientId: task.clientId, dueAt: dueAt.toISOString(), ownerId: task.ownerId });
-        await tx.teamNotification.create({ data: { memberId: task.ownerId, title: `Working-hours retry scheduled: ${task.title}`, href: `/team?workspace=${a.workspaceId}&module=work-station&task=${task.id}` } });
+        await tx.teamNotification.create({ data: { memberId: task.ownerId, title: `Working-hours retry scheduled: ${task.title}`, href: `/team?workspace=${a.workspaceId}&module=${workTaskModule(task)}&task=${task.id}` } });
         recovered++;
     }
     return { recovered };

@@ -89,7 +89,7 @@ export async function syncDailyCallSchedule(tx:Prisma.TransactionClient,a:Actor,
      const changed=await tx.teamTask.update({where:{id:task.id},data:{ownerId:member.id,dueAt,followUpContext:json({...c,dailyCallScheduled:{day,version:CALL_DUTY_VERSION,previousOwnerId:task.ownerId,reason:'Available capacity and priority; original source and attribution retained.'}}),version:{increment:1}}});
      await syncCallbackCalendar(tx,a,changed);
      await tx.teamAudit.create({data:{workspaceId:a.workspaceId,actorId:a.id,action:'calls.daily_scheduled',entityId:task.id,detail:{day,from:task.ownerId,to:member.id,dueAt:dueAt.toISOString()}}});
-     reminders.push({eventKey:`daily-call-assigned:${day}:${task.id}:${member.id}`,memberId:member.id,title:`Call scheduled: ${task.title}`,taskId:task.id,href:`/team?workspace=${a.workspaceId}&module=work-station&task=${task.id}`});
+     reminders.push({eventKey:`daily-call-assigned:${day}:${task.id}:${member.id}`,memberId:member.id,title:`Call scheduled: ${task.title}`,taskId:task.id,href:`/team?workspace=${a.workspaceId}&module=customer-calls&task=${task.id}`});
      if(priorToday)used.set(priorToday.ownerId,Math.max(0,(used.get(priorToday.ownerId)||0)-1));
      used.set(member.id,(used.get(member.id)||0)+1);
      if(member.id!==task.ownerId){load.set(task.ownerId,Math.max(0,(load.get(task.ownerId)||0)-1));load.set(member.id,(load.get(member.id)||0)+1);}

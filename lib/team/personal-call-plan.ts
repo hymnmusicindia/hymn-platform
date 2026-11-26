@@ -59,7 +59,7 @@ export async function syncPersonalCallPlans(tx:Prisma.TransactionClient,a:Actor,
       const updated=await tx.teamTask.update({where:{id:task.id},data:{ownerId:member.id,dueAt,followUpContext:json({...c,personalCallPlan:true,personalPlanDay:day,pinnedAssignee:true}),version:{increment:1}}});
       await syncCallbackCalendar(tx,a,updated);
       await tx.teamAudit.create({data:{workspaceId:a.workspaceId,actorId:a.id,action:'workstation.personal_call_assigned',entityId:task.id,detail:{previousOwnerId:task.ownerId,ownerId:member.id,clientId:client.id,day,dueAt:dueAt.toISOString(),limit:plan.dailyLimit}}});
-      await tx.teamNotification.create({data:{memberId:member.id,title:`Call assigned: ${task.title}`,href:`/team?workspace=${a.workspaceId}&module=work-station&task=${task.id}`}});
+      await tx.teamNotification.create({data:{memberId:member.id,title:`Call assigned: ${task.title}`,href:`/team?workspace=${a.workspaceId}&module=customer-calls&task=${task.id}`}});
       taken++;assigned++;
     }
   }

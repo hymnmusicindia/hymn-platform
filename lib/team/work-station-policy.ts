@@ -1,5 +1,8 @@
-export const WORK_STATION_ALIASES = ['work', 'tasks', 'customer-calls', 'release-qc', 'tasktools'];
-export const workStationModule = (key: string) => WORK_STATION_ALIASES.includes(key) ? 'work-station' : key;
+import { isCallWork } from './daily-call-policy';
+export type WorkQueueType = 'all' | 'calls' | 'tasks';
+export const WORK_STATION_ALIASES = ['work', 'tasks', 'release-qc', 'tasktools'];
+export const workStationModule = (key: string) => key === 'calls' ? 'customer-calls' : WORK_STATION_ALIASES.includes(key) ? 'work-station' : key;
+export const workTaskModule = (task: Parameters<typeof isCallWork>[0]) => isCallWork(task) ? 'customer-calls' : 'work-station';
 export const ACTIVITY_OUTCOMES = { COMPLETED: 'Task completed', FOLLOW_UP: 'Follow-up needed', NO_ANSWER: 'Call not picked up', BUSY: 'Customer busy', WRONG_NUMBER: 'Wrong number', DO_NOT_CONTACT: 'Do not contact', BLOCKED: 'Need help / blocked' } as const;
 export type ActivityOutcome = keyof typeof ACTIVITY_OUTCOMES;
 export type ActivityDraft = {

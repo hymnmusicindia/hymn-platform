@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { Prisma } from '@prisma/client';
+import { workStationModule } from '../lib/team/work-station-policy';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { teamMutation, teamRead, teamWrite } from '../lib/team/service';
@@ -223,6 +225,37 @@ async function main() {
     const handoff=await prisma.teamTask.create({data:{workspaceId:ws.id,ownerId:other.id,creatorId:boss.id,clientId:handoffClient.id,title:'Shared CRM call',eventKey:`${handoffProspect.id}:call`}});
     await teamMutation(rep,'workstation-claim',{id:handoff.id,version:handoff.version});
     assert.equal((await prisma.teamProspect.findUniqueOrThrow({where:{id:handoffProspect.id}})).ownerId,rep.id,'Operational source assignment follows voluntary handoff');
+    const splitPrefix = 'Queue split fixture';
+    const rows = [
+      {name:'SQL null', context:Prisma.DbNull, call:false},
+      {name:'JSON null', context:Prisma.JsonNull, call:false},
+      {name:'Missing kind', context:{}, call:false},
+      {name:'Null kind', context:{kind:null}, call:false},
+      {name:'Research', context:{kind:'TASK'}, call:false},
+      {name:'QC', context:{kind:'QC'}, call:false},
+      {name:'Support', context:{kind:'SUPPORT'}, call:false},
+      {name:'Manual call', context:{kind:'CALL'}, call:true},
+      {name:'Support callback', context:{kind:'SUPPORT_CALLBACK'}, call:true},
+      {name:'Introduction', context:{kind:'FRIENDLY_INTRO'}, call:true},
+      {name:'Legacy callback', context:{}, eventKey:'support-call:split-fixture', call:true},
+      {name:'Legacy CRM', context:{kind:'TASK'}, eventKey:'split-fixture:call', call:true}
+    ];
+    const splitRows=[];
+    for(const row of rows) splitRows.push({...row,task:await prisma.teamTask.create({data:{workspaceId:ws.id,creatorId:boss.id,ownerId:rep.id,title:`${splitPrefix}: ${row.name}`,eventKey:row.eventKey,followUpContext:row.context}})});
+    for(const workType of ['calls','tasks'] as const){
+      const result=await teamRead(rep,'workstation',new URLSearchParams({workType,bucket:'assigned',q:splitPrefix}));
+      const expected=splitRows.filter(row=>row.call===(workType==='calls')).map(row=>row.task.id).sort();
+      assert.deepEqual(result.items.map((row:{id:string})=>row.id).sort(),expected,`${workType} are partitioned before pagination, including null metadata`);
+      assert.equal(result.total,expected.length);
+      assert.equal(result.counts.reduce((sum:number,row:{_count:number})=>sum+row._count,0),expected.length,'Counts use the same queue and search scope');
+      const mobile=await teamRead(rep,'workstation',new URLSearchParams({workType,bucket:'assigned',q:splitPrefix,view:'mobile'}));
+      assert.deepEqual(mobile.items.map((row:{id:string})=>row.id).sort(),expected,'Native queue uses the same partition');
+    }
+    assert.equal(workStationModule('customer-calls'),'customer-calls');
+    assert.equal(workStationModule('calls'),'customer-calls');
+    assert.equal(workStationModule('tasks'),'work-station');
+    assert.equal(workStationModule('release-qc'),'work-station');
+    console.log('PASS separate calls/tasks: disjoint exhaustive queues, legacy markers, null metadata, search totals, mobile parity and route aliases.');
     console.log('PASS Work-station: shared assignments, private-project search isolation, stale claims, customer-return reopening, immutable attempts, permissions, concurrency, retry limits and support workflow. No customer mail sent.');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => prisma.$disconnect());

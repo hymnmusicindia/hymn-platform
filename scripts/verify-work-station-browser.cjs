@@ -11,7 +11,7 @@ async function main(){
   await page.route('https://hymn.fixture/**',r=>r.fulfill({contentType:'text/html',body:`<html data-theme="${theme}"><body><div id="root"></div></body></html>`}));await page.goto('https://hymn.fixture/');
   await page.addStyleTag({path:path.join(out,'global.css')});for(const style of styles)await page.addStyleTag({path:style});await page.addStyleTag({path:path.join(out,'ui.css')});await page.addScriptTag({path:path.join(out,'ui.js')});
   await page.getByRole('button',{name:'Start activity',exact:true}).first().click();const dialog=page.getByRole('dialog',{name:'Work-station activity'});await expect(dialog).toBeVisible();
-  const guide=dialog.getByRole('region',{name:'Personalised conversation tips'});await expect(guide).toContainText('Introduce yourself as Aaditya Giri');await expect(guide.getByRole('heading',{name:'Buying beats',exact:true})).toBeVisible();await expect(guide).toContainText('Hindi');await expect(dialog.getByText('Introduce yourself as Kira',{exact:false})).not.toBeVisible();
+  const guide=dialog.getByRole('region',{name:'Call conversation guide'});await expect(guide).toContainText("I'm Aaditya Giri");await expect(guide.getByRole('heading',{name:'Buying beats',exact:true})).toBeVisible();await expect(guide).toContainText('Hindi');await expect(dialog.getByText('Introduce yourself as Kira',{exact:false})).not.toBeVisible();
   await expect(dialog.getByText('Activity time · running')).toBeVisible();await dialog.getByLabel('Live notes / activity report').fill('Discussed distribution requirements and release timeline.');await dialog.getByLabel('Music distribution',{exact:true}).check();
   await expect.poll(()=>page.evaluate(()=>window.writes.some(w=>w.resource==='workstation-save'&&w.body.draft.notes.includes('timeline')))).toBe(true);
   await expect(guide.getByRole('heading',{name:'Music distribution',exact:true})).toBeVisible();await expect(guide.getByRole('heading',{name:'Buying beats',exact:true})).not.toBeVisible();
@@ -35,6 +35,20 @@ async function main(){
   await page.screenshot({path:path.join(out,`${theme}-${width}.png`),fullPage:true});await dialog.getByRole('button',{name:'Save report & finish',exact:true}).click();await expect(dialog).not.toBeVisible();
   await page.getByRole('button',{name:'Manual activity',exact:true}).click();const manual=page.getByRole('dialog',{name:'Start manual activity'});await manual.getByLabel('Find a contact').fill('Customer');await manual.getByRole('button',{name:/Saved Customer.*updated@fixture/}).click();await expect(manual.getByText('Selected: Saved Customer')).toBeVisible();await manual.getByRole('button',{name:'Close manual activity'}).click();
   expect(errors).toEqual([]);await page.close();console.log(`PASS ${theme} ${width}px: autosave, timer pause/resume, call outcome, ticket email, closure, contact lookup and no overflow.`);
- }}finally{await browser.close();}
+ }
+ for(const scope of ['calls','tasks'])for(const width of [320,1440]){
+  const page=await browser.newPage({viewport:{width,height:950}});
+  await page.route('https://hymn.fixture/**',r=>r.fulfill({contentType:'text/html',body:'<html data-theme="light"><body><div id="root"></div></body></html>'}));await page.goto(`https://hymn.fixture/?scope=${scope}`);
+  await page.addStyleTag({path:path.join(out,'global.css')});for(const style of styles)await page.addStyleTag({path:style});await page.addStyleTag({path:path.join(out,'ui.css')});await page.addScriptTag({path:path.join(out,'ui.js')});
+  await expect(page.getByRole('heading',{name:scope==='calls'?'Calls':'Tasks & operations',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Review release artwork',exact:true})).toHaveCount(scope==='tasks'?1:0);
+  await expect(page.getByRole('heading',{name:'Call Customer',exact:true})).toHaveCount(scope==='calls'?1:0);
+  await expect(page.getByLabel('Filter call stage')).toHaveCount(scope==='calls'?1:0);
+  await expect(page.getByRole('button',{name:'Unanswered',exact:true})).toHaveCount(scope==='calls'?1:0);
+  const areas=page.getByRole('navigation',{name:'Work areas'});await expect(areas.getByRole('link',{name:scope==='calls'?/Calls/:/Tasks & operations/})).toHaveAttribute('aria-current','page');
+  if(scope==='calls'){await page.getByRole('button',{name:'Log a call',exact:true}).click();await expect(page.getByRole('dialog',{name:'Start manual activity'}).getByRole('option')).toHaveCount(1);await expect(page.getByRole('dialog',{name:'Start manual activity'}).getByRole('option')).toHaveText('Call');await page.getByRole('button',{name:'Close manual activity'}).click();}
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:path.join(out,`${scope}-${width}.png`),fullPage:true});await page.close();console.log(`PASS separate ${scope} UI ${width}px: correct queue, controls, manual type, navigation and no overflow.`);
+ }
+}finally{await browser.close();}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

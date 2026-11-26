@@ -165,7 +165,7 @@ export async function customerWorkMutation(tx: Prisma.TransactionClient, actor: 
   await queueAppointment(tx, saved);
   await tx.teamComment.create({ data: { taskId: task.id, authorId: actor.id, body: `Schedule changed: ${data.reason}. ${selection.reason}` } });
   await audit(tx, actor, "contact.schedule_changed", client.id, { taskId: task.id, outcome: data.confirmed ? "APPOINTMENT_CONFIRMED" : "INTERNAL_PLAN", discussion: data.reason, nextAt: startsAt.toISOString(), nextAction: selection.reason });
-  await notify(tx, selection.member.id, `Call scheduled: ${client.name}`, `/team?workspace=${actor.workspaceId}&module=work-station&task=${task.id}`);
+  await notify(tx, selection.member.id, `Call scheduled: ${client.name}`, `/team?workspace=${actor.workspaceId}&module=customer-calls&task=${task.id}`);
   return { id: task.id, version: task.version, calendarEventId: saved.id, reason: selection.reason };
 }
 
